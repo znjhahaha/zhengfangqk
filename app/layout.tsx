@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import ToastProvider from '@/components/ToastProvider'
@@ -16,8 +16,12 @@ export const metadata: Metadata = {
   description: '太原科技大学选课工具 - Next.js现代化界面',
   keywords: ['选课', 'TYUST', '太原科技大学', '课程选择'],
   authors: [{ name: 'TYUST Course Selector' }],
-  viewport: 'width=device-width, initial-scale=1',
   robots: 'noindex, nofollow', // 私有应用，不索引
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({

@@ -46,6 +46,7 @@
   "devDependencies": {
     "@types/html2canvas": "^0.5.35",
     "eslint": "8.0.0",
-    "eslint-config-next": "14.0.0"
+    "eslint-config-next": "14.0.0",
+    "null-loader": "^4.0.1"
   }
 }

@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // 性能优化配置
+  // 基本配置
   swcMinify: true,
-  compress: true,
   
   // 图片优化
   images: {
@@ -19,70 +18,31 @@ const nextConfig = {
   
   // 实验性功能
   experimental: {
-    esmExternals: 'loose',
-    optimizeCss: true,
     optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
   
-  // 解决undici模块解析问题
-  webpack: (config, { isServer, dev }) => {
+  // 简化的webpack配置
+  webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
+        undici: false,
       }
     }
     
-    // 忽略undici的某些模块
+    // 完全排除undici模块
     config.externals = config.externals || []
-    config.externals.push({
-      'undici': 'commonjs undici'
-    })
-    
-    // 生产环境优化
-    if (!dev) {
-      config.optimization = {
-        ...config.optimization,
-        splitChunks: {
-          chunks: 'all',
-          cacheGroups: {
-            vendor: {
-              test: /[\\/]node_modules[\\/]/,
-              name: 'vendors',
-              chunks: 'all',
-            },
-            framerMotion: {
-              test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
-              name: 'framer-motion',
-              chunks: 'all',
-            },
-            lucide: {
-              test: /[\\/]node_modules[\\/]lucide-react[\\/]/,
-              name: 'lucide',
-              chunks: 'all',
-            },
-          },
-        },
-      }
+    if (Array.isArray(config.externals)) {
+      config.externals.push('undici')
+    } else {
+      config.externals = [config.externals, 'undici']
     }
     
     return config
   },
-  
-  // 输出配置
-  output: 'standalone',
-  
-  // 移除不需要的rewrites
-  // async rewrites() {
-  //   return [
-  //     {
-  //       source: '/api/python/:path*',
-  //       destination: 'http://localhost:5000/:path*',
-  //     },
-  //   ]
-  // },
 }
 
 module.exports = nextConfig
