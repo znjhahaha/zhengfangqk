@@ -269,14 +269,9 @@ export default function SchedulePage() {
       
       // 使用html2canvas生成图片
       const canvas = await html2canvas(tempContainer, {
-        backgroundColor: '#1a1a2e',
-        scale: 2, // 提高图片质量
         useCORS: true,
         allowTaint: true,
-        width: 1200,
-        height: tempContainer.scrollHeight,
-        scrollX: 0,
-        scrollY: 0
+        logging: false
       })
       
       // 转换为blob并下载
