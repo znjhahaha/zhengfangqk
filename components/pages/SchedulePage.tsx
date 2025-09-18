@@ -48,6 +48,12 @@ export default function SchedulePage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCourse, setSelectedCourse] = useState<ScheduleCourse | null>(null)
   const [isExporting, setIsExporting] = useState(false)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false) // 标记是否已经加载过一次
+  
+  // 缓存键
+  const CACHE_KEY = 'schedule_data_cache'
+  const CACHE_TIMESTAMP_KEY = 'schedule_data_timestamp'
+  const CACHE_DURATION = 5 * 60 * 1000 // 5分钟缓存
 
   // 星期名称映射
   const weekdays = ['', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六', '星期日']
@@ -61,8 +67,71 @@ export default function SchedulePage() {
     { name: '第9-10节', start: 9, end: 10 }
   ]
 
+  // 缓存相关函数
+  const getCachedData = (): ScheduleCourse[] | null => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY)
+      const timestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY)
+      
+      if (cached && timestamp) {
+        const now = Date.now()
+        const cacheTime = parseInt(timestamp)
+        
+        // 检查缓存是否过期
+        if (now - cacheTime < CACHE_DURATION) {
+          console.log('📦 从缓存加载课表数据')
+          return JSON.parse(cached)
+        } else {
+          console.log('⏰ 缓存已过期，清理缓存')
+          clearCache()
+        }
+      }
+    } catch (error) {
+      console.error('读取缓存失败:', error)
+      clearCache()
+    }
+    return null
+  }
+
+  const setCachedData = (data: ScheduleCourse[]) => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data))
+      localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString())
+      console.log('💾 课表数据已缓存')
+    } catch (error) {
+      console.error('保存缓存失败:', error)
+    }
+  }
+
+  const clearCache = () => {
+    try {
+      localStorage.removeItem(CACHE_KEY)
+      localStorage.removeItem(CACHE_TIMESTAMP_KEY)
+      console.log('🗑️ 课表缓存已清理')
+    } catch (error) {
+      console.error('清理缓存失败:', error)
+    }
+  }
+
   // 获取课表数据
-  const fetchScheduleData = async () => {
+  const fetchScheduleData = async (forceRefresh: boolean = false) => {
+    // 如果不是强制刷新，先尝试从缓存加载
+    if (!forceRefresh) {
+      const cachedData = getCachedData()
+      if (cachedData && cachedData.length > 0) {
+        setScheduleData(cachedData)
+        setHasLoadedOnce(true)
+        console.log('📦 使用缓存的课表数据')
+        return
+      }
+    }
+
+    // 如果已经有数据且不是强制刷新，直接返回
+    if (scheduleData.length > 0 && !forceRefresh) {
+      console.log('📦 课表数据已存在，跳过请求')
+      return
+    }
+
     setIsLoading(true)
     try {
       const response = await fetch('/api/schedule')
@@ -70,7 +139,15 @@ export default function SchedulePage() {
       
       if (result.success) {
         setScheduleData(result.data)
-        toast.success(`成功获取课表，共 ${result.data.length} 门课程`)
+        setHasLoadedOnce(true)
+        
+        // 缓存数据
+        setCachedData(result.data)
+        
+        // 只在第一次加载或强制刷新时显示成功提示
+        if (!hasLoadedOnce || forceRefresh) {
+          toast.success(`成功获取课表，共 ${result.data.length} 门课程`)
+        }
       } else {
         if (result.action === 'go_to_settings') {
           toast.error(result.message)
@@ -305,7 +382,15 @@ export default function SchedulePage() {
 
   // 初始化加载
   useEffect(() => {
-    fetchScheduleData()
+    // 先尝试从缓存加载，如果没有缓存再请求API
+    const cachedData = getCachedData()
+    if (cachedData && cachedData.length > 0) {
+      setScheduleData(cachedData)
+      setHasLoadedOnce(true)
+      console.log('📦 初始化时使用缓存的课表数据')
+    } else {
+      fetchScheduleData()
+    }
   }, [])
 
   return (
@@ -345,7 +430,7 @@ export default function SchedulePage() {
           
           <div className="flex space-x-2">
             <Button
-              onClick={fetchScheduleData}
+              onClick={() => fetchScheduleData(true)}
               disabled={isLoading}
               className="btn-hover"
             >
@@ -355,6 +440,20 @@ export default function SchedulePage() {
                 <RefreshCw className="h-4 w-4 mr-2" />
               )}
               刷新课表
+            </Button>
+            
+            <Button
+              onClick={() => {
+                clearCache()
+                setScheduleData([])
+                setHasLoadedOnce(false)
+                toast.success('缓存已清理，下次查询将重新获取数据')
+              }}
+              variant="outline"
+              className="btn-hover"
+            >
+              <AlertCircle className="h-4 w-4 mr-2" />
+              清理缓存
             </Button>
             
             <div className="relative group">
@@ -505,7 +604,7 @@ export default function SchedulePage() {
                     <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-white mb-2">暂无课表数据</h3>
                     <p className="text-muted-foreground mb-4">请点击刷新按钮获取课表信息</p>
-                    <Button onClick={fetchScheduleData} className="btn-hover">
+                    <Button onClick={() => fetchScheduleData(true)} className="btn-hover">
                       <RefreshCw className="h-4 w-4 mr-2" />
                       获取课表
                     </Button>

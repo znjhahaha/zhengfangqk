@@ -24,6 +24,19 @@ export const courseAPI = {
   // 健康检查
   healthCheck: () => request('/health'),
   
+  // 会话管理
+  createSession: (data: { cookie: string }) =>
+    request('/session', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getSession: (sessionId: string) =>
+    request(`/session?sessionId=${sessionId}`),
+  deleteSession: (sessionId: string) =>
+    request(`/session?sessionId=${sessionId}`, {
+      method: 'DELETE',
+    }),
+  
   // 配置管理
   getConfig: () => request('/config'),
   setConfig: (data: { cookie: string }) => 
@@ -33,7 +46,8 @@ export const courseAPI = {
     }),
   
   // 学生信息
-  getStudentInfo: () => request('/student-info'),
+  getStudentInfo: (sessionId?: string) => 
+    request(`/student-info${sessionId ? `?sessionId=${sessionId}` : ''}`),
   
   // 课程信息
   getAvailableCourses: () => request('/courses/available'),

@@ -2,26 +2,58 @@
 import * as cheerio from 'cheerio'
 import { withCache, cacheKeys } from './api-cache'
 
-// 使用Node.js全局对象存储Cookie，避免热重载时丢失
+// 多用户会话支持
+interface SessionCookie {
+  sessionId: string
+  cookie: string
+}
+
+// 使用Node.js全局对象存储多用户Cookie，避免热重载时丢失
 declare global {
-  var __globalCookie: string | undefined
+  var __globalSessions: Map<string, string> | undefined
 }
 
-// 设置全局Cookie
-export function setGlobalCookie(cookie: string) {
-  global.__globalCookie = cookie
-  console.log('🍪 Cookie已设置，长度:', cookie.length)
+// 初始化全局会话存储
+function initGlobalSessions() {
+  if (!global.__globalSessions) {
+    global.__globalSessions = new Map()
+  }
 }
 
-// 获取全局Cookie
-export function getGlobalCookie(): string {
-  const cookie = global.__globalCookie || ''
-  console.log('🍪 获取Cookie，长度:', cookie.length)
+// 设置会话Cookie
+export function setSessionCookie(sessionId: string, cookie: string) {
+  initGlobalSessions()
+  global.__globalSessions!.set(sessionId, cookie)
+  console.log('🍪 会话Cookie已设置:', sessionId, '长度:', cookie.length)
+}
+
+// 获取会话Cookie
+export function getSessionCookie(sessionId: string): string {
+  initGlobalSessions()
+  const cookie = global.__globalSessions!.get(sessionId) || ''
+  console.log('🍪 获取会话Cookie:', sessionId, '长度:', cookie.length)
   return cookie
 }
 
+// 删除会话Cookie
+export function deleteSessionCookie(sessionId: string) {
+  initGlobalSessions()
+  global.__globalSessions!.delete(sessionId)
+  console.log('🗑️ 删除会话Cookie:', sessionId)
+}
+
+// 兼容性：设置全局Cookie（用于单用户模式）
+export function setGlobalCookie(cookie: string) {
+  setSessionCookie('default', cookie)
+}
+
+// 兼容性：获取全局Cookie（用于单用户模式）
+export function getGlobalCookie(): string {
+  return getSessionCookie('default')
+}
+
 // 创建robust HTTP请求配置
-function createRequestConfig(method: string = 'GET', body?: string) {
+function createRequestConfig(method: string = 'GET', body?: string, sessionId?: string) {
   const headers: Record<string, string> = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
@@ -40,7 +72,8 @@ function createRequestConfig(method: string = 'GET', body?: string) {
     'X-Requested-With': 'XMLHttpRequest',
   }
 
-  const cookie = getGlobalCookie()
+  // 根据会话ID获取对应的Cookie
+  const cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
   if (cookie) {
     headers['Cookie'] = cookie
   }
@@ -194,14 +227,15 @@ function extractParamsFromPage(html: string, pageName: string) {
 }
 
 // 获取学生信息 - 基于原始Python项目的完整实现
-export async function getStudentInfo() {
-  return withCache(cacheKeys.studentInfo, async () => {
+export async function getStudentInfo(sessionId?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.studentInfo}_${sessionId}` : cacheKeys.studentInfo
+  return withCache(cacheKey, async () => {
     try {
-      const config = createRequestConfig('GET')
+      const config = createRequestConfig('GET', undefined, sessionId)
       const timestamp = Date.now()
       const url = `https://newjwc.tyust.edu.cn/jwglxt/xtgl/index_cxYhxxIndex.html?xt=jw&localeKey=zh_CN&_=${timestamp}&gnmkdm=index`
       
-      console.log('🔍 正在获取学生信息...')
+      console.log('🔍 正在获取学生信息...', sessionId ? `(会话: ${sessionId})` : '')
       const response = await robustFetch(url, config)
     
     if (!response.ok) {

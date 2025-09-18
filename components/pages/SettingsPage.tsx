@@ -22,6 +22,8 @@ import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
 import { useStudentStore } from '@/lib/student-store'
 import CookieGuide from '@/components/CookieGuide'
+import UserSessionManager from '@/components/UserSessionManager'
+import { CookieValidator } from '@/lib/cookie-validator'
 
 export default function SettingsPage() {
   const [cookie, setCookie] = useState('')
@@ -68,6 +70,10 @@ export default function SettingsPage() {
 
     setIsLoading(true)
     try {
+      // 0. 清理旧的缓存数据
+      CookieValidator.clearAllCache()
+      console.log('🧹 已清理旧数据，准备保存新Cookie...')
+      
       // 1. 保存Cookie配置
       const response = await courseAPI.setConfig({ cookie: cookie.trim() }) as any
       if (response.success) {
@@ -89,8 +95,16 @@ export default function SettingsPage() {
             setStudentInfo(studentData)
             
             // 4. 重置欢迎动画状态，准备显示欢迎动画
-            setHasShownWelcome(false)
-            setIsFirstVisit(true)
+            // 使用setTimeout确保状态更新顺序
+            setTimeout(() => {
+              setHasShownWelcome(false)
+              setIsFirstVisit(true)
+              
+              // 触发自定义事件通知主页面显示欢迎动画
+              window.dispatchEvent(new CustomEvent('showWelcomeAnimation', {
+                detail: { studentName: studentData.name }
+              }))
+            }, 100)
             
             // 5. 更新服务器状态
             setServerStatus('online')
@@ -565,6 +579,15 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+      </motion.div>
+
+      {/* 多用户会话管理 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+      >
+        <UserSessionManager />
       </motion.div>
 
       {/* Cookie配置指南 */}

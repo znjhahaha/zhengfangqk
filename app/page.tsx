@@ -30,6 +30,7 @@ const SettingsPage = lazy(() => import('@/components/pages/SettingsPage'))
 // 导入API和状态管理
 import { courseAPI } from '@/lib/api'
 import { useStudentStore } from '@/lib/student-store'
+import { CookieValidator } from '@/lib/cookie-validator'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('courses') // 默认显示课程信息页面
@@ -53,6 +54,9 @@ export default function Home() {
   useEffect(() => {
     const checkServerStatus = async () => {
       try {
+        // 首先验证Cookie有效性并清理无效数据
+        await CookieValidator.initialize()
+        
         const response = await courseAPI.healthCheck() as any
         if (response.status === 'healthy') {
           setServerStatus('online')
@@ -64,9 +68,19 @@ export default function Home() {
             toast.error('请先配置Cookie', {
               duration: 8000
             })
+            // 清理所有缓存数据
+            CookieValidator.clearAllCache()
           } else if (configResponse.success && configResponse.data.has_cookie) {
-            // 如果有Cookie，尝试获取学生信息
-            await fetchStudentInfo()
+            // 如果有Cookie，验证有效性并获取学生信息
+            const isValid = await CookieValidator.validateCookie(configResponse.data.cookie)
+            if (isValid) {
+              await fetchStudentInfo()
+            } else {
+              toast.error('Cookie已失效，请重新配置', {
+                duration: 8000
+              })
+              CookieValidator.clearAllCache()
+            }
           }
         } else {
           setServerStatus('offline')
@@ -76,6 +90,8 @@ export default function Home() {
         setServerStatus('offline')
         toast.error('无法连接到后端服务器')
         console.error('服务器连接失败:', error)
+        // 连接失败时也清理缓存
+        CookieValidator.clearAllCache()
       } finally {
         setIsLoading(false)
       }
@@ -148,8 +164,11 @@ export default function Home() {
     if (studentInfo && isFirstVisit && !hasShownWelcome) {
       console.log('🎉 检测到学生信息更新，准备显示欢迎动画:', studentInfo.name)
       setShowWelcome(true)
-      setHasShownWelcome(true)
-      setIsFirstVisit(false)
+      // 延迟更新状态，确保动画能正常显示
+      setTimeout(() => {
+        setHasShownWelcome(true)
+        setIsFirstVisit(false)
+      }, 100)
     }
   }, [studentInfo, isFirstVisit, hasShownWelcome])
 
@@ -160,6 +179,22 @@ export default function Home() {
       setShowTopBar(true)
     }
   }, [studentInfo, showTopBar])
+
+  // 监听自定义事件，显示欢迎动画
+  useEffect(() => {
+    const handleShowWelcomeAnimation = (event: CustomEvent) => {
+      console.log('🎉 收到显示欢迎动画事件:', event.detail)
+      setShowWelcome(true)
+      setHasShownWelcome(true)
+      setIsFirstVisit(false)
+    }
+
+    window.addEventListener('showWelcomeAnimation', handleShowWelcomeAnimation as EventListener)
+    
+    return () => {
+      window.removeEventListener('showWelcomeAnimation', handleShowWelcomeAnimation as EventListener)
+    }
+  }, [])
 
   if (isLoading) {
     return (

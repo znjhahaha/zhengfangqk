@@ -27,6 +27,7 @@ import {
 import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
 import { useCourseStore } from '@/lib/course-store'
+import { useStudentStore } from '@/lib/student-store'
 
 interface Course {
   kch_id: string
@@ -66,6 +67,9 @@ export default function CourseInfoPage() {
     clearAvailableCourses,
     clearSelectedCourses
   } = useCourseStore()
+  
+  // 学生信息状态
+  const { studentInfo } = useStudentStore()
   
   const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -306,6 +310,41 @@ export default function CourseInfoPage() {
   useEffect(() => {
     fetchAvailableCourses()
   }, [fetchAvailableCourses])
+
+  // 如果没有学生信息，显示提示
+  if (!studentInfo) {
+    return (
+      <div className="space-y-6">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-center min-h-[400px]"
+        >
+          <Card className="glass max-w-md w-full">
+            <CardContent className="p-8 text-center">
+              <div className="mb-4">
+                <BookOpen className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-xl font-bold text-white mb-2">请先配置Cookie</h3>
+                <p className="text-muted-foreground mb-6">
+                  您需要先在"系统设置"页面配置有效的Cookie才能查看课程信息
+                </p>
+                <Button 
+                  onClick={() => {
+                    // 这里可以添加跳转到设置页面的逻辑
+                    toast('请切换到"系统设置"页面配置Cookie')
+                  }}
+                  className="w-full"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  前往设置页面
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
