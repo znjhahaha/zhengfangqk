@@ -22,7 +22,7 @@ import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
 import { useStudentStore } from '@/lib/student-store'
 import CookieGuide from '@/components/CookieGuide'
-import UserSessionManager from '@/components/UserSessionManager'
+import MultiUserManager from '@/components/MultiUserManager'
 import { CookieValidator } from '@/lib/cookie-validator'
 
 export default function SettingsPage() {
@@ -581,13 +581,18 @@ export default function SettingsPage() {
         </Card>
       </motion.div>
 
-      {/* 多用户会话管理 */}
+      {/* 多用户管理 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
-        <UserSessionManager />
+        <MultiUserManager onUserChange={(sessionId) => {
+          if (sessionId) {
+            // 用户切换时重新加载配置
+            loadConfig()
+          }
+        }} />
       </motion.div>
 
       {/* Cookie配置指南 */}

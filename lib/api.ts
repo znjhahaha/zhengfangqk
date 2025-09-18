@@ -46,8 +46,7 @@ export const courseAPI = {
     }),
   
   // 学生信息
-  getStudentInfo: (sessionId?: string) => 
-    request(`/student-info${sessionId ? `?sessionId=${sessionId}` : ''}`),
+  getStudentInfo: () => request('/student-info'),
   
   // 课程信息
   getAvailableCourses: () => request('/courses/available'),

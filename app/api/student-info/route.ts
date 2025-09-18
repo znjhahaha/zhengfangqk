@@ -1,13 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { getStudentInfo, getGlobalCookie, getSessionCookie } from '@/lib/course-api'
+import { NextResponse } from 'next/server'
+import { getStudentInfo, getCurrentUserCookie } from '@/lib/course-api'
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const { searchParams } = new URL(request.url)
-    const sessionId = searchParams.get('sessionId')
-    
-    // 根据是否有会话ID选择获取Cookie的方式
-    const cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+    const cookie = getCurrentUserCookie()
     
     if (!cookie) {
       return NextResponse.json({
@@ -18,7 +14,7 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const studentInfo = await getStudentInfo(sessionId || undefined)
+    const studentInfo = await getStudentInfo()
     
     return NextResponse.json({
       success: true,

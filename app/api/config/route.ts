@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getGlobalCookie, setGlobalCookie } from '@/lib/course-api'
+import { getCurrentUserCookie, setUserCookie } from '@/lib/course-api'
 
 export async function GET() {
   try {
-    const cookie = getGlobalCookie()
+    const cookie = getCurrentUserCookie()
     return NextResponse.json({
       success: true,
       data: {
@@ -34,10 +34,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    setGlobalCookie(cookie)
+    const sessionId = setUserCookie(cookie)
     
     // 验证保存是否成功
-    const savedCookie = getGlobalCookie()
+    const savedCookie = getCurrentUserCookie()
     console.log('✅ Cookie保存完成，验证长度:', savedCookie.length)
 
     return NextResponse.json({
