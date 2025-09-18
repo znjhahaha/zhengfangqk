@@ -2,43 +2,85 @@
 import * as cheerio from 'cheerio'
 import { withCache, cacheKeys } from './api-cache'
 
-// 多用户会话管理 - 每个用户独立存储
-import { userSessionManager } from './user-session-manager'
-
-// 设置用户Cookie
-export function setUserCookie(cookie: string): string {
-  const sessionId = userSessionManager.createSession(cookie)
-  console.log('🍪 用户Cookie已设置:', sessionId, '长度:', cookie.length)
-  return sessionId
+// 多用户会话支持
+interface SessionCookie {
+  sessionId: string
+  cookie: string
 }
 
-// 获取当前用户Cookie
-export function getCurrentUserCookie(): string {
-  const cookie = userSessionManager.getCurrentCookie()
-  console.log('🍪 获取当前用户Cookie，长度:', cookie.length)
-  return cookie
+// 请求去重系统 - 避免同时发起相同请求
+const pendingRequests = new Map<string, Promise<any>>()
+
+// 请求去重函数
+async function deduplicatedRequest<T>(
+  key: string, 
+  requestFn: () => Promise<T>
+): Promise<T> {
+  // 如果相同请求正在进行，等待其结果
+  if (pendingRequests.has(key)) {
+    console.log(`🔄 请求去重: 等待进行中的请求 ${key}`)
+    return await pendingRequests.get(key)!
+  }
+  
+  // 创建新请求
+  const requestPromise = requestFn().finally(() => {
+    // 请求完成后清理
+    pendingRequests.delete(key)
+  })
+  
+  // 存储请求Promise
+  pendingRequests.set(key, requestPromise)
+  console.log(`🚀 发起新请求: ${key}`)
+  
+  return await requestPromise
 }
 
-// 删除当前用户Cookie
-export function deleteCurrentUserCookie() {
-  const session = userSessionManager.getCurrentSession()
-  if (session) {
-    userSessionManager.deleteSession(session.sessionId)
-    console.log('🗑️ 删除当前用户Cookie:', session.sessionId)
+// 使用Node.js全局对象存储多用户Cookie，避免热重载时丢失
+declare global {
+  var __globalSessions: Map<string, string> | undefined
+}
+
+// 初始化全局会话存储
+function initGlobalSessions() {
+  if (!global.__globalSessions) {
+    global.__globalSessions = new Map()
   }
 }
 
-// 兼容性函数（保持向后兼容）
-export function setGlobalCookie(cookie: string) {
-  setUserCookie(cookie)
+// 设置会话Cookie
+export function setSessionCookie(sessionId: string, cookie: string) {
+  initGlobalSessions()
+  global.__globalSessions!.set(sessionId, cookie)
+  console.log('🍪 会话Cookie已设置:', sessionId, '长度:', cookie.length)
 }
 
+// 获取会话Cookie
+export function getSessionCookie(sessionId: string): string {
+  initGlobalSessions()
+  const cookie = global.__globalSessions!.get(sessionId) || ''
+  console.log('🍪 获取会话Cookie:', sessionId, '长度:', cookie.length)
+  return cookie
+}
+
+// 删除会话Cookie
+export function deleteSessionCookie(sessionId: string) {
+  initGlobalSessions()
+  global.__globalSessions!.delete(sessionId)
+  console.log('🗑️ 删除会话Cookie:', sessionId)
+}
+
+// 兼容性：设置全局Cookie（用于单用户模式）
+export function setGlobalCookie(cookie: string) {
+  setSessionCookie('default', cookie)
+}
+
+// 兼容性：获取全局Cookie（用于单用户模式）
 export function getGlobalCookie(): string {
-  return getCurrentUserCookie()
+  return getSessionCookie('default')
 }
 
 // 创建robust HTTP请求配置
-function createRequestConfig(method: string = 'GET', body?: string) {
+function createRequestConfig(method: string = 'GET', body?: string, sessionId?: string, tempCookie?: string) {
   const headers: Record<string, string> = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
@@ -57,8 +99,12 @@ function createRequestConfig(method: string = 'GET', body?: string) {
     'X-Requested-With': 'XMLHttpRequest',
   }
 
-  // 获取当前用户的Cookie
-  const cookie = getCurrentUserCookie()
+  // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
+  let cookie = tempCookie
+  if (!cookie) {
+    cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+  }
+  
   if (cookie) {
     headers['Cookie'] = cookie
   }
@@ -67,7 +113,7 @@ function createRequestConfig(method: string = 'GET', body?: string) {
     method,
     headers,
     body,
-    signal: AbortSignal.timeout(30000), // 30秒超时
+    signal: AbortSignal.timeout(10000), // 10秒超时，加快失败检测
   }
 }
 
@@ -212,14 +258,15 @@ function extractParamsFromPage(html: string, pageName: string) {
 }
 
 // 获取学生信息 - 基于原始Python项目的完整实现
-export async function getStudentInfo() {
-  return withCache(cacheKeys.studentInfo, async () => {
+export async function getStudentInfo(sessionId?: string, tempCookie?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.studentInfo}_${sessionId}` : cacheKeys.studentInfo
+  return withCache(cacheKey, async () => {
     try {
-      const config = createRequestConfig('GET')
+      const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
       const timestamp = Date.now()
       const url = `https://newjwc.tyust.edu.cn/jwglxt/xtgl/index_cxYhxxIndex.html?xt=jw&localeKey=zh_CN&_=${timestamp}&gnmkdm=index`
       
-      console.log('🔍 正在获取学生信息...')
+      console.log('🔍 正在获取学生信息...', sessionId ? `(会话: ${sessionId})` : '', tempCookie ? '(使用临时Cookie)' : '')
       const response = await robustFetch(url, config)
     
     if (!response.ok) {
@@ -268,9 +315,9 @@ export async function getStudentInfo() {
 }
 
 // 获取选课参数
-async function getCourseSelectionParams() {
+async function getCourseSelectionParams(sessionId?: string, tempCookie?: string) {
   try {
-    const config = createRequestConfig('GET')
+    const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
     const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=N253512&layout=default'
     const response = await robustFetch(url, config)
     
@@ -282,7 +329,11 @@ async function getCourseSelectionParams() {
     const params = extractParamsFromPage(html, '选课页面')
     
     // 从Cookie中获取备用参数
-    const cookieParams = extractStudentParamsFromCookie(getGlobalCookie())
+    let cookie = tempCookie
+    if (!cookie) {
+      cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+    }
+    const cookieParams = extractStudentParamsFromCookie(cookie)
     
     return {
       njdm_id: params.njdm_id || cookieParams.njdm_id || '2024',
@@ -350,9 +401,9 @@ function parseCourseData(jsonData: any) {
 
 // 获取可选课程 - 基于原始Python项目的实现
 // 获取课程详细信息 - 基于Python版本的实现
-async function getAvailableCourseDetails(kch_id: string, xkkz_id: string = '', jxb_id: string = '') {
+async function getAvailableCourseDetails(kch_id: string, xkkz_id: string = '', jxb_id: string = '', sessionId?: string, tempCookie?: string) {
   try {
-    const params = await getCourseSelectionParams()
+    const params = await getCourseSelectionParams(sessionId, tempCookie)
     
     // 确保kch_id是字符串类型
     if (typeof kch_id !== 'string') {
@@ -397,7 +448,7 @@ async function getAvailableCourseDetails(kch_id: string, xkkz_id: string = '', j
     
     const formData = formDataParts.join('&')
     
-    const config = createRequestConfig('POST', formData)
+    const config = createRequestConfig('POST', formData, sessionId, tempCookie)
     const response = await robustFetch(url, config)
     
     if (response.ok) {
@@ -418,78 +469,158 @@ async function getAvailableCourseDetails(kch_id: string, xkkz_id: string = '', j
   }
 }
 
-export async function getAvailableCourses() {
-  return withCache(cacheKeys.availableCourses('all'), async () => {
+export async function getAvailableCourses(sessionId?: string, tempCookie?: string, fastMode: boolean = true) {
+  const cacheKey = cacheKeys.availableCourses('all')
+  const requestKey = `${cacheKey}_${sessionId || 'default'}_${tempCookie ? 'temp' : 'session'}`
+  
+  return deduplicatedRequest(requestKey, () => 
+    withCache(cacheKey, async () => {
     try {
-      const params = await getCourseSelectionParams()
-      const allCourses: any[] = []
-    
-    // 课程类型列表 - 基于course_api_json.py的实现
-    const courseTypes = [
-      { kklxdm: '01', typeName: '必修' },
-      { kklxdm: '10', typeName: '选修' }
-    ]
-    
-    for (const { kklxdm, typeName } of courseTypes) {
-      console.log(`🔍 正在获取${typeName}课程...`)
+      const startTime = Date.now()
+      console.log('🚀 开始并发获取课程数据...')
       
-      // 基于Python程序的完整参数列表 - 使用字符串拼接方式
-      const formData = `rwlx=1&xkly=0&bklx_id=0&sfkkjyxdxnxq=0&xqh_id=4&jg_id=20&` +
-        `njdm_id_1=${params.njdm_id}&zyh_id_1=${params.zyh_id}&` +
-        `zyh_id=${params.zyh_id}&zyfx_id=wfx&njdm_id=${params.njdm_id}&` +
-        `bh_id=2024200101&bjgkczxbbjwcx=0&xbm=1&xslbdm=wlb&mzm=01&xz=4&` +
-        `ccdm=3&xsbj=4294967296&sfkknj=0&gnjkxdnj=0&sfkkzy=0&kzybkxy=0&` +
-        `sfznkx=0&zdkxms=0&sfkxq=0&sfkcfx=0&kkbk=0&kkbkdj=0&sfkgbcx=0&` +
-        `sfrxtgkcxd=0&tykczgxdcs=0&xkxnm=${params.xkxnm}&` +
-        `xkxqm=${params.xkxqm}&kklxdm=${kklxdm}&bbhzxjxb=0&` +
-        `rlkz=0&xkzgbj=0&kspage=1&jspage=10&jxbzb=`
+      const params = await getCourseSelectionParams(sessionId, tempCookie)
       
-      const config = createRequestConfig('POST', formData.toString())
-      const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbPartDisplay.html?gnmkdm=N253512'
-      const response = await robustFetch(url, config)
+      // 课程类型列表 - 基于course_api_json.py的实现
+      const courseTypes = [
+        { kklxdm: '01', typeName: '必修' },
+        { kklxdm: '10', typeName: '选修' }
+      ]
       
-      if (!response.ok) {
-        console.error(`获取${typeName}课程失败，状态码: ${response.status}`)
-        continue
-      }
-      
-      const jsonData = await response.json()
-      console.log(`📚 ${typeName}课程的JSON响应:`, JSON.stringify(jsonData, null, 2))
-      const courses = parseCourseData(jsonData)
-      console.log(`📚 ${typeName}课程解析到 ${courses.length} 门课程`)
-      
-      // 为课程添加类型信息
-      courses.forEach(course => {
-        course.type_course = typeName
-        course.kklxdm = kklxdm
-      })
-      
-      allCourses.push(...courses)
-    }
-    
-    // 为所有课程添加详细信息 - 基于Python版本的实现
-    if (allCourses.length > 0) {
-      console.log('🔍 正在获取课程详细信息...')
-      
-      // 获取第一个课程的详细信息作为全局详细信息
-      const firstCourse = allCourses[0]
-      const kch_id = firstCourse.kch || firstCourse.kch_id || ''
-      const xkkz_id = firstCourse.xkkz_id || ''
-      
-      if (kch_id) {
-        const courseDetails = await getAvailableCourseDetails(kch_id, xkkz_id)
-        if (courseDetails && Array.isArray(courseDetails) && courseDetails.length > 0) {
-          console.log(`✅ 获取课程详细信息成功，数据条数: ${courseDetails.length}`)
+      // 创建并发请求函数
+      const fetchCourseType = async ({ kklxdm, typeName }: { kklxdm: string, typeName: string }) => {
+        console.log(`🔍 开始获取${typeName}课程...`)
+        
+        // 基于Python程序的完整参数列表 - 使用字符串拼接方式
+        const formData = `rwlx=1&xkly=0&bklx_id=0&sfkkjyxdxnxq=0&xqh_id=4&jg_id=20&` +
+          `njdm_id_1=${params.njdm_id}&zyh_id_1=${params.zyh_id}&` +
+          `zyh_id=${params.zyh_id}&zyfx_id=wfx&njdm_id=${params.njdm_id}&` +
+          `bh_id=2024200101&bjgkczxbbjwcx=0&xbm=1&xslbdm=wlb&mzm=01&xz=4&` +
+          `ccdm=3&xsbj=4294967296&sfkknj=0&gnjkxdnj=0&sfkkzy=0&kzybkxy=0&` +
+          `sfznkx=0&zdkxms=0&sfkxq=0&sfkcfx=0&kkbk=0&kkbkdj=0&sfkgbcx=0&` +
+          `sfrxtgkcxd=0&tykczgxdcs=0&xkxnm=${params.xkxnm}&` +
+          `xkxqm=${params.xkxqm}&kklxdm=${kklxdm}&bbhzxjxb=0&` +
+          `rlkz=0&xkzgbj=0&kspage=1&jspage=10&jxbzb=`
+        
+        try {
+          const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
+          const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbPartDisplay.html?gnmkdm=N253512'
+          const response = await robustFetch(url, config)
           
-          // 为所有课程添加详细信息
-          allCourses.forEach(course => {
-            course.course_details = courseDetails
+          if (!response.ok) {
+            console.error(`获取${typeName}课程失败，状态码: ${response.status}`)
+            return []
+          }
+          
+          const jsonData = await response.json()
+          console.log(`📚 ${typeName}课程解析完成`)
+          const courses = parseCourseData(jsonData)
+          console.log(`✅ ${typeName}课程获取成功: ${courses.length} 门课程`)
+          
+          // 为课程添加类型信息
+          courses.forEach(course => {
+            course.type_course = typeName
+            course.kklxdm = kklxdm
           })
           
-          console.log('✅ 所有课程详细信息添加完成')
-        } else {
-          console.log('⚠️ 获取课程详细信息失败')
+          return courses
+        } catch (error) {
+          console.error(`❌ 获取${typeName}课程失败:`, error)
+          return []
         }
+      }
+      
+      // 并发获取所有课程类型，使用Promise.allSettled避免单个失败影响整体
+      console.log('🔄 开始并发请求...')
+      const coursePromises = courseTypes.map(courseType => fetchCourseType(courseType))
+      const courseResults = await Promise.allSettled(coursePromises)
+      
+      // 处理结果，即使部分失败也继续
+      const successfulResults = courseResults
+        .filter((result): result is PromiseFulfilledResult<any[]> => result.status === 'fulfilled')
+        .map(result => result.value)
+      
+      const failedCount = courseResults.filter(result => result.status === 'rejected').length
+      if (failedCount > 0) {
+        console.warn(`⚠️ ${failedCount} 个课程类型获取失败，但继续处理成功的结果`)
+      }
+      
+      // 合并所有课程数据
+      const allCourses: any[] = []
+      successfulResults.forEach(courses => {
+        allCourses.push(...courses)
+      })
+      
+      const duration = Date.now() - startTime
+      console.log(`⚡ 并发获取完成! 用时: ${duration}ms, 总课程数: ${allCourses.length}`)
+    
+    // 并发获取课程详细信息 - 优化版本（快速模式可跳过）
+    if (allCourses.length > 0 && !fastMode) {
+      console.log('🔍 正在并发获取课程详细信息...')
+      const detailStartTime = Date.now()
+      
+      // 获取唯一的课程ID列表，限制数量避免过多请求
+      const uniqueCourses = new Map()
+      allCourses.forEach(course => {
+        const kch_id = course.kch || course.kch_id || ''
+        if (kch_id && !uniqueCourses.has(kch_id)) {
+          uniqueCourses.set(kch_id, {
+            kch_id,
+            xkkz_id: course.xkkz_id || '',
+            course
+          })
+        }
+      })
+      
+      // 限制并发请求数量，只获取前3个不同课程的详细信息（进一步减少）
+      const coursesToFetch = Array.from(uniqueCourses.values()).slice(0, 3)
+      console.log(`📊 准备并发获取 ${coursesToFetch.length} 个课程的详细信息`)
+      
+      // 创建并发获取详细信息的函数
+      const fetchCourseDetails = async ({ kch_id, xkkz_id }: { kch_id: string, xkkz_id: string }) => {
+        try {
+          const details = await getAvailableCourseDetails(kch_id, xkkz_id, '', sessionId, tempCookie)
+          return { kch_id, details }
+        } catch (error) {
+          console.error(`获取课程 ${kch_id} 详细信息失败:`, error)
+          return { kch_id, details: null }
+        }
+      }
+      
+      // 并发获取详细信息，使用Promise.allSettled避免单个失败影响整体
+      const detailPromises = coursesToFetch.map(({ kch_id, xkkz_id }) => 
+        fetchCourseDetails({ kch_id, xkkz_id })
+      )
+      
+      try {
+        const detailResults = await Promise.allSettled(detailPromises)
+        
+        // 创建详细信息映射，只处理成功的结果
+        const detailsMap = new Map()
+        detailResults
+          .filter((result): result is PromiseFulfilledResult<{ kch_id: string, details: any }> => 
+            result.status === 'fulfilled' && result.value.details !== null
+          )
+          .forEach(({ value: { kch_id, details } }) => {
+            if (details && Array.isArray(details) && details.length > 0) {
+              detailsMap.set(kch_id, details)
+            }
+          })
+        
+        // 为课程添加详细信息
+        let detailsAdded = 0
+        allCourses.forEach(course => {
+          const kch_id = course.kch || course.kch_id || ''
+          if (kch_id && detailsMap.has(kch_id)) {
+            course.course_details = detailsMap.get(kch_id)
+            detailsAdded++
+          }
+        })
+        
+        const detailDuration = Date.now() - detailStartTime
+        console.log(`✅ 并发获取详细信息完成! 用时: ${detailDuration}ms, 成功: ${detailsMap.size} 个, 应用到: ${detailsAdded} 门课程`)
+      } catch (error) {
+        console.error('⚠️ 批量获取课程详细信息失败:', error)
       }
     }
     
@@ -498,7 +629,8 @@ export async function getAvailableCourses() {
       console.error('获取可选课程失败:', error)
       throw error
     }
-  }, 3 * 60 * 1000) // 可选课程缓存3分钟
+  }, 1 * 60 * 1000) // 可选课程缓存1分钟，减少缓存时间
+  )
 }
 
 // 解析已选课程数据 - 基于原始Python项目的实现
@@ -538,11 +670,16 @@ function parseSelectedCourseData(jsonData: any) {
 }
 
 // 获取已选课程 - 基于course_api_json.py的实现
-export async function getSelectedCourses() {
-  return withCache(cacheKeys.selectedCourses, async () => {
+export async function getSelectedCourses(sessionId?: string, tempCookie?: string) {
+  const cacheKey = cacheKeys.selectedCourses
+  const requestKey = `${cacheKey}_${sessionId || 'default'}_${tempCookie ? 'temp' : 'session'}`
+  
+  return deduplicatedRequest(requestKey, () => 
+    withCache(cacheKey, async () => {
     try {
+      const startTime = Date.now()
       console.log('🔍 开始获取已选课程...')
-      const params = await getCourseSelectionParams()
+      const params = await getCourseSelectionParams(sessionId, tempCookie)
       console.log('📋 已选课程查询参数:', params)
     
     // 基于Python程序的已选课程查询实现 - 使用字符串拼接方式
@@ -554,7 +691,7 @@ export async function getSelectedCourses() {
     
     console.log('📤 已选课程请求数据:', formData)
     
-    const config = createRequestConfig('POST', formData.toString())
+    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
     const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbChoosedDisplay.html?gnmkdm=N253512'
     console.log('🌐 已选课程请求URL:', url)
     
@@ -566,7 +703,10 @@ export async function getSelectedCourses() {
     }
     
     const jsonData = await response.json()
-    console.log('📚 已选课程JSON响应:', JSON.stringify(jsonData, null, 2))
+    console.log('📚 已选课程JSON响应长度:', JSON.stringify(jsonData).length)
+    
+    const duration = Date.now() - startTime
+    console.log(`⚡ 已选课程获取完成! 用时: ${duration}ms`)
     
     // 根据Python版本，直接返回JSON数据（可能是数组或对象）
     return jsonData
@@ -574,7 +714,8 @@ export async function getSelectedCourses() {
       console.error('❌ 获取已选课程失败:', error)
       throw error
     }
-  }, 3 * 60 * 1000) // 已选课程缓存3分钟
+  }, 1 * 60 * 1000) // 已选课程缓存1分钟，减少缓存时间
+  )
 }
 
 // 格式化已选课程数据 - 基于course_api_json.py的format_selected_courses_json函数
@@ -649,9 +790,9 @@ export function formatSelectedCoursesData(data: any) {
 }
 
 // 获取课程详细信息 - 基于原始Python项目的实现
-export async function getCourseDetails(kch_id: string) {
+export async function getCourseDetails(kch_id: string, sessionId?: string, tempCookie?: string) {
   try {
-    const params = await getCourseSelectionParams()
+    const params = await getCourseSelectionParams(sessionId, tempCookie)
     
     const formData = new URLSearchParams({
       rwlx: '1',
@@ -693,7 +834,7 @@ export async function getCourseDetails(kch_id: string) {
       fxbj: '0'
     })
     
-    const config = createRequestConfig('POST', formData.toString())
+    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
     const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzbjk_cxJxbWithKchZzxkYzb.html?gnmkdm=N253512'
     const response = await robustFetch(url, config)
     
@@ -716,13 +857,19 @@ export async function executeCourseSelection(courseData: {
   kch_id: string
   jxbzls: string
   kklxdm?: string
-}) {
+}, sessionId?: string, tempCookie?: string) {
   try {
-    if (!getGlobalCookie()) {
+    // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
+    let cookie = tempCookie
+    if (!cookie) {
+      cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+    }
+    
+    if (!cookie) {
       return { flag: "0", msg: "Cookie未设置" }
     }
     
-    const params = await getCourseSelectionParams()
+    const params = await getCourseSelectionParams(sessionId, tempCookie)
     
     const formData = new URLSearchParams({
       jxb_ids: courseData.do_jxb_id,
@@ -736,7 +883,7 @@ export async function executeCourseSelection(courseData: {
       jcxx_id: params.jcxx_id || ''
     })
     
-    const config = createRequestConfig('POST', formData.toString())
+    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
     const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzbjk_xkBcZyZzxkYzb.html?gnmkdm=N253512'
     const response = await robustFetch(url, config)
     
@@ -780,9 +927,9 @@ export async function verifyCourseSelection(courseInfo: {
   jxb_id: string
   kcmc?: string
   jxbmc?: string
-}) {
+}, sessionId?: string, tempCookie?: string) {
   try {
-    const selectedCourses = await getSelectedCourses()
+    const selectedCourses = await getSelectedCourses(sessionId, tempCookie)
     
     if (Array.isArray(selectedCourses)) {
       for (const course of selectedCourses) {
@@ -829,16 +976,16 @@ export async function selectCourseWithVerification(courseInfo: {
   kklxdm?: string
   kcmc?: string
   jxbmc?: string
-}) {
+}, sessionId?: string, tempCookie?: string) {
   try {
-    const result = await executeCourseSelection(courseInfo)
+    const result = await executeCourseSelection(courseInfo, sessionId, tempCookie)
     const parsedResult = parseCourseSelectionResult(result, courseInfo)
     const verification = await verifyCourseSelection({
       kch_id: courseInfo.kch_id,
       jxb_id: courseInfo.jxb_id,
       kcmc: courseInfo.kcmc,
       jxbmc: courseInfo.jxbmc
-    })
+    }, sessionId, tempCookie)
     
     const finalSuccess = parsedResult.flag_success && verification.in_selected
     
@@ -870,9 +1017,14 @@ export async function selectCourseWithVerification(courseInfo: {
 }
 
 // 获取课表数据
-export async function getScheduleData(): Promise<any> {
+export async function getScheduleData(sessionId?: string, tempCookie?: string): Promise<any> {
   return withCache(cacheKeys.scheduleData, async () => {
-    const cookie = getGlobalCookie()
+    // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
+    let cookie = tempCookie
+    if (!cookie) {
+      cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+    }
+    
     if (!cookie) {
       throw new Error('Cookie未设置')
     }

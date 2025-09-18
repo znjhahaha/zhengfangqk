@@ -1,13 +1,25 @@
 // Next.js API路由调用
+import LocalCookieManager from './local-cookie-manager'
+
 const API_BASE_URL = '/api'
 
 // 通用请求函数
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  // 从本地存储获取Cookie并添加到请求头
+  const localCookie = LocalCookieManager.getCookie()
+  
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...options.headers as Record<string, string>,
+  }
+  
+  // 如果有本地Cookie，添加到请求头
+  if (localCookie) {
+    headers['x-course-cookie'] = localCookie
+  }
+
   const response = await fetch(`${API_BASE_URL}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
     ...options,
   })
 
@@ -46,11 +58,13 @@ export const courseAPI = {
     }),
   
   // 学生信息
-  getStudentInfo: () => request('/student-info'),
+  getStudentInfo: (sessionId?: string) => 
+    request(`/student-info${sessionId ? `?sessionId=${sessionId}` : ''}`),
   
   // 课程信息
   getAvailableCourses: () => request('/courses/available'),
   getSelectedCourses: () => request('/courses/selected'),
+  getScheduleData: () => request('/schedule'),
   
   // 选课功能
   executeSingleCourseSelection: (courseData: {

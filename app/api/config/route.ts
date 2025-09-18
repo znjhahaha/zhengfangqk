@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getCurrentUserCookie, setUserCookie } from '@/lib/course-api'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cookie = getCurrentUserCookie()
+    // 从请求头获取Cookie
+    const cookieHeader = request.headers.get('x-course-cookie')
+    
     return NextResponse.json({
       success: true,
       data: {
-        cookie: cookie,
-        has_cookie: !!cookie
+        cookie: cookieHeader || '',
+        has_cookie: !!cookieHeader
       }
     })
   } catch (error) {
@@ -24,7 +25,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { cookie } = body
 
-    console.log('📝 收到保存Cookie请求，长度:', cookie?.length || 0)
+    console.log('📝 收到验证Cookie请求，长度:', cookie?.length || 0)
 
     if (!cookie) {
       console.log('❌ Cookie参数为空')
@@ -34,25 +35,25 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const sessionId = setUserCookie(cookie)
+    // 不再存储Cookie到服务器，只验证格式
+    const isValidFormat = cookie.includes('JSESSIONID') || cookie.includes('SESSION')
     
-    // 验证保存是否成功
-    const savedCookie = getCurrentUserCookie()
-    console.log('✅ Cookie保存完成，验证长度:', savedCookie.length)
+    console.log('✅ Cookie格式验证完成:', isValidFormat)
 
     return NextResponse.json({
       success: true,
-      message: '配置已保存',
+      message: 'Cookie验证完成',
       data: {
-        cookie_length: savedCookie.length,
-        has_cookie: !!savedCookie
+        cookie_length: cookie.length,
+        has_cookie: true,
+        valid_format: isValidFormat
       }
     })
   } catch (error) {
-    console.error('❌ 保存Cookie失败:', error)
+    console.error('❌ 验证Cookie失败:', error)
     return NextResponse.json({
       success: false,
-      error: '保存配置失败'
+      error: '验证配置失败'
     }, { status: 500 })
   }
 }

@@ -1,11 +1,15 @@
-import { NextResponse } from 'next/server'
-import { getStudentInfo, getCurrentUserCookie } from '@/lib/course-api'
+import { NextRequest, NextResponse } from 'next/server'
+import { getStudentInfo } from '@/lib/course-api'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cookie = getCurrentUserCookie()
+    const { searchParams } = new URL(request.url)
+    const sessionId = searchParams.get('sessionId')
     
-    if (!cookie) {
+    // 从请求头获取Cookie
+    const cookieHeader = request.headers.get('x-course-cookie')
+    
+    if (!cookieHeader) {
       return NextResponse.json({
         success: false,
         error: 'Cookie未设置',
@@ -14,7 +18,8 @@ export async function GET() {
       }, { status: 400 })
     }
 
-    const studentInfo = await getStudentInfo()
+    // 临时设置Cookie用于此次请求
+    const studentInfo = await getStudentInfo(sessionId || undefined, cookieHeader)
     
     return NextResponse.json({
       success: true,

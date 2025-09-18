@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server'
-import { getAvailableCourses, getGlobalCookie } from '@/lib/course-api'
+import { NextRequest, NextResponse } from 'next/server'
+import { getAvailableCourses } from '@/lib/course-api'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cookie = getGlobalCookie()
-    if (!cookie) {
+    // 从请求头获取Cookie
+    const cookieHeader = request.headers.get('x-course-cookie')
+    
+    if (!cookieHeader) {
       return NextResponse.json({
         success: false,
         error: 'Cookie未设置',
@@ -13,7 +15,7 @@ export async function GET() {
       }, { status: 400 })
     }
 
-    const courses = await getAvailableCourses()
+    const courses = await getAvailableCourses(undefined, cookieHeader)
     
     return NextResponse.json({
       success: true,

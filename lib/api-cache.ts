@@ -74,7 +74,7 @@ export const cacheKeys = {
 export async function withCache<T>(
   key: string,
   fetcher: () => Promise<T>,
-  ttl: number = 5 * 60 * 1000 // 默认5分钟
+  ttl: number = 2 * 60 * 1000 // 默认2分钟，减少缓存时间
 ): Promise<T> {
   // 尝试从缓存获取
   const cached = apiCache.get<T>(key)

@@ -1,0 +1,8 @@
+{
+  "/page": "app/page.js",
+  "/api/schedule/route": "app/api/schedule/route.js",
+  "/api/courses/available/route": "app/api/courses/available/route.js",
+  "/api/course-selection/single/route": "app/api/course-selection/single/route.js",
+  "/api/config/route": "app/api/config/route.js",
+  "/api/health/route": "app/api/health/route.js"
+}

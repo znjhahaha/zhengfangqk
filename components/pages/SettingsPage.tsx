@@ -22,8 +22,9 @@ import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
 import { useStudentStore } from '@/lib/student-store'
 import CookieGuide from '@/components/CookieGuide'
-import MultiUserManager from '@/components/MultiUserManager'
+import UserSessionManager from '@/components/UserSessionManager'
 import { CookieValidator } from '@/lib/cookie-validator'
+import LocalCookieManager from '@/lib/local-cookie-manager'
 
 export default function SettingsPage() {
   const [cookie, setCookie] = useState('')
@@ -43,23 +44,37 @@ export default function SettingsPage() {
   // 加载配置
   const loadConfig = useCallback(async () => {
     try {
-      const response = await courseAPI.getConfig() as any
-      if (response.success) {
-        setCookie(response.data.cookie || '')
-        setServerStatus(response.data.has_cookie ? 'online' : 'offline')
-        console.log('📋 配置加载成功:', {
-          hasCookie: response.data.has_cookie,
-          cookieLength: response.data.cookie?.length || 0
-        })
+      // 从本地存储加载Cookie和用户信息
+      const localCookie = LocalCookieManager.getCookie()
+      const localUserInfo = LocalCookieManager.getUserInfo()
+      
+      if (localCookie) {
+        setCookie(localCookie)
+        console.log('📋 从本地存储加载Cookie配置')
+        
+        if (localUserInfo) {
+          setStudentInfo(localUserInfo)
+          console.log('👤 从本地存储恢复用户信息:', localUserInfo.name)
+        }
+        
+        // 检查Cookie是否过期
+        if (LocalCookieManager.isExpired()) {
+          console.log('⏰ 本地Cookie已过期')
+          setServerStatus('offline')
+          toast.error('Cookie已过期，请重新配置')
+        } else {
+          setServerStatus('online')
+          console.log('✅ 本地Cookie有效')
+        }
       } else {
-        console.error('配置加载失败:', response.error)
+        console.log('❌ 本地无Cookie配置')
         setServerStatus('offline')
       }
     } catch (error) {
       console.error('加载配置失败:', error)
       setServerStatus('offline')
     }
-  }, [])
+  }, [setStudentInfo])
 
   // 保存配置并验证Cookie有效性
   const saveConfig = useCallback(async () => {
@@ -72,84 +87,60 @@ export default function SettingsPage() {
     try {
       // 0. 清理旧的缓存数据
       CookieValidator.clearAllCache()
+      LocalCookieManager.clear()
       console.log('🧹 已清理旧数据，准备保存新Cookie...')
       
-      // 1. 保存Cookie配置
-      const response = await courseAPI.setConfig({ cookie: cookie.trim() }) as any
-      if (response.success) {
-        console.log('✅ Cookie保存成功，开始验证有效性...')
-        
-        // 2. 验证Cookie有效性 - 尝试获取学生信息
-        try {
-          const studentResponse = await courseAPI.getStudentInfo() as any
-          if (studentResponse.success && studentResponse.data) {
-            const studentData = {
-              name: studentResponse.data.name || '未知',
-              studentId: studentResponse.data.studentId || '',
-              major: studentResponse.data.major || '',
-              grade: studentResponse.data.grade || '',
-              college: studentResponse.data.college || ''
-            }
-            
-            // 3. 保存学生信息到全局状态
-            setStudentInfo(studentData)
-            
-            // 4. 重置欢迎动画状态，准备显示欢迎动画
-            // 使用setTimeout确保状态更新顺序
-            setTimeout(() => {
-              setHasShownWelcome(false)
-              setIsFirstVisit(true)
-              
-              // 触发自定义事件通知主页面显示欢迎动画
-              window.dispatchEvent(new CustomEvent('showWelcomeAnimation', {
-                detail: { studentName: studentData.name }
-              }))
-            }, 100)
-            
-            // 5. 更新服务器状态
-            setServerStatus('online')
-            
-            // 6. 显示成功消息
-            toast.success(`Cookie验证成功！欢迎 ${studentData.name} 同学`, {
-              duration: 3000
-            })
-            
-            console.log('✅ Cookie验证成功，学生信息:', studentData)
-            
-            // 7. 延迟重新加载配置
-            setTimeout(async () => {
-              try {
-                const configResponse = await courseAPI.getConfig() as any
-                if (configResponse.success) {
-                  setCookie(configResponse.data.cookie || '')
-                  setServerStatus(configResponse.data.has_cookie ? 'online' : 'offline')
-                  console.log('✅ 配置重新加载成功，Cookie状态:', configResponse.data.has_cookie)
-                }
-              } catch (error) {
-                console.error('重新加载配置失败:', error)
-              }
-            }, 200)
-            
-          } else {
-            // Cookie无效，无法获取学生信息
-            setServerStatus('offline')
-            toast.error('Cookie无效，无法获取学生信息，请检查Cookie是否正确')
-            console.error('❌ Cookie验证失败，无法获取学生信息')
-          }
-        } catch (studentError) {
-          // 获取学生信息失败
-          setServerStatus('offline')
-          toast.error('Cookie验证失败，请检查网络连接或Cookie是否正确')
-          console.error('❌ 获取学生信息失败:', studentError)
+      // 1. 保存Cookie到本地存储
+      LocalCookieManager.setCookie(cookie.trim())
+      console.log('✅ Cookie保存到本地存储成功')
+      
+      // 2. 验证Cookie有效性 - 尝试获取学生信息
+      const studentResponse = await courseAPI.getStudentInfo() as any
+      if (studentResponse.success && studentResponse.data) {
+        const studentData = {
+          name: studentResponse.data.name || '未知',
+          studentId: studentResponse.data.studentId || '',
+          major: studentResponse.data.major || '',
+          grade: studentResponse.data.grade || '',
+          college: studentResponse.data.college || ''
         }
         
+        // 3. 保存学生信息到本地存储和全局状态
+        LocalCookieManager.setUserInfo(studentData)
+        setStudentInfo(studentData)
+        
+        // 4. 重置欢迎动画状态，准备显示欢迎动画
+        setTimeout(() => {
+          setHasShownWelcome(false)
+          setIsFirstVisit(true)
+          
+          // 触发自定义事件通知主页面显示欢迎动画
+          window.dispatchEvent(new CustomEvent('showWelcomeAnimation', {
+            detail: { studentName: studentData.name }
+          }))
+        }, 100)
+        
+        // 5. 更新服务器状态
+        setServerStatus('online')
+        
+        // 6. 显示成功消息
+        toast.success(`Cookie验证成功！欢迎 ${studentData.name} 同学`, {
+          duration: 3000
+        })
+        
+        console.log('✅ Cookie验证成功，学生信息:', studentData)
       } else {
-        toast.error(response.error || '配置保存失败')
+        // Cookie无效，无法获取学生信息
         setServerStatus('offline')
+        toast.error('Cookie无效，无法获取学生信息，请检查Cookie是否正确')
+        console.error('❌ Cookie验证失败，无法获取学生信息')
       }
     } catch (error: any) {
-      toast.error(error.message || '配置保存失败')
+      console.error('❌ 获取学生信息失败:', error)
       setServerStatus('offline')
+      toast.error('Cookie验证失败，请检查网络连接或Cookie是否正确')
+      // 清理本地存储的无效Cookie
+      LocalCookieManager.clear()
     } finally {
       setIsLoading(false)
     }
@@ -581,18 +572,13 @@ export default function SettingsPage() {
         </Card>
       </motion.div>
 
-      {/* 多用户管理 */}
+      {/* 多用户会话管理 */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
       >
-        <MultiUserManager onUserChange={(sessionId) => {
-          if (sessionId) {
-            // 用户切换时重新加载配置
-            loadConfig()
-          }
-        }} />
+        <UserSessionManager />
       </motion.div>
 
       {/* Cookie配置指南 */}

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import html2canvas from 'html2canvas'
+import { courseAPI } from '@/lib/api'
 
 interface ScheduleCourse {
   name: string
@@ -134,8 +135,7 @@ export default function SchedulePage() {
 
     setIsLoading(true)
     try {
-      const response = await fetch('/api/schedule')
-      const result = await response.json()
+      const result = await courseAPI.getScheduleData() as any
       
       if (result.success) {
         setScheduleData(result.data)
@@ -155,9 +155,16 @@ export default function SchedulePage() {
           toast.error(result.message || '获取课表失败')
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('获取课表数据失败:', error)
-      toast.error('获取课表数据失败，请检查网络连接')
+      const errorMessage = error.message || '获取课表数据失败'
+      if (errorMessage.includes('Cookie未设置')) {
+        toast.error('请先配置Cookie', {
+          duration: 5000
+        })
+      } else {
+        toast.error('获取课表数据失败，请检查网络连接')
+      }
     } finally {
       setIsLoading(false)
     }

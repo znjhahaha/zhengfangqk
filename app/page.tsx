@@ -31,6 +31,7 @@ const SettingsPage = lazy(() => import('@/components/pages/SettingsPage'))
 import { courseAPI } from '@/lib/api'
 import { useStudentStore } from '@/lib/student-store'
 import { CookieValidator } from '@/lib/cookie-validator'
+import LocalCookieManager from '@/lib/local-cookie-manager'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('courses') // 默认显示课程信息页面
@@ -50,54 +51,61 @@ export default function Home() {
     setIsFirstVisit 
   } = useStudentStore()
 
-  // 检查服务器状态和Cookie配置
+  // 检查本地Cookie和服务器状态
   useEffect(() => {
-    const checkServerStatus = async () => {
+    const initializeApp = async () => {
       try {
         // 首先验证Cookie有效性并清理无效数据
         await CookieValidator.initialize()
         
-        const response = await courseAPI.healthCheck() as any
-        if (response.status === 'healthy') {
-          setServerStatus('online')
-          toast.success('后端服务器连接成功')
+        // 1. 优先检查本地localStorage中的Cookie
+        const localCookie = LocalCookieManager.getCookie()
+        const localUserInfo = LocalCookieManager.getUserInfo()
+        
+        if (localCookie && localUserInfo) {
+          console.log('🔄 从本地存储恢复Cookie和用户信息')
+          setStudentInfo(localUserInfo)
           
-          // 检查Cookie是否已配置
-          const configResponse = await courseAPI.getConfig() as any
-          if (configResponse.success && !configResponse.data.has_cookie) {
-            toast.error('请先配置Cookie', {
-              duration: 8000
-            })
-            // 清理所有缓存数据
-            CookieValidator.clearAllCache()
-          } else if (configResponse.success && configResponse.data.has_cookie) {
-            // 如果有Cookie，验证有效性并获取学生信息
-            const isValid = await CookieValidator.validateCookie(configResponse.data.cookie)
-            if (isValid) {
-              await fetchStudentInfo()
+          // 验证本地Cookie是否仍然有效
+          try {
+            const response = await courseAPI.healthCheck() as any
+            if (response.status === 'healthy') {
+              setServerStatus('online')
+              console.log('✅ 本地Cookie恢复成功，服务器在线')
             } else {
-              toast.error('Cookie已失效，请重新配置', {
-                duration: 8000
-              })
-              CookieValidator.clearAllCache()
+              setServerStatus('offline')
+              console.log('⚠️ 服务器离线，但本地数据已恢复')
             }
+          } catch (error) {
+            console.error('服务器连接失败:', error)
+            setServerStatus('offline')
+            // 即使服务器离线，也保持本地数据
+            console.log('⚠️ 服务器离线，使用本地缓存数据')
           }
         } else {
-          setServerStatus('offline')
-          toast.error('后端服务器状态异常')
+          // 2. 如果本地没有Cookie，检查是否过期
+          console.log('📝 本地无Cookie或已过期，需要重新配置')
+          const response = await courseAPI.healthCheck() as any
+          if (response.status === 'healthy') {
+            setServerStatus('online')
+            console.log('✅ 后端服务器连接成功')
+            toast.error('请先配置Cookie', { duration: 8000 })
+          } else {
+            setServerStatus('offline')
+            toast.error('后端服务器连接失败')
+          }
         }
       } catch (error) {
+        console.error('应用初始化失败:', error)
         setServerStatus('offline')
         toast.error('无法连接到后端服务器')
-        console.error('服务器连接失败:', error)
-        // 连接失败时也清理缓存
         CookieValidator.clearAllCache()
       } finally {
         setIsLoading(false)
       }
     }
 
-    checkServerStatus()
+    initializeApp()
   }, [])
 
   // 获取学生信息

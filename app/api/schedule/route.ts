@@ -5,7 +5,19 @@ export async function GET(request: NextRequest) {
   try {
     console.log('📅 API: 开始获取课表数据')
     
-    const scheduleData = await getScheduleData()
+    // 从请求头获取Cookie
+    const cookieHeader = request.headers.get('x-course-cookie')
+    
+    if (!cookieHeader) {
+      return NextResponse.json({
+        success: false,
+        error: 'Cookie未设置',
+        message: '请先在设置页面配置Cookie',
+        action: 'go_to_settings'
+      }, { status: 400 })
+    }
+    
+    const scheduleData = await getScheduleData(undefined, cookieHeader)
     const formattedData = formatScheduleData(scheduleData)
     
     console.log(`📅 API: 课表数据获取成功，共 ${formattedData.length} 门课程`)

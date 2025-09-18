@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { selectCourseWithVerification, getGlobalCookie } from '@/lib/course-api'
+import { selectCourseWithVerification } from '@/lib/course-api'
 
 export async function POST(request: NextRequest) {
   try {
-    const cookie = getGlobalCookie()
-    if (!cookie) {
+    // 从请求头获取Cookie
+    const cookieHeader = request.headers.get('x-course-cookie')
+    
+    if (!cookieHeader) {
       return NextResponse.json({
         success: false,
         error: 'Cookie未设置'
@@ -38,7 +40,7 @@ export async function POST(request: NextRequest) {
       kklxdm: kklxdm || '01', // 课程类型代码 (01=必修, 10=选修)
       kcmc: kcmc || '未知课程',
       jxbmc: jxbmc || '未知教学班'
-    })
+    }, undefined, cookieHeader)
     
     return NextResponse.json({
       success: result.success,

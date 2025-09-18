@@ -1,10 +1,12 @@
-import { NextResponse } from 'next/server'
-import { getSelectedCourses, formatSelectedCoursesData, getGlobalCookie } from '@/lib/course-api'
+import { NextRequest, NextResponse } from 'next/server'
+import { getSelectedCourses, formatSelectedCoursesData } from '@/lib/course-api'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cookie = getGlobalCookie()
-    if (!cookie) {
+    // 从请求头获取Cookie
+    const cookieHeader = request.headers.get('x-course-cookie')
+    
+    if (!cookieHeader) {
       return NextResponse.json({
         success: false,
         error: 'Cookie未设置',
@@ -14,7 +16,7 @@ export async function GET() {
     }
 
     console.log('🔍 API路由：开始获取已选课程...')
-    const rawData = await getSelectedCourses()
+    const rawData = await getSelectedCourses(undefined, cookieHeader)
     console.log('📊 API路由：已选课程原始数据:', rawData)
     
     // 使用格式化函数处理数据

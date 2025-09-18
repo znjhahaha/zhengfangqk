@@ -22,7 +22,8 @@ import {
   FolderOpen,
   Building,
   Settings,
-  Calendar
+  Calendar,
+  AlertCircle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
@@ -80,6 +81,29 @@ export default function CourseInfoPage() {
   const [groupByCategory, setGroupByCategory] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
 
+  // 清理缓存功能
+  const clearAllCache = useCallback(() => {
+    // 清理全局状态缓存
+    clearAvailableCourses()
+    clearSelectedCourses()
+    
+    // 清理API层缓存（如果有的话）
+    if (typeof window !== 'undefined') {
+      // 清理本地存储中的课程相关缓存
+      const keysToRemove = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key && (key.includes('course') || key.includes('available') || key.includes('selected'))) {
+          keysToRemove.push(key)
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key))
+    }
+    
+    toast.success('缓存已清理，下次查询将重新获取数据')
+    console.log('🗑️ 已清理所有课程缓存数据')
+  }, [clearAvailableCourses, clearSelectedCourses])
+
   // 获取可选课程 - 使用useCallback避免重复创建
   const fetchAvailableCourses = useCallback(async () => {
     // 如果已经加载过且数据存在，不重复请求
@@ -89,11 +113,17 @@ export default function CourseInfoPage() {
     }
     
     setIsLoading(true)
+    const startTime = Date.now()
     try {
+      console.log('🚀 开始获取可选课程（前端）...')
       const response = await courseAPI.getAvailableCourses() as any
       if (response.success) {
+        const duration = Date.now() - startTime
         setAvailableCourses(response.data || [])
-        toast.success('可选课程获取成功')
+        toast.success(`可选课程获取成功 (${duration}ms)`, {
+          duration: 3000
+        })
+        console.log(`⚡ 前端获取可选课程完成，用时: ${duration}ms`)
       } else {
         toast.error(response.error || '获取可选课程失败')
       }
@@ -121,6 +151,7 @@ export default function CourseInfoPage() {
     }
     
     setIsLoading(true)
+    const startTime = Date.now()
     try {
       console.log('🔍 前端：开始获取已选课程...')
       const response = await courseAPI.getSelectedCourses() as any
@@ -148,11 +179,15 @@ export default function CourseInfoPage() {
         setSelectedCourses(courses)
         console.log('📊 前端：已选课程数据:', courses)
         
+        const duration = Date.now() - startTime
         if (courses.length > 0) {
-          toast.success(`已选课程获取成功，共 ${courses.length} 门课程`)
+          toast.success(`已选课程获取成功，共 ${courses.length} 门课程 (${duration}ms)`, {
+            duration: 3000
+          })
         } else {
-          toast('当前没有已选课程')
+          toast(`当前没有已选课程 (${duration}ms)`)
         }
+        console.log(`⚡ 前端获取已选课程完成，用时: ${duration}ms`)
       } else {
         const errorMessage = response.error || '获取已选课程失败'
         console.error('❌ 前端：已选课程API错误:', errorMessage)
@@ -451,6 +486,15 @@ export default function CourseInfoPage() {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             刷新
+          </Button>
+
+          <Button
+            onClick={clearAllCache}
+            variant="outline"
+            className="btn-hover"
+          >
+            <AlertCircle className="h-4 w-4 mr-2" />
+            清理缓存
           </Button>
         </div>
       </motion.div>
