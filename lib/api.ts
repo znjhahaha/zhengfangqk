@@ -81,6 +81,25 @@ export const courseAPI = {
       body: JSON.stringify(courseData),
     }),
   
+  // 批量抢课
+  executeBatchCourseSelection: (data: {
+    courses: Array<{
+      jxb_id: string
+      do_jxb_id: string
+      kch_id: string
+      jxbzls?: string
+      kklxdm?: string
+      kcmc?: string
+      jxbmc?: string
+    }>
+    batchSize?: number
+    delay?: number
+  }) => 
+    request('/course-selection/batch', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  
   // 智能选课
   startSmartCourseSelection: (data: {
     courses: any[]

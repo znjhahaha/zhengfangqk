@@ -41,7 +41,7 @@ services:
 networks:
   tyust-network:
     driver: bridge
-
 volumes:
   logs:
     driver: local
+

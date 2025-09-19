@@ -23,7 +23,10 @@ import {
   Building,
   Settings,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Terminal,
+  Trash2,
+  ChevronUp
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
@@ -80,6 +83,104 @@ export default function CourseInfoPage() {
   // 分类相关状态
   const [groupByCategory, setGroupByCategory] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
+  
+  // 多选功能状态
+  const [multiSelectedCourses, setMultiSelectedCourses] = useState<Set<string>>(new Set())
+  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
+  const [isBatchGrabbing, setIsBatchGrabbing] = useState(false)
+  
+  // 日志状态 - 从localStorage加载
+  const [logs, setLogs] = useState<Array<{
+    id: string
+    timestamp: Date
+    type: 'info' | 'success' | 'warning' | 'error'
+    message: string
+  }>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedLogs = localStorage.getItem('course-selection-logs')
+        if (savedLogs) {
+          const parsed = JSON.parse(savedLogs)
+          // 将时间戳字符串转换回Date对象
+          return parsed.map((log: any) => ({
+            ...log,
+            timestamp: new Date(log.timestamp)
+          }))
+        }
+      } catch (error) {
+        console.error('加载日志失败:', error)
+      }
+    }
+    return []
+  })
+
+  // 保存日志到localStorage
+  const saveLogsToStorage = useCallback((logsToSave: typeof logs) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('course-selection-logs', JSON.stringify(logsToSave))
+      } catch (error) {
+        console.error('保存日志失败:', error)
+      }
+    }
+  }, [])
+
+  // 日志管理函数
+  const addLog = useCallback((type: 'info' | 'success' | 'warning' | 'error', message: string) => {
+    const newLog = {
+      id: `${Date.now()}-${Math.random()}`,
+      timestamp: new Date(),
+      type,
+      message
+    }
+    setLogs(prev => {
+      const updated = [...prev.slice(-99), newLog] // 保持最近100条日志
+      saveLogsToStorage(updated)
+      return updated
+    })
+  }, [saveLogsToStorage])
+
+  const clearLogs = useCallback(() => {
+    setLogs([])
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('course-selection-logs')
+      } catch (error) {
+        console.error('清除日志失败:', error)
+      }
+    }
+  }, [])
+
+  // 日志面板折叠状态 - 从localStorage加载
+  const [isLogPanelCollapsed, setIsLogPanelCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('log-panel-collapsed')
+        return saved === 'true'
+      } catch (error) {
+        console.error('加载日志面板状态失败:', error)
+      }
+    }
+    return false
+  })
+
+  // 保存日志面板折叠状态
+  const saveLogPanelState = useCallback((collapsed: boolean) => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('log-panel-collapsed', collapsed.toString())
+      } catch (error) {
+        console.error('保存日志面板状态失败:', error)
+      }
+    }
+  }, [])
+
+  // 切换日志面板折叠状态
+  const toggleLogPanel = useCallback(() => {
+    const newState = !isLogPanelCollapsed
+    setIsLogPanelCollapsed(newState)
+    saveLogPanelState(newState)
+  }, [isLogPanelCollapsed, saveLogPanelState])
 
   // 清理缓存功能
   const clearAllCache = useCallback(() => {
@@ -105,9 +206,9 @@ export default function CourseInfoPage() {
   }, [clearAvailableCourses, clearSelectedCourses])
 
   // 获取可选课程 - 使用useCallback避免重复创建
-  const fetchAvailableCourses = useCallback(async () => {
-    // 如果已经加载过且数据存在，不重复请求
-    if (dataLoaded.available && availableCourses.length > 0) {
+  const fetchAvailableCourses = useCallback(async (forceRefresh = false) => {
+    // 如果不是强制刷新且已经加载过且数据存在，不重复请求
+    if (!forceRefresh && dataLoaded.available && availableCourses.length > 0) {
       console.log('📦 可选课程已缓存，跳过请求')
       return
     }
@@ -115,20 +216,25 @@ export default function CourseInfoPage() {
     setIsLoading(true)
     const startTime = Date.now()
     try {
+      addLog('info', '开始获取可选课程...')
       console.log('🚀 开始获取可选课程（前端）...')
       const response = await courseAPI.getAvailableCourses() as any
       if (response.success) {
         const duration = Date.now() - startTime
         setAvailableCourses(response.data || [])
+        addLog('success', `可选课程获取成功，共${response.data?.length || 0}门课程 (${duration}ms)`)
         toast.success(`可选课程获取成功 (${duration}ms)`, {
           duration: 3000
         })
         console.log(`⚡ 前端获取可选课程完成，用时: ${duration}ms`)
       } else {
-        toast.error(response.error || '获取可选课程失败')
+        const errorMsg = response.error || '获取可选课程失败'
+        addLog('error', `获取可选课程失败: ${errorMsg}`)
+        toast.error(errorMsg)
       }
     } catch (error: any) {
       const errorMessage = error.message || '获取可选课程失败'
+      addLog('error', `获取可选课程异常: ${errorMessage}`)
       if (errorMessage.includes('Cookie未设置')) {
         toast.error('请先配置Cookie', {
           duration: 5000
@@ -140,12 +246,12 @@ export default function CourseInfoPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [dataLoaded.available, availableCourses.length, setAvailableCourses])
+  }, [dataLoaded.available, availableCourses.length, setAvailableCourses, addLog])
 
   // 获取已选课程 - 使用useCallback避免重复创建
-  const fetchSelectedCourses = useCallback(async () => {
-    // 如果已经加载过且数据存在，不重复请求
-    if (dataLoaded.selected && selectedCourses.length > 0) {
+  const fetchSelectedCourses = useCallback(async (forceRefresh = false) => {
+    // 如果不是强制刷新且已经加载过且数据存在，不重复请求
+    if (!forceRefresh && dataLoaded.selected && selectedCourses.length > 0) {
       console.log('📦 已选课程已缓存，跳过请求')
       return
     }
@@ -153,6 +259,7 @@ export default function CourseInfoPage() {
     setIsLoading(true)
     const startTime = Date.now()
     try {
+      addLog('info', '开始获取已选课程...')
       console.log('🔍 前端：开始获取已选课程...')
       const response = await courseAPI.getSelectedCourses() as any
       console.log('📊 前端：已选课程API响应:', response)
@@ -181,31 +288,36 @@ export default function CourseInfoPage() {
         
         const duration = Date.now() - startTime
         if (courses.length > 0) {
+          addLog('success', `已选课程获取成功，共${courses.length}门课程 (${duration}ms)`)
           toast.success(`已选课程获取成功，共 ${courses.length} 门课程 (${duration}ms)`, {
             duration: 3000
           })
         } else {
+          addLog('warning', `当前没有已选课程 (${duration}ms)`)
           toast(`当前没有已选课程 (${duration}ms)`)
         }
         console.log(`⚡ 前端获取已选课程完成，用时: ${duration}ms`)
       } else {
         const errorMessage = response.error || '获取已选课程失败'
+        addLog('error', `获取已选课程失败: ${errorMessage}`)
         console.error('❌ 前端：已选课程API错误:', errorMessage)
         toast.error(errorMessage)
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.error || error.message || '获取已选课程失败'
+      addLog('error', `获取已选课程异常: ${errorMessage}`)
       console.error('❌ 前端：获取已选课程异常:', error)
       toast.error(errorMessage)
     } finally {
       setIsLoading(false)
     }
-  }, [dataLoaded.selected, selectedCourses.length, setSelectedCourses])
+  }, [dataLoaded.selected, selectedCourses.length, setSelectedCourses, addLog])
 
   // 抢课
   const grabCourse = async (course: Course) => {
     const courseKey = `${course.kch_id}_${course.jxb_id}`
     setGrabbingCourses(prev => new Set(prev).add(courseKey))
+    addLog('info', `开始抢课: ${course.kcmc}`)
     
     try {
       const response = await courseAPI.executeSingleCourseSelection({
@@ -219,6 +331,7 @@ export default function CourseInfoPage() {
       }) as any
       
       if (response.success) {
+        addLog('success', `课程 "${course.kcmc}" 抢课成功！`)
         toast.success(`课程 "${course.kcmc}" 抢课成功！`)
         // 刷新课程列表
         if (selectedTab === 'available') {
@@ -227,10 +340,14 @@ export default function CourseInfoPage() {
           fetchSelectedCourses()
         }
       } else {
-        toast.error(response.message || response.error || '抢课失败')
+        const errorMsg = response.message || response.error || '抢课失败'
+        addLog('error', `课程 "${course.kcmc}" 抢课失败: ${errorMsg}`)
+        toast.error(errorMsg)
       }
     } catch (error: any) {
-      toast.error(error.message || '抢课失败')
+      const errorMsg = error.message || '抢课失败'
+      addLog('error', `课程 "${course.kcmc}" 抢课异常: ${errorMsg}`)
+      toast.error(errorMsg)
       console.error('抢课失败:', error)
     } finally {
       setGrabbingCourses(prev => {
@@ -296,6 +413,125 @@ export default function CourseInfoPage() {
       setExpandedCategories(new Set())
     }
   }, [expandedCategories.size, filteredCourses, selectedTab])
+
+  // 多选功能
+  const toggleMultiSelect = useCallback(() => {
+    setIsMultiSelectMode(!isMultiSelectMode)
+    if (isMultiSelectMode) {
+      // 退出多选模式时清空选择
+      setMultiSelectedCourses(new Set())
+    }
+  }, [isMultiSelectMode])
+
+  const toggleCourseSelection = useCallback((courseKey: string) => {
+    setMultiSelectedCourses(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(courseKey)) {
+        newSet.delete(courseKey)
+      } else {
+        newSet.add(courseKey)
+      }
+      return newSet
+    })
+  }, [])
+
+  const selectAllCourses = useCallback(() => {
+    const allCourseKeys = filteredCourses.map(course => `${course.kch_id}_${course.jxb_id}`)
+    setMultiSelectedCourses(new Set(allCourseKeys))
+  }, [filteredCourses])
+
+  const clearAllSelections = useCallback(() => {
+    setMultiSelectedCourses(new Set())
+  }, [])
+
+  // 批量抢课
+  const batchGrabCourses = useCallback(async () => {
+    if (multiSelectedCourses.size === 0) {
+      addLog('warning', '请先选择要抢的课程')
+      toast.error('请先选择要抢的课程')
+      return
+    }
+
+    setIsBatchGrabbing(true)
+    const selectedCoursesList = Array.from(multiSelectedCourses)
+    addLog('info', `开始批量抢课，共${selectedCoursesList.length}门课程`)
+
+    try {
+      // 准备课程数据
+      const coursesToSelect = selectedCoursesList.map(courseKey => {
+        const course = filteredCourses.find(c => `${c.kch_id}_${c.jxb_id}` === courseKey)
+        if (!course) {
+          throw new Error(`课程不存在: ${courseKey}`)
+        }
+        
+        return {
+          jxb_id: course.jxb_id,
+          do_jxb_id: course.do_jxb_id || course.jxb_id,
+          kch_id: course.kch_id,
+          jxbzls: course.jxbzls || '1',
+          kklxdm: course.kklxdm || '01',
+          kcmc: course.kcmc,
+          jxbmc: course.jxbmc || course.jsxm
+        }
+      })
+
+      console.log(`🚀 开始批量抢课，共${coursesToSelect.length}门课程`)
+
+      // 调用批量抢课API
+      const response = await courseAPI.executeBatchCourseSelection({
+        courses: coursesToSelect,
+        batchSize: 3, // 每次最多3个并发请求
+        delay: 500    // 批次间延迟500ms
+      }) as any
+
+      if (response.success) {
+        const { success, failed, results } = response.data
+        
+        // 显示每个课程的结果
+        results.forEach((result: any) => {
+          if (result.success) {
+            addLog('success', `"${result.courseName}" 抢课成功！`)
+            toast.success(`"${result.courseName}" 抢课成功！`)
+          } else {
+            addLog('error', `"${result.courseName}" 抢课失败: ${result.error || result.message}`)
+            toast.error(`"${result.courseName}" 抢课失败: ${result.error || result.message}`)
+          }
+        })
+
+        // 显示总结
+        if (success > 0) {
+          addLog('success', `批量抢课完成！成功: ${success}门，失败: ${failed}门`)
+          toast.success(`批量抢课完成！成功: ${success}门，失败: ${failed}门`)
+        } else {
+          addLog('error', `批量抢课失败！失败: ${failed}门`)
+          toast.error(`批量抢课失败！失败: ${failed}门`)
+        }
+
+        // 刷新课程列表
+        if (selectedTab === 'available') {
+          fetchAvailableCourses()
+        } else {
+          fetchSelectedCourses()
+        }
+
+        // 清空选择
+        setMultiSelectedCourses(new Set())
+        setIsMultiSelectMode(false)
+      } else {
+        const errorMsg = response.error || '批量抢课失败'
+        addLog('error', `批量抢课失败: ${errorMsg}`)
+        toast.error(errorMsg)
+      }
+
+    } catch (error: any) {
+      const errorMsg = error.message || '批量抢课异常'
+      addLog('error', `批量抢课异常: ${errorMsg}`)
+      console.error('批量抢课异常:', error)
+      toast.error(`批量抢课异常: ${errorMsg}`)
+    } finally {
+      setIsBatchGrabbing(false)
+    }
+  }, [multiSelectedCourses, filteredCourses, selectedTab, fetchAvailableCourses, fetchSelectedCourses, addLog])
 
   // 按实际课程名称分组课程
   const groupedCourses = useMemo(() => {
@@ -395,7 +631,7 @@ export default function CourseInfoPage() {
         </div>
         <div className="flex space-x-2">
           <Button
-            onClick={fetchAvailableCourses}
+            onClick={() => fetchAvailableCourses(true)}
             disabled={isLoading}
             variant="outline"
             className="btn-hover"
@@ -474,10 +710,10 @@ export default function CourseInfoPage() {
               // 强制刷新当前标签页的数据
               if (selectedTab === 'available') {
                 clearAvailableCourses()
-                fetchAvailableCourses()
+                fetchAvailableCourses(true)
               } else {
                 clearSelectedCourses()
-                fetchSelectedCourses()
+                fetchSelectedCourses(true)
               }
             }}
             variant="outline"
@@ -496,6 +732,58 @@ export default function CourseInfoPage() {
             <AlertCircle className="h-4 w-4 mr-2" />
             清理缓存
           </Button>
+
+          {/* 多选功能按钮 */}
+          {selectedTab === 'available' && (
+            <>
+              <Button
+                onClick={toggleMultiSelect}
+                variant={isMultiSelectMode ? "default" : "outline"}
+                className="btn-hover"
+              >
+                <CheckCircle className="h-4 w-4 mr-2" />
+                {isMultiSelectMode ? '退出多选' : '多选模式'}
+              </Button>
+              
+              {isMultiSelectMode && (
+                <>
+                  <Button
+                    onClick={selectAllCourses}
+                    variant="outline"
+                    className="btn-hover"
+                    disabled={filteredCourses.length === 0}
+                  >
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                    全选
+                  </Button>
+                  
+                  <Button
+                    onClick={clearAllSelections}
+                    variant="outline"
+                    className="btn-hover"
+                    disabled={multiSelectedCourses.size === 0}
+                  >
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    清空选择
+                  </Button>
+                  
+                  <Button
+                    onClick={batchGrabCourses}
+                    variant="default"
+                    className="btn-hover bg-green-600 hover:bg-green-700"
+                    disabled={multiSelectedCourses.size === 0 || isBatchGrabbing}
+                  >
+                    {isBatchGrabbing ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Play className="h-4 w-4 mr-2" />
+                    )}
+                    批量抢课 ({multiSelectedCourses.size})
+                  </Button>
+                </>
+              )}
+            </>
+          )}
         </div>
       </motion.div>
 
@@ -504,7 +792,7 @@ export default function CourseInfoPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        className={`grid grid-cols-1 gap-4 ${isMultiSelectMode ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
       >
         <Card className="glass">
           <CardContent className="p-4">
@@ -541,7 +829,54 @@ export default function CourseInfoPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* 多选统计卡片 */}
+        {isMultiSelectMode && (
+          <Card className="glass border-green-500/20">
+            <CardContent className="p-4">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-green-400" />
+                <div>
+                  <div className="text-2xl font-bold text-white">{multiSelectedCourses.size}</div>
+                  <div className="text-sm text-muted-foreground">已选择</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </motion.div>
+
+      {/* 多选模式提示 */}
+      {isMultiSelectMode && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <Card className="glass border-blue-500/20 bg-blue-500/5">
+            <CardContent className="p-4">
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-5 w-5 text-blue-400" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-white mb-2">多选模式已启用</h3>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    <p>• 直接点击课程卡片来选择/取消选择课程</p>
+                    <p>• 选中的课程会显示绿色边框和勾选标记</p>
+                    <p>• 使用"全选"按钮选择所有筛选结果</p>
+                    <p>• 使用"清空选择"按钮取消所有选择</p>
+                    <p>• 点击"批量抢课"按钮同时抢多门课程</p>
+                    <p>• 批量抢课会分批处理，避免服务器压力</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
 
       {/* 课程列表 */}
       <motion.div
@@ -683,6 +1018,9 @@ export default function CourseInfoPage() {
                               onGrab={() => grabCourse(course)}
                               isGrabbing={grabbingCourses.has(`${course.kch_id}_${course.jxb_id}`)}
                               showGrabButton={selectedTab === 'available'}
+                              isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
+                              isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
+                              onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
                             />
                           </motion.div>
                         ))}
@@ -714,6 +1052,9 @@ export default function CourseInfoPage() {
                           onGrab={() => grabCourse(course)}
                           isGrabbing={grabbingCourses.has(`${course.kch_id}_${course.jxb_id}`)}
                           showGrabButton={selectedTab === 'available'}
+                          isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
+                          isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
+                          onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
                         />
                       </motion.div>
                     ))}
@@ -724,6 +1065,142 @@ export default function CourseInfoPage() {
           </div>
         )}
       </motion.div>
+
+      {/* 日志面板 - 固定在页面底部 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="fixed bottom-0 left-0 right-0 z-50"
+      >
+        <Card className="glass mx-4 mb-4">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Terminal className="h-5 w-5 text-blue-400" />
+                <CardTitle className="text-lg">操作日志</CardTitle>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  onClick={clearLogs}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title="清空日志"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+                <Button
+                  onClick={toggleLogPanel}
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0"
+                  title={isLogPanelCollapsed ? "展开日志" : "收起日志"}
+                >
+                  <motion.div
+                    animate={{ rotate: isLogPanelCollapsed ? 180 : 0 }}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </motion.div>
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <motion.div
+            initial={false}
+            animate={{
+              height: isLogPanelCollapsed ? 0 : "auto",
+              opacity: isLogPanelCollapsed ? 0 : 1
+            }}
+            transition={{
+              height: { duration: 0.3, ease: "easeInOut" },
+              opacity: { duration: 0.2, ease: "easeInOut" }
+            }}
+            className="overflow-hidden"
+          >
+            <CardContent>
+              <div className="h-48 bg-black/20 rounded-lg p-3 overflow-y-auto">
+                {logs.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: isLogPanelCollapsed ? 0 : 1 }}
+                    transition={{ delay: isLogPanelCollapsed ? 0 : 0.1 }}
+                    className="flex items-center justify-center h-full text-muted-foreground"
+                  >
+                    <div className="text-center">
+                      <Terminal className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">暂无日志</p>
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div className="space-y-2">
+                    {logs.map((log, index) => (
+                      <motion.div
+                        key={log.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ 
+                          opacity: isLogPanelCollapsed ? 0 : 1, 
+                          y: isLogPanelCollapsed ? 10 : 0 
+                        }}
+                        transition={{ 
+                          duration: 0.2,
+                          delay: isLogPanelCollapsed ? 0 : index * 0.05
+                        }}
+                        className={`p-2 rounded text-xs font-mono ${
+                          log.type === 'success' 
+                            ? 'bg-green-500/10 text-green-400 border-l-2 border-green-500'
+                            : log.type === 'error'
+                            ? 'bg-red-500/10 text-red-400 border-l-2 border-red-500'
+                            : log.type === 'warning'
+                            ? 'bg-yellow-500/10 text-yellow-400 border-l-2 border-yellow-500'
+                            : 'bg-blue-500/10 text-blue-400 border-l-2 border-blue-500'
+                        }`}
+                      >
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: isLogPanelCollapsed ? 0 : 1 }}
+                          transition={{ 
+                            duration: 0.2,
+                            delay: isLogPanelCollapsed ? 0 : index * 0.05 + 0.1
+                          }}
+                          className="flex items-center justify-between mb-1"
+                        >
+                          <span className="text-xs opacity-70">
+                            {log.timestamp.toLocaleTimeString()}
+                          </span>
+                          <span className={`px-1 py-0.5 rounded text-xs ${
+                            log.type === 'success' 
+                              ? 'bg-green-500/20 text-green-300'
+                              : log.type === 'error'
+                              ? 'bg-red-500/20 text-red-300'
+                              : log.type === 'warning'
+                              ? 'bg-yellow-500/20 text-yellow-300'
+                              : 'bg-blue-500/20 text-blue-300'
+                          }`}>
+                            {log.type.toUpperCase()}
+                          </span>
+                        </motion.div>
+                        <motion.div
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: isLogPanelCollapsed ? 0 : 1 }}
+                          transition={{ 
+                            duration: 0.2,
+                            delay: isLogPanelCollapsed ? 0 : index * 0.05 + 0.15
+                          }}
+                          className="break-words"
+                        >
+                          {log.message}
+                        </motion.div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </motion.div>
+        </Card>
+      </motion.div>
     </div>
   )
 }
@@ -733,12 +1210,18 @@ function CourseCard({
   course, 
   onGrab, 
   isGrabbing, 
-  showGrabButton 
+  showGrabButton,
+  isMultiSelectMode,
+  isSelected,
+  onToggleSelection
 }: { 
   course: Course
   onGrab: () => void
   isGrabbing: boolean
   showGrabButton: boolean
+  isMultiSelectMode: boolean
+  isSelected: boolean
+  onToggleSelection: () => void
 }) {
   // 统一字段映射，兼容已选课程和可选课程的不同字段名
   const courseName = course.course_name || course.kcmc || '未知课程'
@@ -812,7 +1295,12 @@ function CourseCard({
       }}
       whileTap={{ scale: 0.98 }}
     >
-      <Card className="glass card-hover relative overflow-hidden">
+      <Card 
+        className={`glass card-hover relative overflow-hidden ${
+          isMultiSelectMode ? 'cursor-pointer' : ''
+        } ${isSelected ? 'ring-2 ring-green-500/50 bg-green-500/5' : ''}`}
+        onClick={isMultiSelectMode ? onToggleSelection : undefined}
+      >
         <motion.div
           className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-blue-500/5"
           initial={{ opacity: 0 }}
@@ -828,8 +1316,37 @@ function CourseCard({
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.1 }}
               >
+                {/* 多选状态指示器 */}
+                {isMultiSelectMode && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ delay: 0.1, type: "spring", stiffness: 300 }}
+                    className="flex items-center"
+                  >
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                      isSelected 
+                        ? 'bg-green-500 border-green-500' 
+                        : 'border-gray-400 hover:border-green-400'
+                    }`}>
+                      {isSelected && (
+                        <motion.svg
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ type: "spring", stiffness: 300 }}
+                          className="w-4 h-4 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </motion.svg>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+                
                 <motion.h3 
-                  className="text-lg font-semibold text-white"
+                  className={`text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}
                   whileHover={{ scale: 1.05 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
@@ -914,7 +1431,7 @@ function CourseCard({
             </div>
           </div>
           
-          {showGrabButton && (
+          {showGrabButton && !isMultiSelectMode && (
             <motion.div 
               className="ml-4"
               initial={{ opacity: 0, scale: 0.8 }}
@@ -927,7 +1444,10 @@ function CourseCard({
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <Button
-                  onClick={onGrab}
+                  onClick={(e) => {
+                    e.stopPropagation() // 防止事件冒泡到卡片
+                    onGrab()
+                  }}
                   disabled={isGrabbing}
                   className="btn-hover relative overflow-hidden"
                   size="sm"
