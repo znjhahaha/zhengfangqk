@@ -159,7 +159,9 @@ class UserSessionManager {
       const tempSessionId = this.createSession(cookie)
       
       // 尝试获取学生信息
-      const response = await courseAPI.getStudentInfo() as any
+      const { getCurrentSchool } = require('./global-school-state')
+      const currentSchool = getCurrentSchool()
+      const response = await courseAPI.getStudentInfo(undefined, currentSchool.id) as any
       const result = {
         valid: response.success && response.data,
         studentInfo: response.data

@@ -5,6 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const sessionId = searchParams.get('sessionId')
+    const schoolId = searchParams.get('schoolId')
     
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
@@ -16,6 +17,12 @@ export async function GET(request: NextRequest) {
         message: '请先在系统设置页面配置您的登录Cookie',
         action: '请前往"系统设置"页面，输入您的登录Cookie后重试'
       }, { status: 400 })
+    }
+
+    // 如果提供了学校ID，先更新学校配置
+    if (schoolId) {
+      const { updateSchoolConfig } = require('@/lib/course-api')
+      updateSchoolConfig(schoolId)
     }
 
     // 临时设置Cookie用于此次请求

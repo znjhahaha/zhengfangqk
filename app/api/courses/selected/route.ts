@@ -29,6 +29,17 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('❌ API路由：获取已选课程失败:', error)
+    
+    // 处理特殊状态码
+    if (error.message?.includes('Cookie已过期') || error.message?.includes('需要重新登录')) {
+      return NextResponse.json({
+        success: false,
+        error: 'Cookie已过期',
+        message: 'Cookie已过期，请重新登录',
+        action: '请前往"系统设置"页面，重新输入您的登录Cookie'
+      }, { status: 401 })
+    }
+    
     return NextResponse.json({
       success: false,
       error: error.message || '获取已选课程失败'

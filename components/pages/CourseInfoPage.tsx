@@ -182,6 +182,7 @@ export default function CourseInfoPage() {
     saveLogPanelState(newState)
   }, [isLogPanelCollapsed, saveLogPanelState])
 
+
   // 清理缓存功能
   const clearAllCache = useCallback(() => {
     // 清理全局状态缓存
@@ -218,7 +219,9 @@ export default function CourseInfoPage() {
     try {
       addLog('info', '开始获取可选课程...')
       console.log('🚀 开始获取可选课程（前端）...')
-      const response = await courseAPI.getAvailableCourses() as any
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      const response = await courseAPI.getAvailableCourses(currentSchool.id) as any
       if (response.success) {
         const duration = Date.now() - startTime
         setAvailableCourses(response.data || [])
@@ -261,7 +264,9 @@ export default function CourseInfoPage() {
     try {
       addLog('info', '开始获取已选课程...')
       console.log('🔍 前端：开始获取已选课程...')
-      const response = await courseAPI.getSelectedCourses() as any
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      const response = await courseAPI.getSelectedCourses(currentSchool.id) as any
       console.log('📊 前端：已选课程API响应:', response)
       
       if (response.success) {
@@ -320,6 +325,8 @@ export default function CourseInfoPage() {
     addLog('info', `开始抢课: ${course.kcmc}`)
     
     try {
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
       const response = await courseAPI.executeSingleCourseSelection({
         jxb_id: course.jxb_id,
         do_jxb_id: course.do_jxb_id || course.jxb_id,
@@ -328,7 +335,7 @@ export default function CourseInfoPage() {
         kklxdm: course.kklxdm || '01', // 课程类型代码 (01=必修, 10=选修)
         kcmc: course.kcmc,
         jxbmc: course.jxbmc || course.jsxm
-      }) as any
+      }, currentSchool.id) as any
       
       if (response.success) {
         addLog('success', `课程 "${course.kcmc}" 抢课成功！`)
@@ -478,11 +485,13 @@ export default function CourseInfoPage() {
       console.log(`🚀 开始批量抢课，共${coursesToSelect.length}门课程`)
 
       // 调用批量抢课API
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
       const response = await courseAPI.executeBatchCourseSelection({
         courses: coursesToSelect,
         batchSize: 3, // 每次最多3个并发请求
         delay: 500    // 批次间延迟500ms
-      }) as any
+      }, currentSchool.id) as any
 
       if (response.success) {
         const { success, failed, results } = response.data
@@ -577,10 +586,10 @@ export default function CourseInfoPage() {
     })
   }, [filteredCourses, selectedTab])
 
-  // 初始化加载 - 只在组件挂载时加载一次
-  useEffect(() => {
-    fetchAvailableCourses()
-  }, [fetchAvailableCourses])
+  // 移除自动查询，改为手动查询
+  // useEffect(() => {
+  //   fetchAvailableCourses()
+  // }, [fetchAvailableCourses])
 
   // 如果没有学生信息，显示提示
   if (!studentInfo) {
@@ -631,7 +640,32 @@ export default function CourseInfoPage() {
         </div>
         <div className="flex space-x-2">
           <Button
-            onClick={() => fetchAvailableCourses(true)}
+            onClick={() => {
+              if (selectedTab === 'available') {
+                fetchAvailableCourses(true)
+              } else {
+                fetchSelectedCourses(true)
+              }
+            }}
+            disabled={isLoading}
+            variant="default"
+            className="btn-hover"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Search className="h-4 w-4 mr-2" />
+            )}
+            {selectedTab === 'available' ? '查询可选课程' : '查询已选课程'}
+          </Button>
+          <Button
+            onClick={() => {
+              if (selectedTab === 'available') {
+                fetchAvailableCourses(true)
+              } else {
+                fetchSelectedCourses(true)
+              }
+            }}
             disabled={isLoading}
             variant="outline"
             className="btn-hover"

@@ -14,8 +14,10 @@ import {
   AlertCircle,
   Loader2,
   Calendar,
-  LogIn
+  LogIn,
+  Award
 } from '@/components/ui/optimized-icons'
+import { School } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PerformanceMonitor from '@/components/ui/PerformanceMonitor'
 import AutoLoginModal from '@/components/AutoLoginModal'
@@ -24,14 +26,17 @@ import WelcomeAnimation from '@/components/ui/WelcomeAnimation'
 // 懒加载页面组件
 const CourseInfoPage = lazy(() => import('@/components/pages/CourseInfoPage'))
 const CourseSelectionPage = lazy(() => import('@/components/pages/CourseSelectionPage'))
-const SchedulePage = lazy(() => import('@/components/pages/SchedulePage'))
+const ModernSchedulePage = lazy(() => import('@/components/pages/ModernSchedulePage'))
 const SettingsPage = lazy(() => import('@/components/pages/SettingsPage'))
+const SchoolSelectPage = lazy(() => import('@/components/pages/SchoolSelectPage'))
+const GradePage = lazy(() => import('@/components/pages/GradePage'))
 
 // 导入API和状态管理
 import { courseAPI } from '@/lib/api'
 import { useStudentStore } from '@/lib/student-store'
 import { CookieValidator } from '@/lib/cookie-validator'
 import LocalCookieManager from '@/lib/local-cookie-manager'
+import { getCurrentSchool } from '@/lib/global-school-state'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('courses') // 默认显示课程信息页面
@@ -55,6 +60,11 @@ export default function Home() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // 初始化学校配置
+        const currentSchool = getCurrentSchool()
+        console.log(`🏫 应用启动 - 当前学校配置: ${currentSchool.name} (${currentSchool.domain})`)
+        console.log(`🔍 检查localStorage中的学校ID: ${typeof window !== 'undefined' ? localStorage.getItem('selected-school-id') : 'N/A'}`)
+        
         // 首先验证Cookie有效性并清理无效数据
         await CookieValidator.initialize()
         
@@ -111,7 +121,9 @@ export default function Home() {
   // 获取学生信息
   const fetchStudentInfo = async () => {
     try {
-      const response = await courseAPI.getStudentInfo() as any
+      // 获取当前选中的学校ID
+      const currentSchool = getCurrentSchool()
+      const response = await courseAPI.getStudentInfo(undefined, currentSchool.id) as any
       if (response.success && response.data) {
         const studentData = {
           name: response.data.name || '未知',
@@ -297,7 +309,7 @@ export default function Home() {
                 <BookOpen className="h-8 w-8 text-primary" />
               </motion.div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                TYUST选课工具
+                正方教务工具
               </h1>
             </motion.div>
             
@@ -407,7 +419,7 @@ export default function Home() {
       </motion.header>
 
       {/* 主要内容 */}
-      <main className="max-w-7xl mx-auto p-6 relative">
+      <main className="w-full max-w-[78vw] mx-auto p-4 relative rounded-2xl overflow-hidden">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <motion.div
             initial={{ y: 20, opacity: 0 }}
@@ -450,6 +462,7 @@ export default function Home() {
                 </TabsTrigger>
               </motion.div>
               
+              
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -464,6 +477,40 @@ export default function Home() {
                   />
                   <Target className="h-6 w-6 relative z-10" />
                   <span className="relative z-10">智能选课</span>
+                </TabsTrigger>
+              </motion.div>
+              
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <TabsTrigger value="grade" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-amber-100 dark:data-[state=active]:bg-amber-900/30 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 rounded-lg"
+                    initial={{ x: "-100%" }}
+                    whileHover={{ x: "100%" }}
+                    transition={{ duration: 0.5 }}
+                  />
+                  <Award className="h-6 w-6 relative z-10" />
+                  <span className="relative z-10">成绩查询</span>
+                </TabsTrigger>
+              </motion.div>
+              
+              <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
+                <TabsTrigger value="school" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-lg"
+                    initial={{ x: "-100%" }}
+                    whileHover={{ x: "100%" }}
+                    transition={{ duration: 0.5 }}
+                  />
+                  <School className="h-6 w-6 relative z-10" />
+                  <span className="relative z-10">学校选择</span>
                 </TabsTrigger>
               </motion.div>
               
@@ -524,9 +571,10 @@ export default function Home() {
                     </motion.div>
                   </div>
                 }>
-                  <SchedulePage />
+                  <ModernSchedulePage />
                 </Suspense>
               </TabsContent>
+              
               
               <TabsContent value="selection" className="mt-0">
                 <Suspense fallback={
@@ -540,6 +588,36 @@ export default function Home() {
                   </div>
                 }>
                   <CourseSelectionPage />
+                </Suspense>
+              </TabsContent>
+              
+              <TabsContent value="grade" className="mt-0">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center py-12">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <Loader2 className="h-8 w-8 text-amber-400" />
+                    </motion.div>
+                  </div>
+                }>
+                  <GradePage />
+                </Suspense>
+              </TabsContent>
+              
+              <TabsContent value="school" className="mt-0">
+                <Suspense fallback={
+                  <div className="flex items-center justify-center py-12">
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <Loader2 className="h-8 w-8 text-blue-400" />
+                    </motion.div>
+                  </div>
+                }>
+                  <SchoolSelectPage />
                 </Suspense>
               </TabsContent>
               

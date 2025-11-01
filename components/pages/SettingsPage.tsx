@@ -95,7 +95,9 @@ export default function SettingsPage() {
       console.log('✅ Cookie保存到本地存储成功')
       
       // 2. 验证Cookie有效性 - 尝试获取学生信息
-      const studentResponse = await courseAPI.getStudentInfo() as any
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      const studentResponse = await courseAPI.getStudentInfo(undefined, currentSchool.id) as any
       if (studentResponse.success && studentResponse.data) {
         const studentData = {
           name: studentResponse.data.name || '未知',
@@ -160,7 +162,9 @@ export default function SettingsPage() {
 
       // 再测试Cookie是否有效（尝试获取学生信息）
       try {
-        const studentResponse = await courseAPI.getStudentInfo() as any
+        const { getCurrentSchool } = require('@/lib/global-school-state')
+        const currentSchool = getCurrentSchool()
+        const studentResponse = await courseAPI.getStudentInfo(undefined, currentSchool.id) as any
         if (studentResponse.success) {
           setServerStatus('online')
           toast.success('Cookie配置有效，连接正常')

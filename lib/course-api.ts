@@ -1,183 +1,53 @@
-// 完全独立的Next.js选课API实现
+// 基于Python版本fetch_course_json.py的课程API实现
 import * as cheerio from 'cheerio'
-import { withCache, cacheKeys } from './api-cache'
+import { withCache, cacheKeys, apiCache } from './api-cache'
+import { getCurrentSchool, setCurrentSchool, getApiUrls, getSchoolById } from './global-school-state'
 
 // 多用户会话支持
 interface SessionCookie {
   sessionId: string
   cookie: string
+  timestamp: number
 }
 
-// 请求去重系统 - 避免同时发起相同请求
-const pendingRequests = new Map<string, Promise<any>>()
-
-// 课表参数缓存 - 避免重复解析页面
-const scheduleParamsCache = new Map<string, { xnm: string, xqm: string, csrftoken: string, timestamp: number }>()
-const SCHEDULE_PARAMS_CACHE_TIME = 30 * 60 * 1000 // 30分钟缓存
-
-// 获取课表参数（带缓存）
-async function getScheduleParams(cookie: string): Promise<{ xnm: string, xqm: string, csrftoken: string }> {
-  const cacheKey = `schedule_params_${cookie.substring(0, 20)}` // 使用cookie前20位作为缓存键
-  
-  // 检查缓存
-  const cached = scheduleParamsCache.get(cacheKey)
-  if (cached && (Date.now() - cached.timestamp) < SCHEDULE_PARAMS_CACHE_TIME) {
-    console.log('📦 使用缓存的课表参数')
-    return { xnm: cached.xnm, xqm: cached.xqm, csrftoken: cached.csrftoken }
-  }
-  
-  console.log('📅 正在解析课表页面参数...')
-  
-  // 获取课表页面
-  const schedulePageUrl = 'https://newjwc.tyust.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default'
-  
-  const pageResponse = await robustFetch(schedulePageUrl, {
-    method: 'GET',
-    headers: {
-      'Referer': 'https://newjwc.tyust.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default',
-      'Cookie': cookie
-    }
-  })
-
-  if (!pageResponse.ok) {
-    throw new Error(`获取课表页面失败: ${pageResponse.status}`)
-  }
-
-  const pageHtml = await pageResponse.text()
-  
-  // 检查是否包含登录页面
-  if (pageHtml.includes('登录') || pageHtml.toLowerCase().includes('login')) {
-    throw new Error('Cookie可能无效或已过期，请检查Cookie设置')
-  }
-  
-  const $ = cheerio.load(pageHtml)
-
-  // 提取学年信息
-  let xnm = ''
-  const xnmSelect = $('#xnm')
-  if (xnmSelect.length > 0) {
-    const selectedOption = xnmSelect.find('option[selected]')
-    if (selectedOption.length > 0) {
-      xnm = selectedOption.attr('value') || ''
-    } else {
-      const firstOption = xnmSelect.find('option').first()
-      if (firstOption.length > 0) {
-        xnm = firstOption.attr('value') || ''
-      }
-    }
-  }
-
-  // 提取学期信息
-  let xqm = ''
-  const xqmSelect = $('#xqm')
-  if (xqmSelect.length > 0) {
-    const selectedOption = xqmSelect.find('option[selected]')
-    if (selectedOption.length > 0) {
-      xqm = selectedOption.attr('value') || ''
-    } else {
-      const firstOption = xqmSelect.find('option').first()
-      if (firstOption.length > 0) {
-        xqm = firstOption.attr('value') || ''
-      }
-    }
-  }
-
-  // 提取csrftoken
-  let csrftoken = ''
-  const csrftokenInput = $('#csrftoken')
-  if (csrftokenInput.length > 0) {
-    csrftoken = csrftokenInput.attr('value') || ''
-  }
-
-  if (!xnm || !xqm) {
-    throw new Error('无法获取学年或学期信息')
-  }
-
-  // 缓存参数
-  scheduleParamsCache.set(cacheKey, { xnm, xqm, csrftoken, timestamp: Date.now() })
-  console.log(`📅 课表参数解析完成 - 学年: ${xnm}, 学期: ${xqm}, csrftoken: ${csrftoken ? '已获取' : '未获取'}`)
-  
-  return { xnm, xqm, csrftoken }
-}
-
-// 请求去重函数
-async function deduplicatedRequest<T>(
-  key: string, 
-  requestFn: () => Promise<T>
-): Promise<T> {
-  // 如果相同请求正在进行，等待其结果
-  if (pendingRequests.has(key)) {
-    console.log(`🔄 请求去重: 等待进行中的请求 ${key}`)
-    return await pendingRequests.get(key)!
-  }
-  
-  // 创建新请求
-  const requestPromise = requestFn().finally(() => {
-    // 请求完成后清理
-    pendingRequests.delete(key)
-  })
-  
-  // 存储请求Promise
-  pendingRequests.set(key, requestPromise)
-  console.log(`🚀 发起新请求: ${key}`)
-  
-  return await requestPromise
-}
-
-// 使用Node.js全局对象存储多用户Cookie，避免热重载时丢失
-declare global {
-  var __globalSessions: Map<string, string> | undefined
-}
-
-// 初始化全局会话存储
-function initGlobalSessions() {
-  if (!global.__globalSessions) {
-    global.__globalSessions = new Map()
-  }
-}
+const sessionCookies = new Map<string, SessionCookie>()
 
 // 设置会话Cookie
-export function setSessionCookie(sessionId: string, cookie: string) {
-  initGlobalSessions()
-  global.__globalSessions!.set(sessionId, cookie)
-  console.log('🍪 会话Cookie已设置:', sessionId, '长度:', cookie.length)
+export function setSessionCookie(sessionId: string, cookie: string): void {
+  sessionCookies.set(sessionId, {
+    sessionId,
+    cookie,
+    timestamp: Date.now()
+  })
 }
 
 // 获取会话Cookie
-export function getSessionCookie(sessionId: string): string {
-  initGlobalSessions()
-  const cookie = global.__globalSessions!.get(sessionId) || ''
-  console.log('🍪 获取会话Cookie:', sessionId, '长度:', cookie.length)
-  return cookie
+export function getSessionCookie(sessionId: string): string | null {
+  const session = sessionCookies.get(sessionId)
+  if (session && Date.now() - session.timestamp < 30 * 60 * 1000) { // 30分钟过期
+    return session.cookie
+  }
+  return null
 }
 
-// 删除会话Cookie
-export function deleteSessionCookie(sessionId: string) {
-  initGlobalSessions()
-  global.__globalSessions!.delete(sessionId)
-  console.log('🗑️ 删除会话Cookie:', sessionId)
-}
-
-// 兼容性：设置全局Cookie（用于单用户模式）
-export function setGlobalCookie(cookie: string) {
-  setSessionCookie('default', cookie)
-}
-
-// 兼容性：获取全局Cookie（用于单用户模式）
+// 获取全局Cookie
 export function getGlobalCookie(): string {
-  return getSessionCookie('default')
+  return getSessionCookie('default') || ''
 }
 
 // 创建robust HTTP请求配置
 function createRequestConfig(method: string = 'GET', body?: string, sessionId?: string, tempCookie?: string) {
+  const urls = getApiUrls()
+  const currentSchool = getCurrentSchool()
+  
   const headers: Record<string, string> = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
     'Accept-Encoding': 'gzip, deflate, br, zstd',
     'Accept-Language': 'zh-CN,zh;q=0.9',
     'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-    'Origin': 'https://newjwc.tyust.edu.cn',
+    'Origin': `${currentSchool.protocol}://${currentSchool.domain}`,
     'Priority': 'u=0, i',
-    'Referer': 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=N253512&layout=default',
+    'Referer': urls.getRefererHeader('course'),
     'Sec-Ch-Ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
     'Sec-Ch-Ua-Mobile': '?0',
     'Sec-Ch-Ua-Platform': '"Windows"',
@@ -190,160 +60,49 @@ function createRequestConfig(method: string = 'GET', body?: string, sessionId?: 
 
   // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
   let cookie = tempCookie
-  if (!cookie) {
-    cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+  if (!cookie && sessionId) {
+    cookie = getSessionCookie(sessionId) || undefined
   }
-  
+  if (!cookie) {
+    cookie = getGlobalCookie() || undefined
+  }
+
   if (cookie) {
     headers['Cookie'] = cookie
   }
 
-  return {
+  const config: RequestInit = {
     method,
     headers,
-    body,
-    signal: AbortSignal.timeout(10000), // 10秒超时，加快失败检测
   }
+
+  if (body && method !== 'GET') {
+    config.body = body
+  }
+
+  return config
 }
 
-// 带重试机制的fetch请求
-async function robustFetch(url: string, config: any, retries: number = 3): Promise<Response> {
+// 带重试的fetch函数
+async function robustFetch(url: string, config: RequestInit, maxRetries: number = 3): Promise<Response> {
   let lastError: Error | null = null
-
-  for (let attempt = 0; attempt <= retries; attempt++) {
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      // 确保URL被正确编码
-      const encodedUrl = encodeURI(url)
-      const response = await fetch(encodedUrl, {
-        method: config.method,
-        headers: config.headers,
-        body: config.body,
-        signal: config.signal
-      })
-
-      if (response.ok) {
-        return response
-      }
-
-      if (response.status >= 500 && attempt < retries) {
-        console.log(`请求失败，状态码: ${response.status}，第${attempt + 1}次重试...`)
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
-        continue
-      }
-
+      const response = await fetch(url, config)
       return response
-
     } catch (error) {
       lastError = error as Error
-
-      if (attempt < retries) {
-        console.log(`网络请求失败: ${error}，第${attempt + 1}次重试...`)
-        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)))
-        continue
-      }
-    }
-  }
-
-  throw lastError || new Error('请求失败')
-}
-
-// 从Cookie中提取学生参数
-function extractStudentParamsFromCookie(cookieStr: string) {
-  const params: Record<string, string> = {}
-  if (!cookieStr) return params
-  
-  try {
-    // 从webvpn_username中提取学号信息
-    const webvpnMatch = cookieStr.match(/webvpn_username=([^;]+)/)
-    if (webvpnMatch) {
-      const username = decodeURIComponent(webvpnMatch[1])
-      const parts = username.split('@')
-      if (parts.length >= 3) {
-        params.xh_id = parts[0]
-        params.njdm_id = parts[1]
-        params.zyh_id = parts[2]
-      }
-    }
-    
-    // 从其他Cookie中提取参数
-    const xkxnmMatch = cookieStr.match(/xkxnm=([^;]+)/)
-    if (xkxnmMatch) {
-      params.xkxnm = decodeURIComponent(xkxnmMatch[1])
-    }
-    
-    const xkxqmMatch = cookieStr.match(/xkxqm=([^;]+)/)
-    if (xkxqmMatch) {
-      params.xkxqm = decodeURIComponent(xkxqmMatch[1])
-    }
-  } catch (error) {
-    console.error('解析Cookie参数失败:', error)
-  }
-  
-  return params
-}
-
-// 从HTML页面提取参数
-function extractParamsFromPage(html: string, pageName: string) {
-  const $ = cheerio.load(html)
-  const params: Record<string, string> = {}
-  
-  // 提取所有input字段
-  $('input').each((i, element) => {
-    const $el = $(element)
-    const id = $el.attr('id')
-    const name = $el.attr('name')
-    const value = $el.attr('value')
-    
-    if (id && value) {
-      params[id] = value
-    }
-    if (name && name !== id && value) {
-      params[name] = value
-    }
-  })
-  
-  // 从JavaScript代码中提取参数
-  $('script').each((i, element) => {
-    const scriptContent = $(element).html()
-    if (scriptContent) {
-      // 匹配各种参数模式
-      const patterns = [
-        /["'](\w+)["']\s*:\s*["']([^"']+)["']/g,  // 'param': 'value'
-        /(\w+)\s*[:=]\s*["']([^"']+)["']/g,        // param: 'value'
-        /name=["'](\w+)["'].*?value=["']([^"']+)["']/g,  // name='param' value='value'
-      ]
+      console.warn(`请求失败 (尝试 ${attempt}/${maxRetries}):`, error)
       
-      patterns.forEach(pattern => {
-        let match
-        while ((match = pattern.exec(scriptContent)) !== null) {
-          if (match.length >= 3) {
-            params[match[1]] = match[2]
-          }
-        }
-      })
-    }
-  })
-  
-  // 特殊处理学生信息页面
-  if (pageName === '学生信息页面') {
-    const xhId = params.xh_id || ''
-    if (xhId && xhId.length >= 8) {
-      // 学号格式：202420010138，前4位是年级，5-8位是专业
-      params.njdm_id = xhId.substring(0, 4)
-      params.zyh_id = xhId.substring(4, 8)
-    }
-    
-    // 学年学期信息
-    if (params.xnm) {
-      params.xkxnm = params.xnm
-    }
-    if (params.xqm) {
-      params.xkxqm = params.xqm
+      if (attempt < maxRetries) {
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
     }
   }
   
-  console.log(`从${pageName}提取到 ${Object.keys(params).length} 个参数`)
-  return params
+  throw lastError || new Error('请求失败')
 }
 
 // 获取学生信息 - 基于原始Python项目的完整实现
@@ -352,50 +111,86 @@ export async function getStudentInfo(sessionId?: string, tempCookie?: string) {
   return withCache(cacheKey, async () => {
     try {
       const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
-      const timestamp = Date.now()
-      const url = `https://newjwc.tyust.edu.cn/jwglxt/xtgl/index_cxYhxxIndex.html?xt=jw&localeKey=zh_CN&_=${timestamp}&gnmkdm=index`
+      
+      // 使用新的URL生成机制
+      const urls = getApiUrls()
+      const currentSchool = getCurrentSchool()
+      
+      console.log(`🔍 获取学生信息 - 当前学校: ${currentSchool.name} (${currentSchool.id})`)
+      console.log(`🌐 获取学生信息URL: ${urls.studentInfo}`)
+      console.log(`🏫 当前学校: ${currentSchool.name}`)
+      console.log(`🔍 使用的域名: ${currentSchool.protocol}://${currentSchool.domain}`)
       
       console.log('🔍 正在获取学生信息...', sessionId ? `(会话: ${sessionId})` : '', tempCookie ? '(使用临时Cookie)' : '')
-      const response = await robustFetch(url, config)
+      const response = await robustFetch(urls.studentInfo, config)
     
     if (!response.ok) {
       throw new Error(`获取学生信息失败，状态码: ${response.status}`)
     }
-    
+
     const html = await response.text()
     const $ = cheerio.load(html)
     
-    // 基于原始Python项目的实现：查找h4标签的media-heading类
-    const nameElement = $('h4.media-heading')
-    const name = nameElement.text().trim() || '未知'
+    console.log('🔍 学生信息页面HTML长度:', html.length)
+    console.log('🔍 查找姓名相关元素...')
     
-    console.log('👤 获取到学生姓名:', name)
+    // 尝试多种方式获取姓名
+    let name = '未知'
     
-    // 提取其他学生信息
-    const studentId = $('#xh').val() as string || $('input[name="xh"]').val() as string || ''
-    const njdmId = $('#njdm_id').val() as string || $('input[name="njdm_id"]').val() as string || ''
-    const zyhId = $('#zyh_id').val() as string || $('input[name="zyh_id"]').val() as string || ''
-    const xnm = $('#xnm').val() as string || $('input[name="xnm"]').val() as string || '2025'
-    const xqm = $('#xqm').val() as string || $('input[name="xqm"]').val() as string || '3'
-    
-    // 从Cookie中提取参数
-    const cookieParams = extractStudentParamsFromCookie(getGlobalCookie())
-    
-    const studentInfo = {
-      student_id: cookieParams.xh_id || studentId,
-      njdm_id: cookieParams.njdm_id || njdmId,
-      zyh_id: cookieParams.zyh_id || zyhId,
-      name: name,
-      grade: njdmId || '未知',
-      major: '未知',
-      college: '未知',
-      class_name: '未知',
-      academic_year: cookieParams.xkxnm || xnm,
-      semester: cookieParams.xkxqm || xqm
+    // 方法1: 查找input[name="xm"]
+    const nameInput = $('input[name="xm"]').attr('value')
+    if (nameInput && nameInput.trim()) {
+      name = nameInput.trim()
+      console.log('✅ 通过input[name="xm"]获取到姓名:', name)
+    } else {
+      console.log('❌ input[name="xm"]未找到或为空')
+      
+      // 方法2: 查找h4.media-heading (Python版本的方法)
+      const nameElement = $('h4.media-heading')
+      if (nameElement.length > 0) {
+        const nameText = nameElement.text().trim()
+        if (nameText && nameText !== '') {
+          // 移除"学生"后缀
+          name = nameText.replace(/\s*学生\s*$/, '').trim()
+          console.log('✅ 通过h4.media-heading获取到姓名:', name)
+        } else {
+          console.log('❌ h4.media-heading文本为空')
+        }
+      } else {
+        console.log('❌ h4.media-heading未找到')
+        
+        // 方法3: 查找其他可能的姓名元素
+        const possibleNames = [
+          $('span[name="xm"]').text(),
+          $('div[name="xm"]').text(),
+          $('.user-name').text(),
+          $('.student-name').text(),
+          $('[class*="name"]').first().text()
+        ].filter(text => text && text.trim())
+        
+        if (possibleNames.length > 0) {
+          name = possibleNames[0].trim()
+          console.log('✅ 通过备用方法获取到姓名:', name)
+        } else {
+          console.log('❌ 所有方法都未找到姓名')
+        }
+      }
     }
     
-      console.log('✅ 学生信息获取成功:', studentInfo)
-      return studentInfo
+    // 提取学生信息
+    const studentInfo = {
+      name: name,
+      studentId: $('input[name="xh"]').attr('value') || '',
+      major: $('input[name="zymc"]').attr('value') || '',
+      grade: $('input[name="nj"]').attr('value') || '',
+      class: $('input[name="bh"]').attr('value') || '',
+      college: $('input[name="jgmc"]').attr('value') || '',
+      department: $('input[name="yxmc"]').attr('value') || ''
+    }
+    
+    console.log('✅ 学生信息获取成功:', studentInfo)
+    return studentInfo
+    
     } catch (error) {
       console.error('❌ 获取学生信息失败:', error)
       throw error
@@ -403,780 +198,1646 @@ export async function getStudentInfo(sessionId?: string, tempCookie?: string) {
   }, 10 * 60 * 1000) // 学生信息缓存10分钟
 }
 
-// 获取选课参数
-async function getCourseSelectionParams(sessionId?: string, tempCookie?: string) {
-  try {
-    const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
-    const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=N253512&layout=default'
-    const response = await robustFetch(url, config)
-    
-    if (!response.ok) {
-      throw new Error(`获取选课参数失败，状态码: ${response.status}`)
-    }
-    
-    const html = await response.text()
-    const params = extractParamsFromPage(html, '选课页面')
-    
-    // 从Cookie中获取备用参数
-    let cookie = tempCookie
-    if (!cookie) {
-      cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
-    }
-    const cookieParams = extractStudentParamsFromCookie(cookie)
-    
-    return {
-      njdm_id: params.njdm_id || cookieParams.njdm_id || '2024',
-      zyh_id: params.zyh_id || cookieParams.zyh_id || '2001',
-      xkxnm: params.xkxnm || cookieParams.xkxnm || '2025',
-      xkxqm: params.xkxqm || cookieParams.xkxqm || '3',
-      jcxx_id: params.jcxx_id || '',
-      xkkz_id: params.xkkz_id || ''
-    }
-  } catch (error) {
-    console.error('获取选课参数失败:', error)
-    // 返回默认参数
-    const cookieParams = extractStudentParamsFromCookie(getGlobalCookie())
-    return {
-      njdm_id: cookieParams.njdm_id || '2024',
-      zyh_id: cookieParams.zyh_id || '2001',
-      xkxnm: cookieParams.xkxnm || '2025',
-      xkxqm: cookieParams.xkxqm || '3',
-      jcxx_id: '',
-      xkkz_id: ''
-    }
-  }
-}
-
-// 解析课程数据 - 基于原始Python项目的实现
-function parseCourseData(jsonData: any) {
-  const courses: any[] = []
-  
-  if (jsonData && jsonData.tmpList && Array.isArray(jsonData.tmpList)) {
-    jsonData.tmpList.forEach((course: any) => {
-      courses.push({
-        kch_id: course.kch_id || course.kch || '',
-        kcmc: course.kcmc || '',
-        jxb_id: course.jxb_id || '',
-        jsxm: course.jsxm || course.jsxx || '',
-        kclb: course.kclb || '',
-        xf: course.xf || '',
-        sksj: course.sksj || '',
-        skdd: course.skdd || course.jxdd || '',
-        bjrs: course.bjrs || course.jxbrl || '',
-        yxrs: course.yxrs || course.yxzrs || '',
-        kkxy: course.kkxy || course.kkxymc || '',
-        kkzy: course.kkzy || course.kkzymc || '',
-        kkxq: course.kkxq || course.xqumc || '',
-        kkzc: course.kkzc || '',
-        kkdm: course.kkdm || '',
-        kkmm: course.kkmm || '',
-        kkms: course.kkms || '',
-        kkzt: course.kkzt || '',
-        kkztmc: course.kkztmc || '',
-        kkztms: course.kkztms || '',
-        do_jxb_id: course.do_jxb_id || '',
-        jxbzls: course.jxbzls || '',
-        xkkz_id: course.xkkz_id || '',
-        type_course: course.type_course || '未知',
-        detailed_teacher: course.detailed_teacher || '',
-        detailed_time: course.detailed_time || '',
-        detailed_location: course.detailed_location || ''
-      })
-    })
-  }
-  
-  return courses
-}
-
-// 获取可选课程 - 基于原始Python项目的实现
-// 获取课程详细信息 - 基于Python版本的实现
-async function getAvailableCourseDetails(kch_id: string, xkkz_id: string = '', jxb_id: string = '', sessionId?: string, tempCookie?: string) {
-  try {
-    const params = await getCourseSelectionParams(sessionId, tempCookie)
-    
-    // 确保kch_id是字符串类型
-    if (typeof kch_id !== 'string') {
-      kch_id = String(kch_id)
-    }
-    
-    // 对kch_id进行URL编码
-    kch_id = encodeURIComponent(kch_id)
-    
-    // 如果提供了xkkz_id或jxb_id，也进行URL编码
-    if (xkkz_id) {
-      xkkz_id = encodeURIComponent(xkkz_id)
-    }
-    if (jxb_id) {
-      jxb_id = encodeURIComponent(jxb_id)
-    }
-    
-    const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzbjk_cxJxbWithKchZzxkYzb.html?gnmkdm=N253512'
-    
-    // 构建表单数据 - 使用动态参数
-    const formDataParts = [
-      'rwlx=1', 'xkly=0', 'bklx_id=0', 'sfkkjyxdxnxq=0', 'xqh_id=4', 'jg_id=20',
-      `zyh_id=${params.zyh_id}`, 'zyfx_id=wfx', 
-      `njdm_id=${params.njdm_id}`, 'bh_id=2024200101', 'xbm=1',
-      'xslbdm=wlb', 'mzm=01', 'xz=4', 'ccdm=3', 'xsbj=4294967296', 'sfkknj=0',
-      'gnjkxdnj=0', 'sfkkzy=0', 'kzybkxy=0', 'sfznkx=0', 'zdkxms=0', 'sfkxq=0',
-      'sfkcfx=0', 'bbhzxjxb=0', 'kkbk=0', 'kkbkdj=0', 
-      `xkxnm=${params.xkxnm}`, 
-      `xkxqm=${params.xkxqm}`,
-      'xkxskcgskg=0', 'rlkz=0', 'kklxdm=01', `kch_id=${kch_id}`, 'jxbzcxskg=0'
-    ]
-    
-    // 根据提供的参数添加特定参数
-    if (jxb_id) {
-      formDataParts.push(`jxb_id=${jxb_id}`)
-    } else if (xkkz_id) {
-      formDataParts.push(`xkkz_id=${xkkz_id}`)
-    }
-    
-    // 添加其他参数
-    formDataParts.push('cxbj=0', 'fxbj=0')
-    
-    const formData = formDataParts.join('&')
-    
-    const config = createRequestConfig('POST', formData, sessionId, tempCookie)
-    const response = await robustFetch(url, config)
-    
-    if (response.ok) {
-      const result = await response.json()
-      // 检查返回的数据是否有效
-      if (result && Array.isArray(result) && result.length > 0 && result[0] !== "0") {
-        return result
-      } else {
-        return null
-      }
-    } else {
-      console.error(`获取课程详细信息失败，状态码: ${response.status}`)
-      return null
-    }
-  } catch (error) {
-    console.error('获取课程详细信息异常:', error)
-    return null
-  }
-}
-
-export async function getAvailableCourses(sessionId?: string, tempCookie?: string, fastMode: boolean = true) {
-  const cacheKey = cacheKeys.availableCourses('all')
-  const requestKey = `${cacheKey}_${sessionId || 'default'}_${tempCookie ? 'temp' : 'session'}`
-  
-  return deduplicatedRequest(requestKey, () => 
-    withCache(cacheKey, async () => {
+// 获取可选课程 - 基于Python版本fetch_course_json.py的完整实现
+export async function getAvailableCourses(sessionId?: string, tempCookie?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.availableCourses('all')}_${sessionId}` : cacheKeys.availableCourses('all')
+  return withCache(cacheKey, async () => {
     try {
+      console.log('🚀 开始获取可选课程（基于Python版本fetch_course_json.py）...')
       const startTime = Date.now()
-      console.log('🚀 开始并发获取课程数据...')
       
-      const params = await getCourseSelectionParams(sessionId, tempCookie)
-      
-      // 课程类型列表 - 基于course_api_json.py的实现
-      const courseTypes = [
-        { kklxdm: '01', typeName: '必修' },
-        { kklxdm: '10', typeName: '选修' }
-      ]
-      
-      // 创建并发请求函数
-      const fetchCourseType = async ({ kklxdm, typeName }: { kklxdm: string, typeName: string }) => {
-        console.log(`🔍 开始获取${typeName}课程...`)
-        
-        // 基于Python程序的完整参数列表 - 使用字符串拼接方式
-        const formData = `rwlx=1&xkly=0&bklx_id=0&sfkkjyxdxnxq=0&xqh_id=4&jg_id=20&` +
-          `njdm_id_1=${params.njdm_id}&zyh_id_1=${params.zyh_id}&` +
-          `zyh_id=${params.zyh_id}&zyfx_id=wfx&njdm_id=${params.njdm_id}&` +
-          `bh_id=2024200101&bjgkczxbbjwcx=0&xbm=1&xslbdm=wlb&mzm=01&xz=4&` +
-          `ccdm=3&xsbj=4294967296&sfkknj=0&gnjkxdnj=0&sfkkzy=0&kzybkxy=0&` +
-          `sfznkx=0&zdkxms=0&sfkxq=0&sfkcfx=0&kkbk=0&kkbkdj=0&sfkgbcx=0&` +
-          `sfrxtgkcxd=0&tykczgxdcs=0&xkxnm=${params.xkxnm}&` +
-          `xkxqm=${params.xkxqm}&kklxdm=${kklxdm}&bbhzxjxb=0&` +
-          `rlkz=0&xkzgbj=0&kspage=1&jspage=10&jxbzb=`
-        
-        try {
-          const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
-          const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbPartDisplay.html?gnmkdm=N253512'
-          const response = await robustFetch(url, config)
-          
-          if (!response.ok) {
-            console.error(`获取${typeName}课程失败，状态码: ${response.status}`)
-            return []
-          }
-          
-          const jsonData = await response.json()
-          console.log(`📚 ${typeName}课程解析完成`)
-          const courses = parseCourseData(jsonData)
-          console.log(`✅ ${typeName}课程获取成功: ${courses.length} 门课程`)
-          
-          // 为课程添加类型信息
-          courses.forEach(course => {
-            course.type_course = typeName
-            course.kklxdm = kklxdm
-          })
-          
-          return courses
-        } catch (error) {
-          console.error(`❌ 获取${typeName}课程失败:`, error)
-          return []
-        }
+      // 获取Cookie
+      const cookie = tempCookie || getGlobalCookie()
+      if (!cookie) {
+        throw new Error('Cookie未设置')
       }
       
-      // 并发获取所有课程类型，使用Promise.allSettled避免单个失败影响整体
-      console.log('🔄 开始并发请求...')
-      const coursePromises = courseTypes.map(courseType => fetchCourseType(courseType))
-      const courseResults = await Promise.allSettled(coursePromises)
+      // 使用新的课程获取器
+      const { fetchAllCourses } = require('./course-fetcher')
+      const results = await fetchAllCourses(cookie)
       
-      // 处理结果，即使部分失败也继续
-      const successfulResults = courseResults
-        .filter((result): result is PromiseFulfilledResult<any[]> => result.status === 'fulfilled')
-        .map(result => result.value)
-      
-      const failedCount = courseResults.filter(result => result.status === 'rejected').length
-      if (failedCount > 0) {
-        console.warn(`⚠️ ${failedCount} 个课程类型获取失败，但继续处理成功的结果`)
-      }
-      
-      // 合并所有课程数据
+      // 合并所有课程
       const allCourses: any[] = []
-      successfulResults.forEach(courses => {
-        allCourses.push(...courses)
-      })
+      for (const result of results) {
+        allCourses.push(...result.courses)
+      }
       
       const duration = Date.now() - startTime
-      console.log(`⚡ 并发获取完成! 用时: ${duration}ms, 总课程数: ${allCourses.length}`)
-    
-    // 获取课程详细信息 - 按照Python版本逻辑，只获取第一个课程的详细信息
-    if (allCourses.length > 0 && !fastMode) {
-      console.log('🔍 正在获取课程详细信息（仅第一个课程）...')
-      const detailStartTime = Date.now()
+      console.log(`🎉 所有课程获取完成，共${allCourses.length}门课程，耗时${duration}ms`)
       
-      // 只获取第一个课程的详细信息，然后应用到所有课程（与Python版本一致）
-      const firstCourse = allCourses[0]
-      const kch_id = firstCourse.kch || firstCourse.kch_id || ''
-      const xkkz_id = firstCourse.xkkz_id || ''
-      
-      if (kch_id) {
-        try {
-          const courseDetails = await getAvailableCourseDetails(kch_id, xkkz_id, '', sessionId, tempCookie)
-          if (courseDetails && Array.isArray(courseDetails) && courseDetails.length > 0) {
-            console.log(`✅ 获取课程详细信息成功，数据条数: ${courseDetails.length}`)
-            
-            // 为所有课程添加详细信息（与Python版本一致）
-            allCourses.forEach(course => {
-              course.course_details = courseDetails
-            })
-            
-            const detailDuration = Date.now() - detailStartTime
-            console.log(`✅ 课程详细信息添加完成! 用时: ${detailDuration}ms, 应用到: ${allCourses.length} 门课程`)
-          } else {
-            console.log('⚠️ 获取课程详细信息失败')
-          }
-        } catch (error) {
-          console.error('⚠️ 获取课程详细信息异常:', error)
-        }
-      }
-    }
-    
       return allCourses
     } catch (error) {
       console.error('获取可选课程失败:', error)
       throw error
     }
-  }, 10 * 60 * 1000) // 可选课程缓存10分钟，与Python版本一致
-  )
+  }, 10 * 60 * 1000) // 可选课程缓存10分钟
 }
 
-// 解析已选课程数据 - 基于原始Python项目的实现
+// 获取已选课程动态参数
+async function getSelectedCoursesDynamicParams(sessionId?: string, tempCookie?: string) {
+  try {
+    const urls = getApiUrls()
+    const currentSchool = getCurrentSchool()
+    const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
+    
+    console.log('🔍 获取已选课程动态参数...')
+    
+    // 访问选课页面获取动态参数
+    const response = await robustFetch(urls.courseSelectionParams, config)
+    
+    if (!response.ok) {
+      throw new Error(`获取选课页面失败，状态码: ${response.status}`)
+    }
+    
+    const html = await response.text()
+    const $ = cheerio.load(html)
+    
+    // 提取动态参数
+    const params = {
+      jg_id: $('input[name="jg_id"]').attr('value') || '05',
+      zyh_id: $('input[name="zyh_id"]').attr('value') || '527',
+      njdm_id: $('input[name="njdm_id"]').attr('value') || '2024',
+      zyfx_id: $('input[name="zyfx_id"]').attr('value') || 'wfx',
+      bh_id: $('input[name="bh_id"]').attr('value') || '',
+      xz: $('input[name="xz"]').attr('value') || '4',
+      ccdm: $('input[name="ccdm"]').attr('value') || '3',
+      xqh_id: $('input[name="xqh_id"]').attr('value') || '01',
+      xkxnm: $('input[name="xkxnm"]').attr('value') || '2025',
+      xkxqm: $('input[name="xkxqm"]').attr('value') || '3',
+      xkly: $('input[name="xkly"]').attr('value') || '0'
+    }
+    
+    console.log('✅ 已选课程动态参数获取成功:', params)
+    return params
+    
+  } catch (error) {
+    console.error('❌ 获取已选课程动态参数失败:', error)
+    // 返回默认参数
+    return {
+      jg_id: '05',
+      zyh_id: '527',
+      njdm_id: '2024',
+      zyfx_id: 'wfx',
+      bh_id: '',
+      xz: '4',
+      ccdm: '3',
+      xqh_id: '01',
+      xkxnm: '2025',
+      xkxqm: '3',
+      xkly: '0'
+    }
+  }
+}
+
+// 获取已选课程 - 基于Python版本的实现
+export async function getSelectedCourses(sessionId?: string, tempCookie?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.selectedCourses}_${sessionId}` : cacheKeys.selectedCourses
+  return withCache(cacheKey, async () => {
+    try {
+      const urls = getApiUrls()
+      const currentSchool = getCurrentSchool()
+      
+      console.log(`🔍 获取已选课程 - 当前学校: ${currentSchool.name} (${currentSchool.id})`)
+      
+      // 动态获取已选课程参数
+      const selectedParams = await getSelectedCoursesDynamicParams(sessionId, tempCookie)
+      console.log('🔍 已选课程动态参数:', selectedParams)
+      
+      // 构建请求配置
+      const config = createRequestConfig('POST', undefined, sessionId, tempCookie)
+      
+      // 设置特定的请求头
+      config.headers = {
+        ...config.headers,
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'Origin': `${currentSchool.protocol}://${currentSchool.domain}`,
+        'Pragma': 'no-cache',
+        'Referer': `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=N253512&layout=default`,
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+      
+      // 构建POST数据
+      const formData = new URLSearchParams()
+      Object.entries(selectedParams).forEach(([key, value]) => {
+        formData.append(key, value)
+      })
+      
+      console.log('🔍 已选课程POST数据:', formData.toString())
+      
+      // 更新配置以包含POST数据
+      config.body = formData.toString()
+      config.method = 'POST'
+      
+      // 使用正确的已选课程接口URL
+      const selectedCoursesUrl = `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbChoosedDisplay.html?gnmkdm=N253512`
+      console.log(`🌐 已选课程URL: ${selectedCoursesUrl}`)
+      console.log(`📋 POST数据: ${formData.toString()}`)
+      
+      console.log('🔍 正在获取已选课程...', sessionId ? `(会话: ${sessionId})` : '', tempCookie ? '(使用临时Cookie)' : '')
+      const response = await robustFetch(selectedCoursesUrl, config)
+    
+    if (!response.ok) {
+      // 处理特殊状态码
+      if (response.status === 901) {
+        throw new Error('Cookie已过期，请重新登录')
+      } else if (response.status === 910) {
+        throw new Error('需要重新登录，请检查Cookie')
+      } else {
+        throw new Error(`获取已选课程失败，状态码: ${response.status}`)
+      }
+    }
+
+    const responseText = await response.text()
+    console.log('📄 已选课程响应长度:', responseText.length)
+    console.log('📄 已选课程响应前500字符:', responseText.substring(0, 500))
+    
+    // 检查是否是登录页面
+    if (responseText.includes('用户登录') || responseText.includes('登 录') || responseText.includes('统一身份认证')) {
+      console.log('⚠️ 检测到登录页面，Cookie可能已过期')
+      throw new Error('Cookie已过期，请重新登录')
+    }
+    
+    // 解析已选课程
+    const courses: any[] = []
+    
+    try {
+      // 尝试解析JSON响应
+      const jsonData = JSON.parse(responseText)
+      console.log('📊 解析到JSON数据:', jsonData)
+      
+      // 检查是否是单个课程对象
+      if (jsonData.kcmc && jsonData.kch) {
+        console.log('📚 检测到单个课程对象，转换为课程列表')
+        const course = {
+          course_name: jsonData.kcmc || '未知课程',
+          teacher: jsonData.jsxx ? jsonData.jsxx.split('/')[1] || '未知教师' : '未知教师',
+          classroom: jsonData.jxdd ? jsonData.jxdd.replace(/<br\/>/g, ', ') : '未知教室',
+          time: jsonData.sksj ? jsonData.sksj.replace(/<br\/>/g, ', ') : '未知时间',
+          credits: jsonData.xf || jsonData.jxbxf || '0',
+          category: jsonData.kklxmc || '未知类别',
+          status: jsonData.sfxkbj === '1' ? '已选' : '未选',
+          course_code: jsonData.kch || '',
+          course_id: jsonData.kch_id || '',
+          class_name: jsonData.jxbmc || '',
+          class_id: jsonData.jxb_id || ''
+        }
+        courses.push(course)
+      } else if (Array.isArray(jsonData)) {
+        // 如果是数组
+        console.log('📚 检测到课程数组')
+        jsonData.forEach((item: any) => {
+          if (item.kcmc && item.kch) {
+            const course = {
+              course_name: item.kcmc || '未知课程',
+              teacher: item.jsxx ? item.jsxx.split('/')[1] || '未知教师' : '未知教师',
+              classroom: item.jxdd ? item.jxdd.replace(/<br\/>/g, ', ') : '未知教室',
+              time: item.sksj ? item.sksj.replace(/<br\/>/g, ', ') : '未知时间',
+              credits: item.xf || item.jxbxf || '0',
+              category: item.kklxmc || '未知类别',
+              status: item.sfxkbj === '1' ? '已选' : '未选',
+              course_code: item.kch || '',
+              course_id: item.kch_id || '',
+              class_name: item.jxbmc || '',
+              class_id: item.jxb_id || ''
+            }
+            courses.push(course)
+          }
+        })
+      } else if (jsonData.totalResult === '0' || jsonData.pageTotal === 0) {
+        console.log('📚 当前没有已选课程')
+        // 返回空数组，表示没有已选课程
+      } else {
+        console.log('⚠️ 未知的JSON数据结构:', jsonData)
+      }
+      
+    } catch (jsonError) {
+      console.log('📄 不是JSON格式，尝试解析HTML')
+      
+      // 如果不是JSON，尝试解析HTML
+      const $ = cheerio.load(responseText)
+      
+      // 检查是否有错误信息
+      const errorMsg = $('.alert-danger, .error, .warning').text().trim()
+      if (errorMsg) {
+        console.log('⚠️ 页面显示错误信息:', errorMsg)
+      }
+      
+      // 查找课程表格 - 尝试多种选择器
+      let tableFound = false
+      
+      // 方法1: 查找标准表格
+      $('table tbody tr').each((index, element) => {
+        const $row = $(element)
+        const cells = $row.find('td')
+        
+        if (cells.length >= 8) {
+          const course = {
+            course_name: $(cells[1]).text().trim(),
+            teacher: $(cells[2]).text().trim(),
+            classroom: $(cells[3]).text().trim(),
+            time: $(cells[4]).text().trim(),
+            credits: $(cells[5]).text().trim(),
+            category: $(cells[6]).text().trim(),
+            status: $(cells[7]).text().trim()
+          }
+          
+          if (course.course_name) {
+            courses.push(course)
+            tableFound = true
+          }
+        }
+      })
+      
+      // 方法2: 如果没有找到表格，尝试其他结构
+      if (!tableFound) {
+        console.log('🔍 未找到标准表格，尝试其他结构...')
+        
+        // 查找所有可能的课程行
+        $('tr').each((index, element) => {
+          const $row = $(element)
+          const cells = $row.find('td')
+          
+          if (cells.length >= 6) {
+            const text = $row.text().trim()
+            if (text && !text.includes('课程名称') && !text.includes('教师') && !text.includes('学分')) {
+              const course = {
+                course_name: $(cells[1] || cells[0]).text().trim(),
+                teacher: $(cells[2] || cells[1]).text().trim(),
+                classroom: $(cells[3] || cells[2]).text().trim(),
+                time: $(cells[4] || cells[3]).text().trim(),
+                credits: $(cells[5] || cells[4]).text().trim(),
+                category: $(cells[6] || cells[5]).text().trim(),
+                status: $(cells[7] || cells[6]).text().trim()
+              }
+              
+              if (course.course_name && course.course_name.length > 0) {
+                courses.push(course)
+              }
+            }
+          }
+        })
+      }
+    }
+    
+    console.log(`✅ 已选课程获取成功，共${courses.length}门课程`)
+    return courses
+    
+    } catch (error) {
+      console.error('❌ 获取已选课程失败:', error)
+      throw error
+    }
+  }, 5 * 60 * 1000) // 已选课程缓存5分钟
+}
+
+// 解析已选课程数据
 function parseSelectedCourseData(jsonData: any) {
   const courses: any[] = []
   
-  if (jsonData && jsonData.tmpList && Array.isArray(jsonData.tmpList)) {
+  console.log('🔍 parseSelectedCourseData 输入数据:', jsonData)
+  
+  // 情况1: 如果是数组，直接处理
+  if (Array.isArray(jsonData)) {
+    console.log('📚 检测到课程数组')
+    jsonData.forEach((course: any) => {
+      if (course.kcmc && course.kch) {
+        courses.push({
+          kch_id: course.kch_id || '',
+          kcmc: course.kcmc || '',
+          jxb_id: course.jxb_id || '',
+          jsxm: course.jsxm || (course.jsxx ? course.jsxx.split('/')[1] : '') || '',
+          jxdd: course.jxdd || '',
+          sksj: course.sksj || '',
+          xf: course.xf || course.jxbxf || '',
+          jxbrl: course.jxbrl || '',
+          yxzrs: course.yxzrs || '',
+          kklxdm: course.kklxdm || '',
+          do_jxb_id: course.do_jxb_id || course.jxb_id || '',
+          ...course
+        })
+      }
+    })
+  }
+  // 情况2: 如果是单个课程对象
+  else if (jsonData && jsonData.kcmc && jsonData.kch) {
+    console.log('📚 检测到单个课程对象')
+    courses.push({
+      kch_id: jsonData.kch_id || '',
+      kcmc: jsonData.kcmc || '',
+      jxb_id: jsonData.jxb_id || '',
+      jsxm: jsonData.jsxm || (jsonData.jsxx ? jsonData.jsxx.split('/')[1] : '') || '',
+      jxdd: jsonData.jxdd || '',
+      sksj: jsonData.sksj || '',
+      xf: jsonData.xf || jsonData.jxbxf || '',
+      jxbrl: jsonData.jxbrl || '',
+      yxzrs: jsonData.yxzrs || '',
+      kklxdm: jsonData.kklxdm || '',
+      do_jxb_id: jsonData.do_jxb_id || jsonData.jxb_id || '',
+      ...jsonData
+    })
+  }
+  // 情况3: 如果有tmpList字段
+  else if (jsonData && jsonData.tmpList && Array.isArray(jsonData.tmpList)) {
+    console.log('📚 检测到tmpList数组')
     jsonData.tmpList.forEach((course: any) => {
       courses.push({
         kch_id: course.kch_id || '',
         kcmc: course.kcmc || '',
         jxb_id: course.jxb_id || '',
         jsxm: course.jsxm || course.jsxx || '',
-        kclb: course.kclb || '',
-        xf: course.xf || '',
+        jxdd: course.jxdd || '',
         sksj: course.sksj || '',
-        skdd: course.skdd || course.jxdd || '',
-        bjrs: course.bjrs || course.jxbrl || '',
-        yxrs: course.yxrs || course.yxzrs || '',
-        kkxy: course.kkxy || course.kkxymc || '',
-        kkzy: course.kkzy || course.kkzymc || '',
-        kkxq: course.kkxq || course.xqumc || '',
-        kkzc: course.kkzc || '',
-        kkdm: course.kkdm || '',
-        kkmm: course.kkmm || '',
-        kkms: course.kkms || '',
-        kkzt: course.kkzt || '',
-        kkztmc: course.kkztmc || '',
-        kkztms: course.kkztms || '',
-        do_jxb_id: course.do_jxb_id || '',
-        jxbzls: course.jxbzls || ''
+        xf: course.xf || '',
+        jxbrl: course.jxbrl || '',
+        yxzrs: course.yxzrs || '',
+        kklxdm: course.kklxdm || '',
+        do_jxb_id: course.do_jxb_id || course.jxb_id || '',
+        ...course
       })
     })
   }
+  // 情况4: 如果是空结果
+  else if (jsonData && (jsonData.totalResult === '0' || jsonData.pageTotal === 0)) {
+    console.log('📚 检测到空结果')
+    // 返回空数组
+  }
+  else {
+    console.log('⚠️ 未知的数据结构:', jsonData)
+  }
   
+  console.log(`✅ parseSelectedCourseData 解析完成，共${courses.length}门课程`)
   return courses
 }
 
-// 获取已选课程 - 基于course_api_json.py的实现
-export async function getSelectedCourses(sessionId?: string, tempCookie?: string) {
-  const cacheKey = cacheKeys.selectedCourses
-  const requestKey = `${cacheKey}_${sessionId || 'default'}_${tempCookie ? 'temp' : 'session'}`
-  
-  return deduplicatedRequest(requestKey, () => 
-    withCache(cacheKey, async () => {
-    try {
-      const startTime = Date.now()
-      console.log('🔍 开始获取已选课程...')
-      const params = await getCourseSelectionParams(sessionId, tempCookie)
-      console.log('📋 已选课程查询参数:', params)
-    
-    // 基于Python程序的已选课程查询实现 - 使用字符串拼接方式
-    const formData = `xkxnm=${params.xkxnm}&` +
-      `zyh_id=${params.zyh_id}&` +
-      `xz=4&njdm_id=${params.njdm_id}&` +
-      `xkly=0&ccdm=3&bh_id=2024200101&jg_id=20&zyfx_id=wfx&` +
-      `xkxqm=${params.xkxqm}`
-    
-    console.log('📤 已选课程请求数据:', formData)
-    
-    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
-    const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzb_cxZzxkYzbChoosedDisplay.html?gnmkdm=N253512'
-    console.log('🌐 已选课程请求URL:', url)
-    
-    const response = await robustFetch(url, config)
-    console.log('📡 已选课程响应状态:', response.status)
-    
-    if (!response.ok) {
-      throw new Error(`获取已选课程失败，状态码: ${response.status}`)
-    }
-    
-    const jsonData = await response.json()
-    console.log('📚 已选课程JSON响应长度:', JSON.stringify(jsonData).length)
-    
-    const duration = Date.now() - startTime
-    console.log(`⚡ 已选课程获取完成! 用时: ${duration}ms`)
-    
-    // 根据Python版本，直接返回JSON数据（可能是数组或对象）
-    return jsonData
-  } catch (error) {
-      console.error('❌ 获取已选课程失败:', error)
-      throw error
-    }
-  }, 10 * 60 * 1000) // 已选课程缓存10分钟，与Python版本一致
-  )
-}
-
-// 格式化已选课程数据 - 基于course_api_json.py的format_selected_courses_json函数
-export function formatSelectedCoursesData(data: any) {
-  console.log('🔧 开始格式化已选课程数据...')
-  
-  if (!data) {
-    console.log('⚠️ 没有已选课程数据')
-    return { error: "没有已选课程数据" }
-  }
-  
-  const result = {
-    courses: [] as any[]
-  }
-  
-  // 处理数据格式 - 可能是数组或对象
-  let coursesArray: any[] = []
-  if (Array.isArray(data)) {
-    coursesArray = data
-  } else if (data && typeof data === 'object') {
-    // 如果是对象，尝试提取数组
-    coursesArray = data.tmpList || data.courses || data.data || []
-  }
-  
-  console.log(`📊 找到 ${coursesArray.length} 门已选课程`)
-  
-  // 遍历所有已选课程
-  for (const course of coursesArray) {
-    if (!course || typeof course !== 'object') {
-      continue
-    }
-    
-    // 获取课程基本信息 - 基于Python版本的字段映射
-    const courseInfo = {
-      course_id: course.kch || '',
-      course_name: course.kcmc || '',
-      class_name: course.jxbmc || '',
-      credit: course.xf || '',
-      teacher: '',
-      time: course.sksj || '未知时间',
-      location: course.jxdd || '未知地点',
-      selected_count: course.yxzrs || '0',
-      operation: '已选',
-      // 添加更多字段用于前端显示
-      kch_id: course.kch_id || course.kch || '',
-      jxb_id: course.jxb_id || '',
-      kklxdm: course.kklxdm || '',
-      jxbzls: course.jxbzls || '',
-      jsxx: course.jsxx || '',
-      jsxm: course.jsxm || '',
-      jszc: course.jszc || ''
-    }
-    
-    // 教师信息处理 - 基于Python版本的逻辑
-    const teacherInfo = course.jsxx || '' // 格式如 "2006078/卫郭敏/教授"
-    if (teacherInfo && teacherInfo.includes('/')) {
-      const parts = teacherInfo.split('/')
-      const teacherName = parts[1] || '未知教师'
-      const teacherTitle = parts[2] || ''
-      courseInfo.teacher = `${teacherName} ${teacherTitle}`.trim()
-    } else {
-      const teacherName = course.jsxm || '未知教师'
-      const teacherTitle = course.jszc || ''
-      courseInfo.teacher = `${teacherName} ${teacherTitle}`.trim()
-    }
-    
-    result.courses.push(courseInfo)
-  }
-  
-  console.log(`✅ 已选课程格式化完成，共 ${result.courses.length} 门课程`)
-  return result
-}
-
-// 获取课程详细信息 - 基于原始Python项目的实现
-export async function getCourseDetails(kch_id: string, sessionId?: string, tempCookie?: string) {
+// 选课功能
+export async function selectCourseWithVerification(
+  courseData: {
+    jxb_id: string
+    do_jxb_id: string
+    kch_id: string
+    jxbzls?: string
+    kklxdm?: string
+    kcmc?: string
+    jxbmc?: string
+    xkkz_id?: string
+  },
+  sessionId?: string,
+  tempCookie?: string
+) {
   try {
-    const params = await getCourseSelectionParams(sessionId, tempCookie)
+    console.log(`🎯 开始选课: ${courseData.kcmc || courseData.kch_id}`)
     
-    const formData = new URLSearchParams({
-      rwlx: '1',
-      xkly: '0',
-      bklx_id: '0',
-      sfkkjyxdxnxq: '0',
-      xqh_id: '4',
-      jg_id: '20',
-      zyh_id: params.zyh_id,
-      zyfx_id: 'wfx',
-      njdm_id: params.njdm_id,
-      bh_id: '2024200101',
-      xbm: '1',
-      xslbdm: 'wlb',
-      mzm: '01',
-      xz: '4',
-      ccdm: '3',
-      xsbj: '4294967296',
-      sfkknj: '0',
-      gnjkxdnj: '0',
-      sfkkzy: '0',
-      kzybkxy: '0',
-      sfznkx: '0',
-      zdkxms: '0',
-      sfkxq: '0',
-      sfkcfx: '0',
-      bbhzxjxb: '0',
-      kkbk: '0',
-      kkbkdj: '0',
-      xkxnm: params.xkxnm,
-      xkxqm: params.xkxqm,
-      xkxskcgskg: '0',
-      rlkz: '0',
-      kklxdm: '01',
-      kch_id: kch_id,
-      jxbzcxskg: '0',
-      xkkz_id: params.xkkz_id || '',
-      cxbj: '0',
-      fxbj: '0'
-    })
+    // 1. 先获取课程抢课详细信息
+    console.log('🔍 获取课程抢课详细信息...')
+    const selectionDetails = await getCourseSelectionDetails(courseData, sessionId, tempCookie)
     
-    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
-    const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzbjk_cxJxbWithKchZzxkYzb.html?gnmkdm=N253512'
-    const response = await robustFetch(url, config)
-    
-    if (!response.ok) {
-      throw new Error(`获取课程详细信息失败，状态码: ${response.status}`)
+    if (!selectionDetails) {
+      return {
+        success: false,
+        message: '获取课程抢课详细信息失败',
+        data: null
+      }
     }
     
-    const jsonData = await response.json()
-    return jsonData
-  } catch (error) {
-    console.error('获取课程详细信息失败:', error)
-    throw error
+    // 2. 使用详细信息执行选课
+    const result = await executeCourseSelection(courseData, sessionId, tempCookie)
+    
+    if (result.success) {
+      // 验证选课结果
+      const verification = await verifyCourseSelection(courseData, sessionId, tempCookie)
+      return {
+        success: true,
+        message: `课程 "${courseData.kcmc || courseData.kch_id}" 选课成功！`,
+        data: result.data,
+        verification,
+        selectionDetails
+      }
+    } else {
+      return {
+        success: false,
+        message: result.message || '选课失败',
+        data: result.data,
+        selectionDetails
+      }
+    }
+  } catch (error: any) {
+    console.error('选课过程中发生错误:', error)
+    return {
+      success: false,
+      message: error.message || '选课失败',
+      data: null
+    }
   }
 }
 
 // 执行选课
-export async function executeCourseSelection(courseData: {
-  jxb_id: string
-  do_jxb_id: string
-  kch_id: string
-  jxbzls: string
-  kklxdm?: string
-}, sessionId?: string, tempCookie?: string) {
+async function executeCourseSelection(
+  courseData: {
+    jxb_id: string
+    do_jxb_id: string
+    kch_id: string
+    jxbzls?: string
+    kklxdm?: string
+    kcmc?: string
+    jxbmc?: string
+  },
+  sessionId?: string,
+  tempCookie?: string
+) {
   try {
-    // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
-    let cookie = tempCookie
-    if (!cookie) {
-      cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
-    }
+    const config = createRequestConfig('POST', undefined, sessionId, tempCookie)
+    const urls = getApiUrls()
     
-    if (!cookie) {
-      return { flag: "0", msg: "Cookie未设置" }
-    }
-    
-    const params = await getCourseSelectionParams(sessionId, tempCookie)
-    
+    // 构建选课请求数据
     const formData = new URLSearchParams({
-      jxb_ids: courseData.do_jxb_id,
-      kch_id: courseData.jxb_id, // 使用jxb_id作为kch_id
-      qz: '0',
-      njdm_id: params.njdm_id,
-      zyh_id: params.zyh_id,
-      xkxnm: params.xkxnm,
-      xkxqm: params.xkxqm,
-      kklxdm: courseData.kklxdm || '01', // 课程类型代码 (01=必修, 10=选修)
-      jcxx_id: params.jcxx_id || ''
+      'jxb_ids': courseData.do_jxb_id || courseData.jxb_id,
+      'kch_id': courseData.kch_id,
+      'jxbzls': courseData.jxbzls || '1',
+      'kklxdm': courseData.kklxdm || '01',
+      'xkxnm': '2025',
+      'xkxqm': '3'
     })
     
-    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
-    const url = 'https://newjwc.tyust.edu.cn/jwglxt/xsxk/zzxkyzbjk_xkBcZyZzxkYzb.html?gnmkdm=N253512'
-    const response = await robustFetch(url, config)
+    const response = await robustFetch(urls.courseSelection, {
+      ...config,
+      body: formData.toString()
+    })
     
     if (!response.ok) {
-      return { flag: "0", msg: `请求失败，状态码: ${response.status}` }
+      throw new Error(`选课请求失败，状态码: ${response.status}`)
     }
     
-    try {
-      const result = await response.json()
-      console.log('📥 选课响应数据:', JSON.stringify(result, null, 2))
-      return result
-    } catch (jsonError) {
-      const textResult = await response.text()
-      console.log('❌ JSON解析失败，原始响应:', textResult)
-      return { flag: "0", msg: "响应解析失败", raw_response: textResult }
-    }
-  } catch (error) {
-    console.error('选课失败:', error)
-    return { flag: "0", msg: `发生错误: ${error}` }
-  }
-}
-
-// 解析选课结果
-export function parseCourseSelectionResult(result: any, courseInfo?: any) {
-  const flag = result.flag || '0'
-  const message = result.msg || result.message || '未知错误'
-  const flagSuccess = flag === '1'
-  
-  return {
-    flag,
-    message,
-    flag_success: flagSuccess,
-    success: flagSuccess,
-    raw_result: result
-  }
-}
-
-// 验证选课结果（检查是否在已选课程中）
-export async function verifyCourseSelection(courseInfo: {
-  kch_id: string
-  jxb_id: string
-  kcmc?: string
-  jxbmc?: string
-}, sessionId?: string, tempCookie?: string) {
-  try {
-    const selectedCourses = await getSelectedCourses(sessionId, tempCookie)
-    
-    if (Array.isArray(selectedCourses)) {
-      for (const course of selectedCourses) {
-        const courseId = course.course_id || course.kch_id || course.kch || ''
-        const jxbId = course.jxb_id || course.jxbid || ''
-        
-        if (courseId === courseInfo.kch_id && jxbId === courseInfo.jxb_id) {
-          return {
-            in_selected: true,
-            verification_message: `课程《${courseInfo.kcmc || '未知'}》已在已选课程中`
-          }
-        }
-      }
-    } else if (selectedCourses && (selectedCourses as any).courses && Array.isArray((selectedCourses as any).courses)) {
-      for (const course of (selectedCourses as any).courses) {
-        const courseId = course.course_id || ''
-        if (courseId === courseInfo.kch_id) {
-          return {
-            in_selected: true,
-            verification_message: `课程《${courseInfo.kcmc || '未知'}》已在已选课程中`
-          }
-        }
-      }
-    }
+    const result = await response.json()
+    console.log('选课响应:', result)
     
     return {
-      in_selected: false,
-      verification_message: `课程《${courseInfo.kcmc || '未知'}》未在已选课程中找到`
+      success: result.flag === '1',
+      message: result.msg || (result.flag === '1' ? '选课成功' : '选课失败'),
+      data: result
     }
-  } catch (error) {
+  } catch (error: any) {
+    console.error('执行选课失败:', error)
     return {
-      in_selected: false,
-      verification_message: `验证过程出错: ${error}`
-    }
-  }
-}
-
-// 综合选课功能（包含验证）
-export async function selectCourseWithVerification(courseInfo: {
-  jxb_id: string
-  do_jxb_id: string
-  kch_id: string
-  jxbzls: string
-  kklxdm?: string
-  kcmc?: string
-  jxbmc?: string
-}, sessionId?: string, tempCookie?: string) {
-  try {
-    const result = await executeCourseSelection(courseInfo, sessionId, tempCookie)
-    const parsedResult = parseCourseSelectionResult(result, courseInfo)
-    const verification = await verifyCourseSelection({
-      kch_id: courseInfo.kch_id,
-      jxb_id: courseInfo.jxb_id,
-      kcmc: courseInfo.kcmc,
-      jxbmc: courseInfo.jxbmc
-    }, sessionId, tempCookie)
-    
-    const finalSuccess = parsedResult.flag_success && verification.in_selected
-    
-    console.log('\n📊 选课结果综合判断:')
-    console.log(`   📍 网站返回标志: ${parsedResult.flag} (${parsedResult.flag_success ? '✅ 成功' : '❌ 失败'})`)
-    console.log(`   📍 网站返回消息: ${parsedResult.message}`)
-    console.log(`   🔍 已选课程验证: ${verification.in_selected ? '✅ 已选上' : '❌ 未选上'}`)
-    console.log(`   🔍 验证详情: ${verification.verification_message}`)
-    console.log(`   🎯 最终结果: ${finalSuccess ? '🎉 选课成功！' : '❌ 选课失败'}`)
-    
-    return {
-      ...parsedResult,
-      verification,
-      success: finalSuccess
-    }
-  } catch (error) {
-    console.error('选课过程出错:', error)
-    return {
-      flag: '0',
-      message: `选课过程出错: ${error}`,
-      flag_success: false,
       success: false,
-      verification: {
-        in_selected: false,
-        verification_message: `选课过程出错: ${error}`
-      }
+      message: error.message || '选课失败',
+      data: null
     }
   }
 }
 
-// 获取课表数据
-export async function getScheduleData(sessionId?: string, tempCookie?: string): Promise<any> {
-  const cacheKey = cacheKeys.scheduleData
-  const requestKey = `${cacheKey}_${sessionId || 'default'}_${tempCookie ? 'temp' : 'session'}`
-  
-  return deduplicatedRequest(requestKey, () => 
-    withCache(cacheKey, async () => {
-    // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
-    let cookie = tempCookie
-    if (!cookie) {
-      cookie = sessionId ? getSessionCookie(sessionId) : getGlobalCookie()
+// 验证选课结果
+async function verifyCourseSelection(
+  courseData: {
+    jxb_id: string
+    do_jxb_id: string
+    kch_id: string
+    jxbzls?: string
+    kklxdm?: string
+    kcmc?: string
+    jxbmc?: string
+  },
+  sessionId?: string,
+  tempCookie?: string
+) {
+  try {
+    // 获取已选课程列表进行验证
+    const selectedCourses = await getSelectedCourses(sessionId, tempCookie)
+    const isSelected = selectedCourses.some(course => 
+      course.jxb_id === courseData.jxb_id || course.kch_id === courseData.kch_id
+    )
+    
+    return {
+      verified: isSelected,
+      message: isSelected ? '选课验证成功' : '选课验证失败'
+    }
+  } catch (error: any) {
+    console.error('验证选课结果失败:', error)
+    return {
+      verified: false,
+      message: '验证失败: ' + error.message
+    }
+  }
+}
+
+// 获取课表数据 - 使用正确的API端点
+export async function getScheduleData(sessionId?: string, tempCookie?: string) {
+  const cacheKey = sessionId ? `schedule_${sessionId}` : 'schedule'
+  return withCache(cacheKey, async () => {
+    try {
+      console.log('📅 开始获取课表数据（使用新的API端点）...')
+      const startTime = Date.now()
+      
+      const currentSchool = getCurrentSchool()
+      const cookie = tempCookie || getGlobalCookie()
+      
+      if (!cookie) {
+        throw new Error('Cookie未设置')
+      }
+      
+      // 使用正确的课表API端点
+      const scheduleUrl = `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/kbcx/xskbcx_cxXsgrkb.html?gnmkdm=N2151`
+      
+      // 获取动态参数（xnm, xqm）
+      let xnm = '2025'
+      let xqm = '3'
+      
+      try {
+        const dynamicParams = await getScheduleDynamicParams(cookie)
+        xnm = dynamicParams.xnm
+        xqm = dynamicParams.xqm
+        console.log('📋 课表动态参数获取成功:', { xnm, xqm })
+      } catch (error) {
+        console.warn('⚠️ 课表动态参数获取失败，使用默认值:', error)
+        console.log('📋 使用默认课表参数:', { xnm, xqm })
+      }
+      
+      // 构造请求数据 - xsdm参数固定为空
+      const formData = new URLSearchParams({
+        'xnm': xnm,
+        'xqm': xqm,
+        'kzlx': 'ck',
+        'xsdm': ''  // 固定为空
+      })
+      
+      console.log('📋 课表请求参数:', { xnm, xqm, xsdm: '' })
+      
+      const response = await robustFetch(scheduleUrl, {
+        method: 'POST',
+        headers: {
+          'Accept': '*/*',
+          'Accept-Language': 'zh-CN,zh;q=0.9',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'Origin': `${currentSchool.protocol}://${currentSchool.domain}`,
+          'Pragma': 'no-cache',
+          'Referer': `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default`,
+          'Sec-Fetch-Dest': 'empty',
+          'Sec-Fetch-Mode': 'cors',
+          'Sec-Fetch-Site': 'same-origin',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+          'X-Requested-With': 'XMLHttpRequest',
+          'sec-ch-ua': '"Chromium";v="140", "Not=A?Brand";v="24", "Google Chrome";v="140"',
+          'sec-ch-ua-mobile': '?0',
+          'sec-ch-ua-platform': '"Windows"',
+          'Cookie': cookie
+        },
+        body: formData.toString()
+      })
+      
+      if (!response.ok) {
+        throw new Error(`获取课表数据失败: ${response.status}`)
+      }
+      
+      const scheduleData = await response.json()
+      const duration = Date.now() - startTime
+      console.log(`📅 课表数据获取成功，耗时${duration}ms`)
+      console.log('📊 原始课表数据:', scheduleData)
+      console.log('📋 kbList数据:', scheduleData?.kbList)
+      console.log('📊 kbList长度:', scheduleData?.kbList?.length || 0)
+      
+      return scheduleData
+    } catch (error) {
+      console.error('📅 获取课表数据失败:', error)
+      throw error
+    }
+  }, 10 * 60 * 1000) // 课表数据缓存10分钟
+}
+
+// 获取课表动态参数
+async function getScheduleDynamicParams(cookie: string) {
+  try {
+    const currentSchool = getCurrentSchool()
+    
+    // 获取课表页面来提取参数
+    const scheduleIndexUrl = `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default`
+    
+    console.log('🔍 正在获取课表页面参数...', scheduleIndexUrl)
+    
+    const response = await robustFetch(scheduleIndexUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Referer': scheduleIndexUrl,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+        'Cookie': cookie
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`获取课表页面失败: ${response.status}`)
     }
     
+    const html = await response.text()
+    console.log('📄 课表页面HTML长度:', html.length)
+    
+    const $ = cheerio.load(html)
+    
+    // 提取课表参数
+    const xnm = $('input[name="xnm"]').attr('value') || '2025'
+    const xqm = $('input[name="xqm"]').attr('value') || '3'
+    
+    console.log('📋 课表动态参数提取结果:', { xnm, xqm })
+    
+    // 验证参数是否有效
+    if (!xnm || !xqm) {
+      throw new Error('无法从页面中提取有效的课表参数')
+    }
+    
+    return { xnm, xqm }
+  } catch (error) {
+    console.error('❌ 获取课表动态参数失败:', error)
+    throw error
+  }
+}
+
+// 获取课表参数（旧版本，保留兼容性）
+async function getScheduleParams(cookie: string) {
+  const urls = getApiUrls()
+  
+  const response = await robustFetch(urls.scheduleParams, {
+    method: 'GET',
+    headers: {
+      'Referer': urls.getRefererHeader('schedule'),
+      'Cookie': cookie
+    }
+  })
+  
+  if (!response.ok) {
+    throw new Error(`获取课表页面失败: ${response.status}`)
+  }
+  
+  const html = await response.text()
+  const $ = cheerio.load(html)
+  
+  // 提取课表参数
+  const xnm = $('input[name="xnm"]').attr('value') || '2025'
+  const xqm = $('input[name="xqm"]').attr('value') || '3'
+  const csrftoken = $('input[name="csrftoken"]').attr('value') || ''
+  
+  console.log('📋 课表参数提取结果:', { xnm, xqm, csrftoken: csrftoken ? '已获取' : '未获取' })
+  
+  return { xnm, xqm, csrftoken }
+}
+
+// 格式化课表数据
+export function formatScheduleData(data: any): any[] {
+  const scheduleInfo: any[] = []
+  
+  if (data && data.kbList && Array.isArray(data.kbList)) {
+    data.kbList.forEach((course: any) => {
+      // 解析星期几 - 使用xqjmc字段（如"星期一"）
+      let day = 0
+      if (course.xqjmc) {
+        const xqjmc = course.xqjmc.trim()
+        console.log(`🔍 原始xqjmc值: "${xqjmc}"`)
+        
+        // 将中文星期转换为数字
+        const dayMap: Record<string, number> = {
+          '星期一': 1,
+          '星期二': 2,
+          '星期三': 3,
+          '星期四': 4,
+          '星期五': 5,
+          '星期六': 6,
+          '星期日': 7,
+          '星期天': 7
+        }
+        
+        day = dayMap[xqjmc] || 0
+        console.log(`✅ 星期转换: "${xqjmc}" -> ${day}`)
+      }
+      
+      // 如果没有有效的星期信息，跳过这个课程
+      if (day === 0) {
+        console.log(`⚠️ 跳过课程 ${course.kcmc}: 没有有效的星期信息 (xqjmc: "${course.xqjmc}")`)
+        return
+      }
+      
+      console.log(`📅 课程 ${course.kcmc}: xqjmc="${course.xqjmc}", 解析后day=${day}`)
+      
+      // 解析节次信息
+      const jcs = course.jcs || ''  // 如 "1-2" 或 "3-4"
+      let period = 1
+      if (jcs) {
+        // 从 "1-2" 中提取起始节次
+        const match = jcs.match(/(\d+)/)
+        if (match) {
+          period = parseInt(match[1])
+        }
+      }
+      
+      // 创建课程数据对象
+      const courseData = {
+        // 先展开原始数据
+        ...course,
+        // 然后覆盖关键的解析字段（确保不被原始数据覆盖）
+        name: course.kcmc || '未知课程',           // 课程名称
+        teacher: course.xm || '未知教师',          // 教师姓名
+        location: course.cdmc || '未知地点',       // 地点
+        day: day,                                 // 星期几（解析后的值，不能被覆盖）
+        period: period,                           // 节次（解析后的值，不能被覆盖）
+        time: course.jc || '',                    // 时间
+        weeks: course.zcd || '',                  // 周次
+        class: course.jxbmc || '',                // 教学班
+        credit: course.xf || '',                  // 学分
+        assessment: course.khfsmc || '',          // 考核方式
+        course_type: course.kcxz || '',           // 课程性质
+        campus: course.xqmc || '',                // 校区
+        hours: {
+          total: course.zxs || '',                // 总学时
+          lecture: course.kcxszc || ''            // 讲课学时
+        },
+        // 保留原始数据用于调试
+        kch_id: course.kch_id || '',
+        jxb_id: course.jxb_id || '',
+        xqjmc: course.xqjmc,                      // 原始星期字段
+        jcs: course.jcs                           // 原始节次字段
+      }
+      
+      scheduleInfo.push(courseData)
+    })
+  }
+  
+  console.log(`📅 格式化课表数据完成，共 ${scheduleInfo.length} 门课程`)
+  
+  // 调试：打印前几个课程的数据结构
+  if (scheduleInfo.length > 0) {
+    console.log('🔍 前3个课程的数据结构:')
+    scheduleInfo.slice(0, 3).forEach((course, index) => {
+      console.log(`课程${index + 1}:`, {
+        name: course.name,
+        day: course.day,
+        period: course.period,
+        dayType: typeof course.day,
+        periodType: typeof course.period,
+        originalXqjmc: course.xqjmc,
+        originalJcs: course.jcs
+      })
+    })
+  }
+  
+  return scheduleInfo
+}
+
+// 更新学校配置
+export function updateSchoolConfig(schoolId: string): void {
+  const school = getSchoolById(schoolId)
+  if (school) {
+    console.log(`🔄 开始切换学校: ${school.name} (${school.domain})`)
+    
+    // 设置当前学校
+    setCurrentSchool(school)
+    console.log(`💾 已保存学校配置: ${school.id}`)
+    
+    // 验证配置是否生效
+    const currentSchool = getCurrentSchool()
+    console.log(`✅ 验证新配置: ${currentSchool.name} - ${currentSchool.protocol}://${currentSchool.domain}`)
+    
+    // 清理所有缓存，因为不同学校的数据不兼容
+    apiCache.clear()
+    console.log(`🗑️ 已清理所有缓存数据`)
+    
+    console.log(`🎉 学校切换完成: ${school.name} (${school.domain})`)
+  } else {
+    console.error(`❌ 未找到学校ID: ${schoolId}`)
+    throw new Error(`未找到学校ID: ${schoolId}`)
+  }
+}
+
+// 获取当前学校信息
+export function getCurrentSchoolInfo() {
+  return getCurrentSchool()
+}
+
+// 设置全局Cookie
+export function setGlobalCookie(cookie: string): void {
+  setSessionCookie('default', cookie)
+}
+
+// 删除会话Cookie
+export function deleteSessionCookie(sessionId: string): void {
+  sessionCookies.delete(sessionId)
+}
+
+// 格式化已选课程数据
+export function formatSelectedCoursesData(data: any) {
+  return parseSelectedCourseData(data)
+}
+
+// 获取课程抢课详细信息 - 动态获取所有参数
+export async function getCourseSelectionDetails(
+  courseData: {
+    kch_id: string
+    kklxdm?: string
+    xkkz_id?: string
+    [key: string]: any
+  },
+  sessionId?: string,
+  tempCookie?: string
+) {
+  try {
+    console.log(`🔍 开始获取课程抢课详细信息: ${courseData.kch_id}`)
+    
+    const cookie = tempCookie || getGlobalCookie()
     if (!cookie) {
       throw new Error('Cookie未设置')
     }
-
-  const startTime = Date.now()
-  console.log('📅 开始获取课表数据...')
-
-  try {
-    // 获取课表参数（带缓存优化）
-    const { xnm, xqm, csrftoken } = await getScheduleParams(cookie)
-
-    // 构造获取课表数据的请求
-    const scheduleUrl = 'https://newjwc.tyust.edu.cn/jwglxt/kbcx/xskbcx_cxXsKb.html?gnmkdm=N253508'
     
-    const formData = new URLSearchParams()
-    formData.append('xnm', xnm)
-    formData.append('xqm', xqm)
-    if (csrftoken) {
-      formData.append('csrftoken', csrftoken)
+    const urls = getApiUrls()
+    const currentSchool = getCurrentSchool()
+    
+    // 1. 获取选课参数
+    console.log('📋 获取选课参数...')
+    const courseParams = await getCourseSelectionParams(sessionId, tempCookie)
+    console.log('选课参数:', courseParams)
+    
+    // 2. 获取页面隐藏数据
+    console.log('🔍 获取页面隐藏数据...')
+    const hiddenParams = await getPageHiddenParams(cookie)
+    console.log('页面隐藏参数:', hiddenParams)
+    
+    // 3. 根据kklxdm设置不同的rwlx和xklc值
+    const kklxdm = courseData.kklxdm || '01'
+    let rwlx = '1'
+    let xklc = '2'
+    
+    if (kklxdm === '01') {
+      rwlx = '1'
+      xklc = '2'
+    } else if (kklxdm === '10') {
+      rwlx = '2'
+      xklc = '4'
+    } else if (kklxdm === '05') {
+      rwlx = '2'
+      xklc = '3'
     }
-
-    const scheduleResponse = await robustFetch(scheduleUrl, {
+    
+    // 4. 构建动态表单数据
+    const formData = new URLSearchParams({
+      'rwlx': rwlx,
+      'xkly': '0',
+      'bklx_id': '0',
+      'sfkkjyxdxnxq': '0',
+      'kzkcgs': '0',
+      'xqh_id': hiddenParams.xqh_id || courseParams.xqh_id || '01',
+      'jg_id': hiddenParams.jg_id || courseParams.jg_id || '05',
+      'zyh_id': hiddenParams.zyh_id || courseParams.zyh_id || '088',
+      'zyfx_id': hiddenParams.zyfx_id || courseParams.zyfx_id || 'wfx',
+      'txbsfrl': hiddenParams.txbsfrl || '0',
+      'njdm_id': hiddenParams.njdm_id || courseParams.njdm_id || '2024',
+      'bh_id': hiddenParams.bh_id || courseParams.bh_id || '',
+      'xbm': hiddenParams.xbm || courseParams.xbm || '1',
+      'xslbdm': hiddenParams.xslbdm || courseParams.xslbdm || 'wlb',
+      'mzm': hiddenParams.mzm || courseParams.mzm || '01',
+      'xz': hiddenParams.xz || courseParams.xz || '4',
+      'ccdm': hiddenParams.ccdm || courseParams.ccdm || '3',
+      'xsbj': hiddenParams.xsbj || courseParams.xsbj || '0',
+      'sfkknj': hiddenParams.sfkknj || courseParams.sfkknj || '0',
+      'gnjkxdnj': hiddenParams.gnjkxdnj || courseParams.gnjkxdnj || '0',
+      'sfkkzy': hiddenParams.sfkkzy || courseParams.sfkkzy || '0',
+      'kzybkxy': hiddenParams.kzybkxy || courseParams.kzybkxy || '0',
+      'sfznkx': hiddenParams.sfznkx || courseParams.sfznkx || '0',
+      'zdkxms': hiddenParams.zdkxms || courseParams.zdkxms || '0',
+      'sfkxq': hiddenParams.sfkxq || courseParams.sfkxq || '0',
+      'sfkcfx': hiddenParams.sfkcfx || courseParams.sfkcfx || '0',
+      'bbhzxjxb': hiddenParams.bbhzxjxb || courseParams.bbhzxjxb || '0',
+      'kkbk': hiddenParams.kkbk || courseParams.kkbk || '0',
+      'kkbkdj': hiddenParams.kkbkdj || courseParams.kkbkdj || '0',
+      'bklbkcj': hiddenParams.bklbkcj || courseParams.bklbkcj || '0',
+      'xkxnm': hiddenParams.xkxnm || courseParams.xkxnm || '2025',
+      'xkxqm': hiddenParams.xkxqm || courseParams.xkxqm || '3',
+      'xkxskcgskg': hiddenParams.xkxskcgskg || '0',
+      'rlkz': hiddenParams.rlkz || '0',
+      'cdrlkz': hiddenParams.cdrlkz || '0',
+      'rlzlkz': hiddenParams.rlzlkz || '1',
+      'kklxdm': kklxdm,
+      'kch_id': courseData.kch_id,
+      'jxbzcxskg': hiddenParams.jxbzcxskg || '0',
+      'xklc': xklc,
+      'xkkz_id': courseData.xkkz_id || hiddenParams.xkkz_id || courseParams.xkkz_id || '3EC380169F7E8633E0636F1310AC7E15',
+      'cxbj': hiddenParams.cxbj || '0',
+      'fxbj': hiddenParams.fxbj || '0'
+    })
+    
+    console.log(`📋 动态构建的抢课详细信息请求参数:`, Object.fromEntries(formData))
+    
+    const response = await fetch(`${currentSchool.protocol}://${currentSchool.domain}/jwglxt/xsxk/zzxkyzbjk_cxJxbWithKchZzxkYzb.html?gnmkdm=N253512`, {
       method: 'POST',
       headers: {
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Cache-Control': 'no-cache',
         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        'Referer': 'https://newjwc.tyust.edu.cn/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N253508&layout=default',
+        'Origin': `${currentSchool.protocol}://${currentSchool.domain}`,
+        'Pragma': 'no-cache',
+        'Referer': urls.courseSelectionParams,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
         'X-Requested-With': 'XMLHttpRequest',
         'Cookie': cookie
       },
       body: formData.toString()
     })
-
-    if (!scheduleResponse.ok) {
-      throw new Error(`获取课表数据失败: ${scheduleResponse.status}`)
-    }
-
-    const scheduleData = await scheduleResponse.json()
-    console.log('📅 课表数据获取成功，数据条数:', scheduleData?.kbList?.length || 0)
     
-    const duration = Date.now() - startTime
-    console.log(`⚡ 课表获取完成! 用时: ${duration}ms`)
-
-    return scheduleData
-
-    } catch (error) {
-      console.error('📅 获取课表数据失败:', error)
-      throw error
+    console.log(`📊 抢课详细信息响应状态码: ${response.status}`)
+    
+    if (response.status === 901 || response.status === 910) {
+      console.log(`状态码${response.status}：可能需要重新登录或会话已过期`)
+      return null
+    } else if (!response.ok) {
+      console.error(`获取抢课详细信息失败，状态码: ${response.status}`)
+      const text = await response.text()
+      console.error(`响应内容: ${text.slice(0, 500)}`)
+      return null
     }
-  }, 10 * 60 * 1000) // 课表数据缓存10分钟，与Python版本一致
-  )
+    
+    const result = await response.json()
+    console.log(`✅ 抢课详细信息获取成功:`, result)
+    
+    return result
+    
+  } catch (error) {
+    console.error('❌ 获取抢课详细信息失败:', error)
+    throw error
+  }
 }
 
-// 格式化课表数据
-export function formatScheduleData(data: any): any[] {
-  if (!data || !data.kbList || !Array.isArray(data.kbList)) {
-    return []
+// 获取页面隐藏参数
+async function getPageHiddenParams(cookie: string): Promise<Record<string, string>> {
+  try {
+    const urls = getApiUrls()
+    const currentSchool = getCurrentSchool()
+    
+    console.log('🔍 正在获取页面隐藏参数...')
+    
+    const response = await fetch(urls.courseSelectionParams, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'zh-CN,zh;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Referer': urls.courseSelectionParams,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+        'Cookie': cookie
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`获取页面隐藏参数失败，状态码: ${response.status}`)
+    }
+    
+    const html = await response.text()
+    const $ = cheerio.load(html)
+    
+    // 提取隐藏参数
+    const hiddenParams: Record<string, string> = {}
+    $('input[type="hidden"]').each((_, element) => {
+      const name = $(element).attr('name')
+      const value = $(element).attr('value') || ''
+      if (name) {
+        hiddenParams[name] = value
+        console.log(`隐藏参数: ${name} = ${value}`)
+      }
+    })
+    
+    console.log(`✅ 成功提取 ${Object.keys(hiddenParams).length} 个隐藏参数`)
+    return hiddenParams
+    
+  } catch (error) {
+    console.error('❌ 获取页面隐藏参数失败:', error)
+    return {}
   }
+}
 
-  const scheduleInfo: any[] = []
+// 获取选课参数
+async function getCourseSelectionParams(sessionId?: string, tempCookie?: string): Promise<Record<string, string>> {
+  try {
+    console.log('📋 正在获取选课参数...')
+    
+    const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
+    const urls = getApiUrls()
+    
+    const response = await robustFetch(urls.courseSelectionParams, config)
+    
+    if (!response.ok) {
+      throw new Error(`获取选课参数失败，状态码: ${response.status}`)
+    }
+    
+    const html = await response.text()
+    const $ = cheerio.load(html)
+    
+    // 提取选课参数
+    const params: Record<string, string> = {}
+    
+    // 提取隐藏字段
+    $('input[type="hidden"]').each((_, element) => {
+      const name = $(element).attr('name')
+      const value = $(element).attr('value') || ''
+      if (name) {
+        params[name] = value
+      }
+    })
+    
+    // 提取其他重要参数
+    const xkxnm = $('input[name="xkxnm"]').attr('value') || '2025'
+    const xkxqm = $('input[name="xkxqm"]').attr('value') || '3'
+    const njdm_id = $('input[name="njdm_id"]').attr('value') || '2024'
+    const zyh_id = $('input[name="zyh_id"]').attr('value') || '088'
+    const xqh_id = $('input[name="xqh_id"]').attr('value') || '01'
+    const jg_id = $('input[name="jg_id"]').attr('value') || '05'
+    
+    // 合并参数
+    const courseParams = {
+      xkxnm,
+      xkxqm,
+      njdm_id,
+      zyh_id,
+      xqh_id,
+      jg_id,
+      ...params
+    }
+    
+    console.log(`✅ 成功获取选课参数:`, courseParams)
+    return courseParams
+    
+  } catch (error) {
+    console.error('❌ 获取选课参数失败:', error)
+    return {}
+  }
+}
 
-  for (const course of data.kbList) {
-    // 解析星期几 (1=星期一, 2=星期二, ..., 7=星期日)
-    const day = parseInt(course.xqj || '1')
+// 成绩查询接口类型
+export interface GradeItem {
+  kcmc: string  // 课程名称
+  kch: string   // 课程号
+  kch_id: string // 课程ID
+  xf: string    // 学分
+  jd: string    // 绩点
+  cj: string    // 成绩
+  xq: string    // 学期
+  xnm: string   // 学年名
+  xqm: string   // 学期码
+  kcxzmc: string // 课程性质名称
+  ksxzmc: string // 考试性质名称
+  kcsx: string  // 课程属性
+  kssj: string  // 考试时间
+}
 
-    // 解析节次信息
-    let period = 1
-    const jcs = course.jcs || ''
-    if (jcs) {
-      const match = jcs.match(/(\d+)/)
-      if (match) {
-        period = parseInt(match[1])
+// 获取成绩数据
+export async function getGrades(
+  xnm: string,  // 学年名，如2024表示2024-2025学年
+  xqm: string,  // 学期：3为上学期，12为下学期
+  sessionId?: string,
+  tempCookie?: string
+): Promise<GradeItem[]> {
+  try {
+    console.log(`📊 正在查询成绩: 学年=${xnm}, 学期=${xqm}`)
+    
+    const urls = getApiUrls()
+    const currentSchool = getCurrentSchool()
+    
+    // 生成时间戳（nd参数）
+    const nd = Date.now().toString()
+    
+    // 构建表单数据
+    const formData = new URLSearchParams({
+      xnm: xnm,
+      xqm: xqm,
+      nd: nd
+    })
+    
+    // 创建请求配置
+    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
+    config.headers = {
+      ...config.headers,
+      'Referer': urls.getRefererHeader('grade'),
+      'Content-Type': 'application/x-www-form-urlencoded'
+    }
+    
+    const response = await robustFetch(urls.gradeQuery, config)
+    
+    if (!response.ok) {
+      if (response.status === 901 || response.status === 910) {
+        throw new Error('Cookie已过期，请重新登录')
+      }
+      throw new Error(`获取成绩失败，状态码: ${response.status}`)
+    }
+    
+    const responseText = await response.text()
+    
+    // 检查是否是登录页面
+    if (responseText.includes('用户登录') || responseText.includes('登 录')) {
+      throw new Error('Cookie已过期，请重新登录')
+    }
+    
+    // 尝试解析JSON
+    let jsonData: any
+    try {
+      jsonData = JSON.parse(responseText)
+    } catch (e) {
+      // 如果不是JSON，尝试HTML解析
+      const $ = cheerio.load(responseText)
+      const errorMsg = $('.alert-danger').text().trim()
+      if (errorMsg) {
+        throw new Error(errorMsg || '获取成绩失败')
+      }
+      throw new Error('返回数据格式错误')
+    }
+    
+    // 解析成绩数据
+    const grades: GradeItem[] = []
+    
+    if (Array.isArray(jsonData)) {
+      // 直接是数组
+      jsonData.forEach((item: any) => {
+        if (item.kcmc) {
+          grades.push({
+            kcmc: item.kcmc || '',
+            kch: item.kch || '',
+            kch_id: item.kch_id || '',
+            xf: item.xf || '0',
+            jd: item.jd || '0',
+            cj: item.cj || '',
+            xq: item.xq || '',
+            xnm: item.xnm || xnm,
+            xqm: item.xqm || xqm,
+            kcxzmc: item.kcxzmc || '',
+            ksxzmc: item.ksxzmc || '',
+            kcsx: item.kcsx || '',
+            kssj: item.kssj || ''
+          })
+        }
+      })
+    } else if (jsonData.items && Array.isArray(jsonData.items)) {
+      // items数组
+      jsonData.items.forEach((item: any) => {
+        if (item.kcmc) {
+          grades.push({
+            kcmc: item.kcmc || '',
+            kch: item.kch || '',
+            kch_id: item.kch_id || '',
+            xf: item.xf || '0',
+            jd: item.jd || '0',
+            cj: item.cj || '',
+            xq: item.xq || '',
+            xnm: item.xnm || xnm,
+            xqm: item.xqm || xqm,
+            kcxzmc: item.kcxzmc || '',
+            ksxzmc: item.ksxzmc || '',
+            kcsx: item.kcsx || '',
+            kssj: item.kssj || ''
+          })
+        }
+      })
+    }
+    
+    console.log(`✅ 成功获取 ${grades.length} 条成绩记录`)
+    return grades
+    
+  } catch (error: any) {
+    console.error('❌ 获取成绩失败:', error)
+    throw error
+  }
+}
+
+// 总体成绩项接口
+export interface OverallGradeItem {
+  xfyqjd_id: string
+  kcmc: string // 课程名称
+  kch: string // 课程号
+  xf: string // 学分
+  cj: string // 成绩
+  jd: string // 绩点
+  kcxzmc?: string // 课程性质
+  xq?: string // 学期
+  [key: string]: any // 允许其他字段
+}
+
+// 总体成绩查询结果接口
+export interface OverallGradesResult {
+  grades: OverallGradeItem[]
+  gpa?: string // 总体GPA
+}
+
+// 获取总体成绩参数
+interface OverallGradeParams {
+  xfyqjd_id: string
+  xh_id: string
+  cjlrxn: string
+  cjlrxq: string
+  bkcjlrxn: string
+  bkcjlrxq: string
+  xscjcxkz: string
+  cjcxkzzt: string
+  cjztkz: string
+  cjzt: string
+}
+
+// 获取总体成绩数据
+export async function getOverallGrades(
+  sessionId?: string,
+  tempCookie?: string
+): Promise<OverallGradesResult> {
+  try {
+    console.log('📊 开始获取总体成绩数据')
+    
+    const urls = getApiUrls()
+    const currentSchool = getCurrentSchool()
+    
+    // 第一步：获取参数页面
+    const indexConfig = createRequestConfig('GET', undefined, sessionId, tempCookie)
+    indexConfig.headers = {
+      ...indexConfig.headers,
+      'Referer': urls.getRefererHeader('overallGrade'),
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    }
+    
+    const indexResponse = await robustFetch(urls.overallGradeIndex, indexConfig)
+    
+    if (!indexResponse.ok) {
+      if (indexResponse.status === 901 || indexResponse.status === 910) {
+        throw new Error('Cookie已过期，请重新登录')
+      }
+      throw new Error(`获取总体成绩参数失败，状态码: ${indexResponse.status}`)
+    }
+    
+    const indexHtml = await indexResponse.text()
+    
+    // 检查是否是登录页面
+    if (indexHtml.includes('用户登录') || indexHtml.includes('登 录')) {
+      throw new Error('Cookie已过期，请重新登录')
+    }
+    
+    // 解析HTML获取参数
+    const $ = cheerio.load(indexHtml)
+    
+    // 提取GPA值
+    let overallGPA: string | undefined
+    try {
+      // 方法1: 查找 <a name="showGpa"> 附近的 font 标签
+      const gpaAnchor = $('a[name="showGpa"]')
+      if (gpaAnchor.length > 0) {
+        // 在相邻的元素中查找 font 标签
+        const gpaFont = gpaAnchor.parent().find('font[style*="color"]').first()
+        if (gpaFont.length > 0) {
+          const gpaText = gpaFont.text().trim()
+          const gpaMatch = gpaText.match(/(\d+\.?\d*)/)
+          if (gpaMatch) {
+            overallGPA = gpaMatch[1]
+            console.log('✅ 从 a[name="showGpa"] 提取到GPA:', overallGPA)
+          }
+        }
+      }
+      
+      // 方法2: 如果方法1失败，直接搜索包含 "(GPA)" 的文本附近的 font 标签
+      if (!overallGPA) {
+        const htmlText = indexHtml
+        const gpaMatch = htmlText.match(/\(GPA\)\s*[:\：]\s*<font[^>]*>([^<]+)<\/font>/i)
+        if (gpaMatch && gpaMatch[1]) {
+          const gpaValue = gpaMatch[1].trim().match(/(\d+\.?\d*)/)
+          if (gpaValue) {
+            overallGPA = gpaValue[1]
+            console.log('✅ 从文本匹配提取到GPA:', overallGPA)
+          }
+        }
+      }
+      
+      // 方法3: 搜索所有包含红色字体和数字的 font 标签
+      if (!overallGPA) {
+        $('font[style*="color"][style*="red"], font[style*="color:red"]').each((_, elem) => {
+          const text = $(elem).text().trim()
+          const match = text.match(/(\d+\.\d{2})/)
+          if (match) {
+            overallGPA = match[1]
+            console.log('✅ 从红色字体提取到GPA:', overallGPA)
+            return false // 停止遍历
+          }
+        })
+      }
+      
+      // 方法4: 搜索 class="clj" 的元素附近的 GPA
+      if (!overallGPA) {
+        $('a.clj[name="showGpa"]').each((_, elem) => {
+          const parent = $(elem).parent()
+          const text = parent.text()
+          const match = text.match(/GPA[:\：]\s*(\d+\.\d{2})/i)
+          if (match) {
+            overallGPA = match[1]
+            console.log('✅ 从 clj 类提取到GPA:', overallGPA)
+            return false
+          }
+        })
+      }
+      
+      if (overallGPA) {
+        console.log(`📊 成功提取总体GPA: ${overallGPA}`)
+      } else {
+        console.warn('⚠️ 未能提取到GPA值')
+      }
+    } catch (error) {
+      console.warn('⚠️ 提取GPA时出错:', error)
+    }
+    
+    // 提取单个参数
+    const params: Partial<OverallGradeParams> = {
+      xh_id: $('input[name="xh_id"]').attr('value') || '',
+      cjlrxn: $('input[name="cjlrxn"]').attr('value') || '',
+      cjlrxq: $('input[name="cjlrxq"]').attr('value') || '',
+      bkcjlrxn: $('input[name="bkcjlrxn"]').attr('value') || '',
+      bkcjlrxq: $('input[name="bkcjlrxq"]').attr('value') || '',
+      xscjcxkz: $('input[name="xscjcxkz"]').attr('value') || '0',
+      cjcxkzzt: $('input[name="cjcxkzzt"]').attr('value') || '2',
+      cjztkz: $('input[name="cjztkz"]').attr('value') || '0',
+      cjzt: $('input[name="cjzt"]').attr('value') || ''
+    }
+    
+    console.log('📋 提取的参数:', params)
+    
+    // 提取所有 xfyqjd_id 值（可能有多个）
+    const xfyqjdIds: string[] = []
+    
+    // 方法1: 查找所有包含 xfyqjd_id 的 input 字段
+    $('input[name="xfyqjd_id"]').each((_, elem) => {
+      const value = $(elem).attr('value')
+      if (value && value.trim()) {
+        xfyqjdIds.push(value.trim())
+      }
+    })
+    
+    // 方法2: 查找 select 选项
+    $('select[name="xfyqjd_id"] option').each((_, elem) => {
+      const value = $(elem).attr('value')
+      if (value && value.trim() && value !== '') {
+        xfyqjdIds.push(value.trim())
+      }
+    })
+    
+    // 方法3: 从HTML属性中提取（如 fxfyqjd_id="xxx"）
+    // 查找所有包含 fxfyqjd_id 或 xfyqjd_id 属性的元素
+    $('[fxfyqjd_id], [xfyqjd_id]').each((_, elem) => {
+      const value = $(elem).attr('fxfyqjd_id') || $(elem).attr('xfyqjd_id')
+      if (value && value.trim()) {
+        xfyqjdIds.push(value.trim())
+      }
+    })
+    
+    // 方法4: 从隐藏的 input 或其他表单元素中提取
+    $('input[type="hidden"][id*="xfyqjd"], input[id*="xfyqjd"], input[class*="xfyqjd"]').each((_, elem) => {
+      const value = $(elem).attr('value') || $(elem).attr('id') || $(elem).attr('data-id')
+      if (value && value.trim() && value.length > 10) {
+        xfyqjdIds.push(value.trim())
+      }
+    })
+    
+    // 方法5: 从脚本中提取（支持 fxfyqjd_id 和 xfyqjd_id）
+    const scripts = $('script').toArray()
+    for (const script of scripts) {
+      const scriptContent = $(script).html() || ''
+      
+      // 匹配 fxfyqjd_id="xxx" 或 xfyqjd_id="xxx"
+      const patterns = [
+        /fxfyqjd_id\s*=\s*["']([^"']+)["']/gi,
+        /xfyqjd_id\s*=\s*["']([^"']+)["']/gi,
+        /xfyqjd_id['"]?\s*[:=]\s*['"]([^'"]+)['"]/gi,
+        /fxfyqjd_id['"]?\s*[:=]\s*['"]([^'"]+)['"]/gi
+      ]
+      
+      patterns.forEach(pattern => {
+        const matches = scriptContent.match(pattern)
+        if (matches) {
+          matches.forEach(match => {
+            const valueMatch = match.match(/["']([^"']+)["']/)
+            if (valueMatch && valueMatch[1] && valueMatch[1].trim().length > 10) {
+              xfyqjdIds.push(valueMatch[1].trim())
+            }
+          })
+        }
+      })
+      
+      // 也尝试匹配 HTML 属性格式
+      const attrMatches = scriptContent.match(/(?:f)?xfyqjd_id=["']([^"']+)["']/gi)
+      if (attrMatches) {
+        attrMatches.forEach(match => {
+          const valueMatch = match.match(/["']([^"']+)["']/)
+          if (valueMatch && valueMatch[1] && valueMatch[1].trim().length > 10) {
+            xfyqjdIds.push(valueMatch[1].trim())
+          }
+        })
       }
     }
-
-    // 创建课程数据对象
-    const courseData = {
-      name: course.kcmc || '未知课程',
-      teacher: course.xm || '未知教师',
-      location: course.cdmc || '未知地点',
-      day: day,
-      period: period,
-      time: course.jc || '',
-      weeks: course.zcd || '',
-      class: course.jxbmc || '',
-      credit: course.xf || '',
-      assessment: course.khfsmc || '',
-      course_type: course.kcxz || '',
-      campus: course.xqmc || '',
-      hours: {
-        total: course.zxs || '',
-        lecture: course.kcxszc || ''
+    
+    // 方法6: 直接从 HTML 文本中搜索（最后的手段）
+    const htmlText = $.html()
+    const textMatches = htmlText.match(/(?:f)?xfyqjd_id=["']([A-F0-9]{32,})["']/gi)
+    if (textMatches) {
+      textMatches.forEach(match => {
+        const valueMatch = match.match(/["']([A-F0-9]{32,})["']/i)
+        if (valueMatch && valueMatch[1]) {
+          xfyqjdIds.push(valueMatch[1].trim())
+        }
+      })
+    }
+    
+    // 去重（确保没有重复的值）
+    const uniqueXfyqjdIds = [...new Set(xfyqjdIds.filter(id => id && id.trim().length > 10))]
+    
+    console.log(`📋 找到 ${uniqueXfyqjdIds.length} 个唯一的 xfyqjd_id:`, uniqueXfyqjdIds)
+    
+    if (uniqueXfyqjdIds.length === 0) {
+      console.error('❌ 未找到任何 xfyqjd_id 参数')
+      console.log('📄 HTML 预览（前1000字符）:', indexHtml.substring(0, 1000))
+      throw new Error('无法获取 xfyqjd_id 参数，请检查Cookie是否有效')
+    }
+    
+    console.log(`📊 准备对 ${uniqueXfyqjdIds.length} 个唯一的 xfyqjd_id 发起并行查询请求`)
+    
+    // 辅助函数：获取字段值（支持大小写不敏感）
+    const getField = (item: any, ...fieldNames: string[]): string => {
+      for (const fieldName of fieldNames) {
+        // 先尝试原始字段名
+        if (item[fieldName] !== undefined && item[fieldName] !== null) {
+          return String(item[fieldName])
+        }
+        // 再尝试小写
+        const lowerField = fieldName.toLowerCase()
+        if (item[lowerField] !== undefined && item[lowerField] !== null) {
+          return String(item[lowerField])
+        }
+        // 再尝试大写
+        const upperField = fieldName.toUpperCase()
+        if (item[upperField] !== undefined && item[upperField] !== null) {
+          return String(item[upperField])
+        }
+      }
+      return ''
+    }
+    
+    // 解析函数
+    const parseGradeItem = (item: any, xfyqjdId: string): OverallGradeItem | null => {
+      const kcmc = getField(item, 'kcmc', 'KCMC', 'kcMc')
+      const kch = getField(item, 'kch', 'KCH', 'kcH')
+      
+      // 至少要有课程名称或课程号
+      if (!kcmc && !kch) {
+        return null
+      }
+      
+      const grade: OverallGradeItem = {
+        xfyqjd_id: xfyqjdId,
+        kcmc: kcmc || '',
+        kch: kch || getField(item, 'kch_id', 'KCH_ID'),
+        xf: getField(item, 'xf', 'XF') || '0',
+        jd: getField(item, 'jd', 'JD') || '0',
+        cj: getField(item, 'cj', 'CJ', 'maxcj', 'MAXCJ') || '',
+        kcxzmc: getField(item, 'kcxzmc', 'KCXZMC', 'kcXzmc') || '',
+        xq: getField(item, 'xq', 'XQ', 'xqm', 'XQM') || '',
+        ...item // 保留所有原始字段
+      }
+      
+      return grade
+    }
+    
+    // 查询单个 xfyqjd_id 的函数
+    const querySingleXfyqjdId = async (xfyqjdId: string, index: number): Promise<OverallGradeItem[]> => {
+      try {
+        console.log(`📊 开始查询 xfyqjd_id [${index + 1}/${uniqueXfyqjdIds.length}]: ${xfyqjdId}`)
+        
+        const formData = new URLSearchParams({
+          xfyqjd_id: xfyqjdId,
+          xh_id: params.xh_id || '',
+          cjlrxn: params.cjlrxn || '',
+          cjlrxq: params.cjlrxq || '',
+          bkcjlrxn: params.bkcjlrxn || '',
+          bkcjlrxq: params.bkcjlrxq || '',
+          xscjcxkz: params.xscjcxkz || '0',
+          cjcxkzzt: params.cjcxkzzt || '2',
+          cjztkz: params.cjztkz || '0',
+          cjzt: params.cjzt || ''
+        })
+        
+        const queryConfig = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
+        queryConfig.headers = {
+          ...queryConfig.headers,
+          'Referer': urls.getRefererHeader('overallGrade'),
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+        
+        const queryResponse = await robustFetch(urls.overallGradeQuery, queryConfig)
+        
+        if (!queryResponse.ok) {
+          console.warn(`⚠️ xfyqjd_id ${xfyqjdId} 查询失败，状态码: ${queryResponse.status}`)
+          return []
+        }
+        
+        const responseText = await queryResponse.text()
+        
+        // 检查是否是登录页面
+        if (responseText.includes('用户登录') || responseText.includes('登 录')) {
+          throw new Error('Cookie已过期，请重新登录')
+        }
+        
+        // 解析JSON响应
+        let jsonData: any
+        try {
+          jsonData = JSON.parse(responseText)
+        } catch (e) {
+          console.warn(`⚠️ xfyqjd_id ${xfyqjdId} 返回的不是JSON格式`)
+          return []
+        }
+        
+        // 解析成绩数据（支持大小写不敏感）
+        const grades: OverallGradeItem[] = []
+        
+        if (Array.isArray(jsonData)) {
+          jsonData.forEach((item: any) => {
+            const grade = parseGradeItem(item, xfyqjdId)
+            if (grade) {
+              grades.push(grade)
+            }
+          })
+        } else if (jsonData.items && Array.isArray(jsonData.items)) {
+          jsonData.items.forEach((item: any) => {
+            const grade = parseGradeItem(item, xfyqjdId)
+            if (grade) {
+              grades.push(grade)
+            }
+          })
+        } else if (jsonData.list && Array.isArray(jsonData.list)) {
+          jsonData.list.forEach((item: any) => {
+            const grade = parseGradeItem(item, xfyqjdId)
+            if (grade) {
+              grades.push(grade)
+            }
+          })
+        } else if (jsonData.data && Array.isArray(jsonData.data)) {
+          jsonData.data.forEach((item: any) => {
+            const grade = parseGradeItem(item, xfyqjdId)
+            if (grade) {
+              grades.push(grade)
+            }
+          })
+        } else {
+          // 尝试将整个对象当作单个课程处理
+          const grade = parseGradeItem(jsonData, xfyqjdId)
+          if (grade) {
+            grades.push(grade)
+          }
+        }
+        
+        console.log(`✅ xfyqjd_id ${xfyqjdId} 获取到 ${grades.length} 条成绩`)
+        return grades
+        
+      } catch (error: any) {
+        console.error(`❌ xfyqjd_id ${xfyqjdId} 查询失败:`, error)
+        return []
       }
     }
-
-    scheduleInfo.push(courseData)
+    
+    // 第二步：并行查询所有 xfyqjd_id
+    const startTime = Date.now()
+    const queryPromises = uniqueXfyqjdIds.map((xfyqjdId, index) => 
+      querySingleXfyqjdId(xfyqjdId, index)
+    )
+    
+    // 使用 Promise.allSettled 确保即使部分请求失败，其他成功的请求也能返回结果
+    const results = await Promise.allSettled(queryPromises)
+    
+    const allGrades: OverallGradeItem[] = []
+    let successCount = 0
+    let failCount = 0
+    
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        allGrades.push(...result.value)
+        if (result.value.length > 0) {
+          successCount++
+        }
+      } else {
+        console.error(`❌ xfyqjd_id ${uniqueXfyqjdIds[index]} 查询被拒绝:`, result.reason)
+        failCount++
+      }
+    })
+    
+    const endTime = Date.now()
+    const duration = ((endTime - startTime) / 1000).toFixed(2)
+    console.log(`✅ 并行查询完成！成功: ${successCount}/${uniqueXfyqjdIds.length}，失败: ${failCount}，耗时: ${duration}秒`)
+    
+    console.log(`✅ 总共获取 ${allGrades.length} 条总体成绩记录`)
+    
+    return {
+      grades: allGrades,
+      gpa: overallGPA
+    }
+    
+  } catch (error: any) {
+    console.error('❌ 获取总体成绩失败:', error)
+    throw error
   }
-
-  console.log(`📅 格式化课表数据完成，共 ${scheduleInfo.length} 门课程`)
-  return scheduleInfo
 }

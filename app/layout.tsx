@@ -12,10 +12,10 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: 'TYUST选课工具 - 现代化界面',
-  description: '太原科技大学选课工具 - Next.js现代化界面',
-  keywords: ['选课', 'TYUST', '太原科技大学', '课程选择'],
-  authors: [{ name: 'TYUST Course Selector' }],
+  title: '正方教务工具 - 现代化界面',
+  description: '正方教务工具 - Next.js现代化界面',
+  keywords: ['选课', '正方教务', '教务系统', '课程选择'],
+  authors: [{ name: '正方教务工具' }],
   robots: 'noindex, nofollow', // 私有应用，不索引
 }
 

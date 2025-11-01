@@ -3,6 +3,9 @@ import { selectCourseWithVerification } from '@/lib/course-api'
 
 export async function POST(request: NextRequest) {
   try {
+    const { searchParams } = new URL(request.url)
+    const schoolId = searchParams.get('schoolId')
+    
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
     
@@ -11,6 +14,12 @@ export async function POST(request: NextRequest) {
         success: false,
         error: 'Cookie未设置'
       }, { status: 400 })
+    }
+
+    // 如果提供了学校ID，先更新学校配置
+    if (schoolId) {
+      const { updateSchoolConfig } = require('@/lib/course-api')
+      updateSchoolConfig(schoolId)
     }
 
     const body = await request.json()

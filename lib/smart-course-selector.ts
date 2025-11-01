@@ -199,14 +199,14 @@ class SmartCourseSelector {
       })
 
       if (result.success) {
-        return { 
-          success: true, 
-          message: `选课成功 - API标志: ${result.flag}, 验证: ${result.verification.verification_message}` 
+        return {
+          success: true,
+          message: `选课成功 - 验证: ${result.verification?.message || '成功'}`
         }
       } else {
         return { 
           success: false, 
-          message: `选课失败 - API标志: ${result.flag}, 消息: ${result.message}, 验证: ${result.verification.verification_message}` 
+          message: `选课失败 - 消息: ${result.message}` 
         }
       }
     } catch (error) {

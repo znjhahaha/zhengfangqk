@@ -42,7 +42,9 @@ export default function StudentInfoPage() {
   const fetchStudentInfo = async () => {
     setIsLoading(true)
     try {
-      const response = await courseAPI.getStudentInfo() as any
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      const response = await courseAPI.getStudentInfo(undefined, currentSchool.id) as any
       if (response.success) {
         setStudentInfo(response.data)
         setLastUpdated(new Date().toISOString())

@@ -5,6 +5,9 @@ export async function GET(request: NextRequest) {
   try {
     console.log('📅 API: 开始获取课表数据')
     
+    const { searchParams } = new URL(request.url)
+    const schoolId = searchParams.get('schoolId')
+    
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
     
@@ -15,6 +18,12 @@ export async function GET(request: NextRequest) {
         message: '请先在设置页面配置Cookie',
         action: 'go_to_settings'
       }, { status: 400 })
+    }
+    
+    // 如果提供了学校ID，先更新学校配置
+    if (schoolId) {
+      const { updateSchoolConfig } = require('@/lib/course-api')
+      updateSchoolConfig(schoolId)
     }
     
     const scheduleData = await getScheduleData(undefined, cookieHeader)

@@ -18,17 +18,54 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     headers['x-course-cookie'] = localCookie
   }
 
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    headers,
-    ...options,
-  })
+  try {
+    const response = await fetch(`${API_BASE_URL}${url}`, {
+      headers,
+      ...options,
+    })
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: '请求失败' }))
-    throw new Error(error.error || `HTTP ${response.status}`)
+    // 尝试解析响应，无论状态码如何
+    let data: any
+    const contentType = response.headers.get('content-type')
+    
+    if (contentType && contentType.includes('application/json')) {
+      try {
+        data = await response.json()
+      } catch (e) {
+        // JSON解析失败，尝试文本
+        const text = await response.clone().text()
+        throw new Error(text || `HTTP ${response.status}: 响应格式错误`)
+      }
+    } else {
+      // 不是JSON格式，读取文本
+      const text = await response.text()
+      if (!response.ok) {
+        throw new Error(text || `HTTP ${response.status}`)
+      }
+      return text as any as T
+    }
+
+    // 如果状态码不是成功的，但响应是JSON格式
+    // 检查是否有 success 字段，如果有则返回数据让调用者处理
+    if (!response.ok) {
+      // 如果是JSON格式的错误响应，可能包含 success: false
+      // 对于成绩查询等API，我们允许返回 success: false 的数据
+      if (data && typeof data === 'object' && 'success' in data) {
+        return data as T
+      }
+      // 否则抛出错误
+      throw new Error(data.error || data.message || `HTTP ${response.status}`)
+    }
+
+    return data as T
+  } catch (error: any) {
+    // 如果是我们主动抛出的错误，直接抛出
+    if (error instanceof Error && error.message) {
+      throw error
+    }
+    // 其他网络错误
+    throw new Error(error.message || '网络请求失败，请检查网络连接')
   }
-
-  return response.json()
 }
 
 // API接口定义
@@ -58,13 +95,35 @@ export const courseAPI = {
     }),
   
   // 学生信息
-  getStudentInfo: (sessionId?: string) => 
-    request(`/student-info${sessionId ? `?sessionId=${sessionId}` : ''}`),
+  getStudentInfo: (sessionId?: string, schoolId?: string) => {
+    const params = new URLSearchParams()
+    if (sessionId) params.append('sessionId', sessionId)
+    if (schoolId) params.append('schoolId', schoolId)
+    const queryString = params.toString()
+    return request(`/student-info${queryString ? `?${queryString}` : ''}`)
+  },
   
   // 课程信息
-  getAvailableCourses: () => request('/courses/available'),
-  getSelectedCourses: () => request('/courses/selected'),
-  getScheduleData: () => request('/schedule'),
+  getAvailableCourses: (schoolId?: string) => 
+    request(`/courses/available${schoolId ? `?schoolId=${schoolId}` : ''}`),
+  getSelectedCourses: (schoolId?: string) => 
+    request(`/courses/selected${schoolId ? `?schoolId=${schoolId}` : ''}`),
+  getScheduleData: (schoolId?: string) => 
+    request(`/schedule${schoolId ? `?schoolId=${schoolId}` : ''}`),
+  
+  // 成绩查询
+  getGrades: (xnm: string, xqm: string, sessionId?: string) =>
+    request('/grade', {
+      method: 'POST',
+      body: JSON.stringify({ xnm, xqm, sessionId }),
+    }),
+  
+  // 总体成绩查询
+  getOverallGrades: (sessionId?: string) =>
+    request('/overall-grade', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
   
   // 选课功能
   executeSingleCourseSelection: (courseData: {
@@ -75,8 +134,8 @@ export const courseAPI = {
     kklxdm?: string
     kcmc?: string
     jxbmc?: string
-  }) => 
-    request('/course-selection/single', {
+  }, schoolId?: string) => 
+    request(`/course-selection/single${schoolId ? `?schoolId=${schoolId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(courseData),
     }),
@@ -94,8 +153,8 @@ export const courseAPI = {
     }>
     batchSize?: number
     delay?: number
-  }) => 
-    request('/course-selection/batch', {
+  }, schoolId?: string) => 
+    request(`/course-selection/batch${schoolId ? `?schoolId=${schoolId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
