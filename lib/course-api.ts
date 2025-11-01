@@ -1645,7 +1645,7 @@ export async function getOverallGrades(
     }
     
     // 去重（确保没有重复的值）
-    const uniqueXfyqjdIds = [...new Set(xfyqjdIds.filter(id => id && id.trim().length > 10))]
+    const uniqueXfyqjdIds = Array.from(new Set(xfyqjdIds.filter(id => id && id.trim().length > 10)))
     
     console.log(`📋 找到 ${uniqueXfyqjdIds.length} 个唯一的 xfyqjd_id:`, uniqueXfyqjdIds)
     
