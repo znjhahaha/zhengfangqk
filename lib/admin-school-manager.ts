@@ -3,6 +3,9 @@
 
 import { SchoolConfig } from './global-school-state'
 
+// 重新导出 SchoolConfig 类型，供其他模块使用
+export type { SchoolConfig }
+
 const STORAGE_KEY_SCHOOLS = 'admin-custom-schools'
 const STORAGE_KEY_URL_CONFIG = 'admin-school-url-config'
 
