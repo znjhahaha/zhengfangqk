@@ -4,3 +4,4 @@ env
 *.log
 package-lock.json
 yarn.lock
+data/

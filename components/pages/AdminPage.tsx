@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,7 +33,14 @@ import {
   Server,
   Zap,
   AlertTriangle,
-  Info
+  Info,
+  Megaphone,
+  MessageSquare,
+  Send,
+  Eye,
+  EyeOff,
+  ChevronDown,
+  Check
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { 
@@ -70,12 +78,154 @@ import {
 } from '@/lib/visit-tracker'
 import { SimpleBarChart, SimplePieChart } from '@/components/ui/SimpleChart'
 
+// 动画下拉选择组件
+interface AnimatedSelectProps {
+  value: string
+  onChange: (value: string) => void
+  options: Array<{ value: string; label: string }>
+  className?: string
+}
+
+function AnimatedSelect({ value, onChange, options, className = '' }: AnimatedSelectProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const selectRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
+
+  // 更新下拉菜单位置
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const updatePosition = () => {
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect()
+          setDropdownPosition({
+            top: rect.bottom + 8,
+            left: rect.left,
+            width: rect.width
+          })
+        }
+      }
+      
+      updatePosition()
+      window.addEventListener('scroll', updatePosition, { passive: true })
+      window.addEventListener('resize', updatePosition)
+      
+      return () => {
+        window.removeEventListener('scroll', updatePosition)
+        window.removeEventListener('resize', updatePosition)
+      }
+    }
+  }, [isOpen])
+
+  // 点击外部关闭
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        selectRef.current && 
+        !selectRef.current.contains(event.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false)
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  const selectedOption = options.find(opt => opt.value === value)
+
+  return (
+    <div className={`relative ${className}`} ref={selectRef}>
+      <motion.button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-800/50 border border-slate-600 rounded-lg text-xs sm:text-sm text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all duration-200 flex items-center justify-between"
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
+      >
+        <span className="flex-1 text-left">{selectedOption?.label || '请选择'}</span>
+        <motion.div
+          animate={{ rotate: isOpen ? 180 : 0 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+        >
+          <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 flex-shrink-0" />
+        </motion.div>
+      </motion.button>
+
+      {typeof window !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <motion.div
+              ref={dropdownRef}
+              initial={{ opacity: 0, y: -10, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.95 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="fixed bg-slate-700/95 backdrop-blur-xl border border-purple-400/30 rounded-lg shadow-2xl overflow-hidden z-[99999]"
+              style={{ 
+                position: 'fixed',
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                width: dropdownPosition.width || 180,
+                zIndex: 99999
+              }}
+            >
+              <div className="py-2">
+                {options.map((option, index) => (
+                  <motion.button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value)
+                      setIsOpen(false)
+                    }}
+                    className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-left flex items-center justify-between hover:bg-purple-500/20 transition-colors text-xs sm:text-sm ${
+                      value === option.value 
+                        ? 'bg-purple-500/30 text-purple-300' 
+                        : 'text-gray-300'
+                    }`}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: index * 0.05, duration: 0.2 }}
+                    whileHover={{ x: 5, backgroundColor: 'rgba(147, 51, 234, 0.2)' }}
+                  >
+                    <span className="flex-1">{option.label}</span>
+                    {value === option.value && (
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 300 }}
+                      >
+                        <Check className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400" />
+                      </motion.div>
+                    )}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 export default function AdminPage() {
   const [schools, setSchools] = useState<SchoolConfig[]>([])
   const [editingSchool, setEditingSchool] = useState<SchoolConfig | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [urlConfigs, setUrlConfigs] = useState<Record<string, any>>({})
-  const [activeTab, setActiveTab] = useState<'schools' | 'data' | 'stats' | 'config' | 'logs' | 'monitor'>('schools')
+  const [activeTab, setActiveTab] = useState<'schools' | 'data' | 'stats' | 'config' | 'logs' | 'monitor' | 'announcements' | 'suggestions'>('schools')
   const [storageData, setStorageData] = useState<any[]>([])
   const [storageUsage, setStorageUsage] = useState({ used: 0, total: 0, percentage: 0 })
   const [logs, setLogs] = useState<AdminLog[]>([])
@@ -90,6 +240,13 @@ export default function AdminPage() {
     visitsByDay: [],
     visitsByHour: []
   })
+  const [announcements, setAnnouncements] = useState<any[]>([])
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false)
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [isAddingAnnouncement, setIsAddingAnnouncement] = useState(false)
+  const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
+  const [confirmationStats, setConfirmationStats] = useState<Record<string, number>>({})
 
   // 表单状态
   const [formData, setFormData] = useState({
@@ -101,6 +258,16 @@ export default function AdminPage() {
     gradeGnmkdm: '',
     courseGnmkdm: '',
     scheduleGnmkdm: ''
+  })
+
+  // 公告表单状态
+  const [announcementForm, setAnnouncementForm] = useState({
+    title: '',
+    content: '',
+    type: 'info' as 'info' | 'success' | 'warning' | 'error',
+    priority: 'normal' as 'low' | 'normal' | 'high',
+    expiresAt: '', // 可选，格式：YYYY-MM-DD
+    isActive: true
   })
 
   // 初始化加载
@@ -145,6 +312,8 @@ export default function AdminPage() {
         clearInterval(interval)
       }
     }
+    // 如果不在需要自动刷新的标签页，返回空清理函数
+    return () => {}
   }, [activeTab])
 
   // 加载日志
@@ -158,6 +327,136 @@ export default function AdminPage() {
   const loadVisitStats = () => {
     const stats = getVisitStats()
     setVisitStats(stats)
+  }
+
+  // 加载公告
+  const loadAnnouncements = async () => {
+    setIsLoadingAnnouncements(true)
+    try {
+      const response = await fetch(`/api/admin/announcements?t=${Date.now()}`)
+      const result = await response.json()
+      if (result.success) {
+        setAnnouncements(result.data || [])
+        // 加载确认统计
+        loadConfirmationStats(result.data || [])
+      }
+    } catch (error) {
+      console.error('加载公告失败:', error)
+      toast.error('加载公告失败')
+    } finally {
+      setIsLoadingAnnouncements(false)
+    }
+  }
+
+  // 加载确认统计
+  const loadConfirmationStats = async (announcementsList: any[]) => {
+    try {
+      const response = await fetch('/api/admin/announcements/confirm')
+      const result = await response.json()
+      if (result.success && result.data) {
+        setConfirmationStats(result.data)
+      }
+    } catch (error) {
+      console.error('加载确认统计失败:', error)
+    }
+  }
+
+  // 加载建议
+  const loadSuggestions = async () => {
+    setIsLoadingSuggestions(true)
+    try {
+      const adminToken = typeof window !== 'undefined' && localStorage.getItem('admin-logged-in') === 'true' 
+        ? 'Znj00751_admin_2024' 
+        : ''
+      
+      // 添加时间戳防止缓存
+      const response = await fetch(`/api/admin/suggestions?t=${Date.now()}`, {
+        headers: {
+          'x-admin-token': adminToken
+        }
+      })
+      const result = await response.json()
+      if (result.success) {
+        console.log('💡 加载建议成功:', result.data?.length || 0, '条')
+        setSuggestions(result.data || [])
+      }
+    } catch (error) {
+      console.error('加载建议失败:', error)
+      toast.error('加载建议失败')
+    } finally {
+      setIsLoadingSuggestions(false)
+    }
+  }
+
+  // 重置公告表单
+  const resetAnnouncementForm = () => {
+    setAnnouncementForm({
+      title: '',
+      content: '',
+      type: 'info',
+      priority: 'normal',
+      expiresAt: '',
+      isActive: true
+    })
+    setIsAddingAnnouncement(false)
+    setEditingAnnouncement(null)
+  }
+
+  // 保存公告
+  const handleSaveAnnouncement = async () => {
+    console.log('📢 开始保存公告')
+    if (!announcementForm.title.trim() || !announcementForm.content.trim()) {
+      toast.error('请填写标题和内容')
+      return
+    }
+
+    try {
+      const adminToken = 'Znj00751_admin_2024'
+      const action = editingAnnouncement ? 'update' : 'create'
+      
+      const announcementData = {
+        ...(editingAnnouncement ? { id: editingAnnouncement.id } : {}),
+        title: announcementForm.title.trim(),
+        content: announcementForm.content.trim(),
+        type: announcementForm.type,
+        priority: announcementForm.priority,
+        expiresAt: announcementForm.expiresAt 
+          ? new Date(announcementForm.expiresAt).getTime() 
+          : undefined,
+        isActive: announcementForm.isActive
+      }
+
+      const response = await fetch('/api/admin/announcements', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken
+        },
+        body: JSON.stringify({
+          action,
+          announcement: announcementData
+        })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        toast.success(editingAnnouncement ? '公告更新成功' : '公告创建成功')
+        console.log('📢 保存成功，重新加载公告列表')
+        // 重置表单
+        resetAnnouncementForm()
+        // 延迟一点再加载，确保服务器已保存完成
+        setTimeout(() => {
+          loadAnnouncements()
+        }, 100)
+        addLog('success', editingAnnouncement ? '更新公告' : '创建公告', announcementForm.title)
+      } else {
+        console.error('📢 保存失败:', result)
+        toast.error(result.message || '操作失败')
+      }
+    } catch (error: any) {
+      console.error('保存公告失败:', error)
+      toast.error('保存失败')
+    }
   }
 
   // 加载存储数据
@@ -461,6 +760,30 @@ export default function AdminPage() {
             <Activity className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
             系统监控
           </Button>
+          <Button
+            variant={activeTab === 'announcements' ? 'default' : 'outline'}
+            onClick={() => {
+              setActiveTab('announcements')
+              loadAnnouncements()
+            }}
+            className="text-xs sm:text-sm"
+            size="sm"
+          >
+            <Megaphone className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            公告管理
+          </Button>
+          <Button
+            variant={activeTab === 'suggestions' ? 'default' : 'outline'}
+            onClick={() => {
+              setActiveTab('suggestions')
+              loadSuggestions()
+            }}
+            className="text-xs sm:text-sm"
+            size="sm"
+          >
+            <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            建议管理
+          </Button>
         </motion.div>
 
         {/* 学校管理 */}
@@ -521,14 +844,14 @@ export default function AdminPage() {
 
                   <div className="space-y-1.5 sm:space-y-2">
                     <label className="text-xs sm:text-sm font-medium text-white">协议</label>
-                    <select
+                    <AnimatedSelect
                       value={formData.protocol}
-                      onChange={(e) => setFormData({ ...formData, protocol: e.target.value })}
-                      className="w-full h-10 px-3 rounded-md bg-slate-800/50 border border-slate-600 text-white text-xs sm:text-sm"
-                    >
-                      <option value="https">HTTPS</option>
-                      <option value="http">HTTP</option>
-                    </select>
+                      onChange={(value) => setFormData({ ...formData, protocol: value as 'http' | 'https' })}
+                      options={[
+                        { value: 'https', label: 'HTTPS' },
+                        { value: 'http', label: 'HTTP' }
+                      ]}
+                    />
                   </div>
 
                   <div className="space-y-1.5 sm:space-y-2 md:col-span-2">
@@ -1616,6 +1939,446 @@ export default function AdminPage() {
                     </p>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* 公告管理 */}
+        {activeTab === 'announcements' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 sm:space-y-6"
+          >
+            {/* 添加/编辑公告表单 */}
+            <AnimatePresence>
+              {(isAddingAnnouncement || editingAnnouncement) && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0, y: -20 }}
+                  animate={{ opacity: 1, height: 'auto', y: 0 }}
+                  exit={{ opacity: 0, height: 0, y: -20 }}
+                  transition={{ 
+                    type: "spring", 
+                    stiffness: 300, 
+                    damping: 30,
+                    duration: 0.3
+                  }}
+                >
+                  <Card className="glass border-purple-500/30 mb-4 sm:mb-6">
+                    <CardHeader className="p-3 sm:p-6">
+                      <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                        {editingAnnouncement ? <Edit className="h-4 w-4 sm:h-5 sm:w-5" /> : <Plus className="h-4 w-4 sm:h-5 sm:w-5" />}
+                        {editingAnnouncement ? '编辑公告' : '添加公告'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">
+                          标题 <span className="text-red-400">*</span>
+                        </label>
+                        <Input
+                          value={announcementForm.title}
+                          onChange={(e) => setAnnouncementForm({ ...announcementForm, title: e.target.value })}
+                          placeholder="请输入公告标题..."
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                          maxLength={100}
+                        />
+                      </div>
+
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">
+                          内容 <span className="text-red-400">*</span>
+                        </label>
+                        <textarea
+                          value={announcementForm.content}
+                          onChange={(e) => setAnnouncementForm({ ...announcementForm, content: e.target.value })}
+                          placeholder="请输入公告内容..."
+                          rows={6}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-800/50 border border-slate-600 rounded-lg text-xs sm:text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 resize-none"
+                          maxLength={2000}
+                        />
+                        <p className="text-[10px] sm:text-xs text-gray-400 text-right">
+                          {announcementForm.content.length}/2000
+                        </p>
+                      </div>
+
+                      <motion.div 
+                        className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1, duration: 0.3 }}
+                      >
+                        <motion.div 
+                          className="space-y-1.5 sm:space-y-2"
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.15, duration: 0.3, type: "spring", stiffness: 200 }}
+                        >
+                          <label className="text-xs sm:text-sm font-medium text-white">类型</label>
+                          <AnimatedSelect
+                            value={announcementForm.type}
+                            onChange={(value) => setAnnouncementForm({ ...announcementForm, type: value as any })}
+                            options={[
+                              { value: 'info', label: '信息' },
+                              { value: 'success', label: '成功' },
+                              { value: 'warning', label: '警告' },
+                              { value: 'error', label: '错误' }
+                            ]}
+                          />
+                        </motion.div>
+
+                        <motion.div 
+                          className="space-y-1.5 sm:space-y-2"
+                          initial={{ opacity: 0, x: 20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: 0.2, duration: 0.3, type: "spring", stiffness: 200 }}
+                        >
+                          <label className="text-xs sm:text-sm font-medium text-white">优先级</label>
+                          <AnimatedSelect
+                            value={announcementForm.priority}
+                            onChange={(value) => setAnnouncementForm({ ...announcementForm, priority: value as any })}
+                            options={[
+                              { value: 'low', label: '低' },
+                              { value: 'normal', label: '普通' },
+                              { value: 'high', label: '高' }
+                            ]}
+                          />
+                        </motion.div>
+                      </motion.div>
+
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">
+                          过期时间 <span className="text-gray-500 text-[10px] sm:text-xs">（可选）</span>
+                        </label>
+                        <Input
+                          type="date"
+                          value={announcementForm.expiresAt}
+                          onChange={(e) => setAnnouncementForm({ ...announcementForm, expiresAt: e.target.value })}
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                        <p className="text-[10px] sm:text-xs text-gray-400">留空表示永久有效</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="isActive"
+                          checked={announcementForm.isActive}
+                          onChange={(e) => setAnnouncementForm({ ...announcementForm, isActive: e.target.checked })}
+                          className="w-4 h-4 rounded border-slate-600 bg-slate-800/50 text-purple-500 focus:ring-purple-500"
+                        />
+                        <label htmlFor="isActive" className="text-xs sm:text-sm text-white cursor-pointer">
+                          立即生效（活跃状态）
+                        </label>
+                      </div>
+
+                      <div className="flex gap-2 sm:gap-3 pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={resetAnnouncementForm}
+                          className="flex-1 text-xs sm:text-sm"
+                        >
+                          <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                          取消
+                        </Button>
+                        <Button
+                          onClick={handleSaveAnnouncement}
+                          className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-xs sm:text-sm"
+                        >
+                          <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                          保存
+                        </Button>
+                      </div>
+                    </CardContent>
+                </Card>
+              </motion.div>
+            )}
+            </AnimatePresence>
+
+            <Card className="glass">
+              <CardHeader className="p-3 sm:p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                      <Megaphone className="h-4 w-4 sm:h-5 sm:w-5" />
+                      公告管理
+                    </CardTitle>
+                    <CardDescription className="text-xs sm:text-sm mt-1">
+                      创建和管理系统公告，所有用户都能看到
+                    </CardDescription>
+                  </div>
+                  {!isAddingAnnouncement && !editingAnnouncement && (
+                    <Button
+                      onClick={() => {
+                        resetAnnouncementForm()
+                        setIsAddingAnnouncement(true)
+                      }}
+                      className="text-xs sm:text-sm"
+                    >
+                      <Plus className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      添加公告
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                {isLoadingAnnouncements ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto text-purple-400 mb-2" />
+                    <p className="text-xs sm:text-sm text-gray-400">加载中...</p>
+                  </div>
+                ) : announcements.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Megaphone className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-600 mb-3" />
+                    <p className="text-xs sm:text-sm text-gray-400">暂无公告</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {announcements.map((ann) => (
+                      <div key={ann.id} className="p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-medium text-xs sm:text-sm text-white">{ann.title}</h3>
+                              <span className={`px-2 py-0.5 text-[10px] rounded ${
+                                ann.type === 'info' ? 'bg-blue-500/20 text-blue-300' :
+                                ann.type === 'success' ? 'bg-green-500/20 text-green-300' :
+                                ann.type === 'warning' ? 'bg-yellow-500/20 text-yellow-300' :
+                                'bg-red-500/20 text-red-300'
+                              }`}>
+                                {ann.type}
+                              </span>
+                              {!ann.isActive && (
+                                <span className="px-2 py-0.5 text-[10px] rounded bg-gray-500/20 text-gray-300">
+                                  已停用
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] sm:text-xs text-gray-400 whitespace-pre-wrap">{ann.content}</p>
+                            <div className="flex items-center gap-3 mt-2">
+                              <p className="text-[9px] sm:text-[10px] text-gray-500">
+                                {new Date(ann.createdAt).toLocaleString('zh-CN')}
+                              </p>
+                              {ann.isActive && (
+                                <span className="text-[9px] sm:text-[10px] text-green-400 flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  已确认: {confirmationStats[ann.id] || 0} 人
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingAnnouncement(ann)
+                                setAnnouncementForm({
+                                  title: ann.title,
+                                  content: ann.content,
+                                  type: ann.type,
+                                  priority: ann.priority,
+                                  expiresAt: ann.expiresAt 
+                                    ? new Date(ann.expiresAt).toISOString().split('T')[0]
+                                    : '',
+                                  isActive: ann.isActive
+                                })
+                                setIsAddingAnnouncement(false)
+                              }}
+                              className="text-xs"
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const adminToken = 'Znj00751_admin_2024'
+                                  const response = await fetch('/api/admin/announcements', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'x-admin-token': adminToken
+                                    },
+                                    body: JSON.stringify({
+                                      action: 'delete',
+                                      announcement: { id: ann.id }
+                                    })
+                                  })
+                                  const result = await response.json()
+                                  if (result.success) {
+                                    toast.success('公告已删除')
+                                    loadAnnouncements()
+                                  } else {
+                                    toast.error(result.message || '删除失败')
+                                  }
+                                } catch (error) {
+                                  toast.error('删除失败')
+                                }
+                              }}
+                              className="text-xs text-red-400"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* 建议管理 */}
+        {activeTab === 'suggestions' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 sm:space-y-6"
+          >
+            <Card className="glass">
+              <CardHeader className="p-3 sm:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
+                  建议管理
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm mt-1">
+                  查看和处理用户的建议反馈
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                {isLoadingSuggestions ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-6 w-6 sm:h-8 sm:w-8 animate-spin mx-auto text-purple-400 mb-2" />
+                    <p className="text-xs sm:text-sm text-gray-400">加载中...</p>
+                  </div>
+                ) : suggestions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-gray-600 mb-3" />
+                    <p className="text-xs sm:text-sm text-gray-400">暂无建议</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {suggestions.map((sug) => (
+                      <div key={sug.id} className={`p-3 sm:p-4 rounded-lg border ${
+                        sug.status === 'pending' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                        sug.status === 'reviewing' ? 'bg-blue-500/10 border-blue-500/30' :
+                        sug.status === 'approved' ? 'bg-green-500/10 border-green-500/30' :
+                        sug.status === 'rejected' ? 'bg-red-500/10 border-red-500/30' :
+                        'bg-purple-500/10 border-purple-500/30'
+                      }`}>
+                        <div className="flex items-start justify-between gap-3 mb-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 flex-wrap mb-2">
+                              <h3 className="font-medium text-xs sm:text-sm text-white">{sug.title}</h3>
+                              <span className={`px-2 py-0.5 text-[10px] rounded ${
+                                sug.type === 'school' ? 'bg-blue-500/20 text-blue-300' :
+                                sug.type === 'bug' ? 'bg-red-500/20 text-red-300' :
+                                sug.type === 'feature' ? 'bg-purple-500/20 text-purple-300' :
+                                'bg-gray-500/20 text-gray-300'
+                              }`}>
+                                {sug.type === 'school' ? '添加学校' :
+                                 sug.type === 'bug' ? 'BUG反馈' :
+                                 sug.type === 'feature' ? '功能建议' : '其他'}
+                              </span>
+                              <span className={`px-2 py-0.5 text-[10px] rounded ${
+                                sug.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                                sug.status === 'reviewing' ? 'bg-blue-500/20 text-blue-300' :
+                                sug.status === 'approved' ? 'bg-green-500/20 text-green-300' :
+                                sug.status === 'rejected' ? 'bg-red-500/20 text-red-300' :
+                                'bg-purple-500/20 text-purple-300'
+                              }`}>
+                                {sug.status === 'pending' ? '待处理' :
+                                 sug.status === 'reviewing' ? '审核中' :
+                                 sug.status === 'approved' ? '已通过' :
+                                 sug.status === 'rejected' ? '已拒绝' : '已完成'}
+                              </span>
+                            </div>
+                            <p className="text-[10px] sm:text-xs text-gray-400 whitespace-pre-wrap mb-2">{sug.content}</p>
+                            {sug.contact && (
+                              <p className="text-[9px] sm:text-[10px] text-gray-500 mb-1">联系方式: {sug.contact}</p>
+                            )}
+                            <p className="text-[9px] sm:text-[10px] text-gray-500">
+                              {new Date(sug.createdAt).toLocaleString('zh-CN')}
+                            </p>
+                          </div>
+                          {sug.status === 'pending' && (
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const adminToken = 'Znj00751_admin_2024'
+                                    const response = await fetch('/api/admin/suggestions', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'x-admin-token': adminToken
+                                      },
+                                      body: JSON.stringify({
+                                        action: 'updateStatus',
+                                        suggestion: { id: sug.id, status: 'approved' }
+                                      })
+                                    })
+                                    const result = await response.json()
+                                    if (result.success) {
+                                      toast.success('建议已通过')
+                                      loadSuggestions()
+                                    } else {
+                                      toast.error(result.message || '操作失败')
+                                    }
+                                  } catch (error) {
+                                    toast.error('操作失败')
+                                  }
+                                }}
+                                className="text-xs text-green-400"
+                              >
+                                通过
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const adminToken = 'Znj00751_admin_2024'
+                                    const response = await fetch('/api/admin/suggestions', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'x-admin-token': adminToken
+                                      },
+                                      body: JSON.stringify({
+                                        action: 'updateStatus',
+                                        suggestion: { id: sug.id, status: 'rejected' }
+                                      })
+                                    })
+                                    const result = await response.json()
+                                    if (result.success) {
+                                      toast.success('建议已拒绝')
+                                      loadSuggestions()
+                                    } else {
+                                      toast.error(result.message || '操作失败')
+                                    }
+                                  } catch (error) {
+                                    toast.error('操作失败')
+                                  }
+                                }}
+                                className="text-xs text-red-400"
+                              >
+                                拒绝
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>

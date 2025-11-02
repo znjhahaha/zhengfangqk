@@ -17,12 +17,14 @@ import {
   LogIn,
   Award
 } from '@/components/ui/optimized-icons'
-import { School, Menu, X, Shield } from 'lucide-react'
+import { School, Menu, X, Shield, MessageSquare, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PerformanceMonitor from '@/components/ui/PerformanceMonitor'
 import AutoLoginModal from '@/components/AutoLoginModal'
 import WelcomeAnimation from '@/components/ui/WelcomeAnimation'
 import AdminLoginModal from '@/components/AdminLoginModal'
+import AnnouncementModal from '@/components/AnnouncementModal'
+import SuggestionModal from '@/components/SuggestionModal'
 
 // 懒加载页面组件
 const CourseInfoPage = lazy(() => import('@/components/pages/CourseInfoPage'))
@@ -51,6 +53,9 @@ export default function Home() {
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false)
+  const [showSuggestionModal, setShowSuggestionModal] = useState(false)
+  const [showAnnouncements, setShowAnnouncements] = useState(false)
+  const [hasUnviewedAnnouncements, setHasUnviewedAnnouncements] = useState(false)
   
   // 学生信息状态
   const { 
@@ -244,6 +249,35 @@ export default function Home() {
     }
   }, [studentInfo, showTopBar])
 
+  // 检查未查看公告
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    
+    const checkUnviewedAnnouncements = async () => {
+      try {
+        // 从 localStorage 读取已查看的公告
+        const viewedIds = new Set(JSON.parse(localStorage.getItem('viewed-announcements') || '[]'))
+        
+        // 获取所有活跃公告
+        const response = await fetch(`/api/admin/announcements?activeOnly=true&t=${Date.now()}`)
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          // 检查是否有未查看的公告
+          const unviewed = result.data.filter((a: any) => !viewedIds.has(a.id))
+          setHasUnviewedAnnouncements(unviewed.length > 0)
+        }
+      } catch (error) {
+        console.warn('检查未查看公告失败:', error)
+      }
+    }
+
+    checkUnviewedAnnouncements()
+    // 每30秒检查一次
+    const interval = setInterval(checkUnviewedAnnouncements, 30 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
   // 监听自定义事件，显示欢迎动画
   useEffect(() => {
     const handleShowWelcomeAnimation = (event: CustomEvent) => {
@@ -307,6 +341,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen particles-bg">
+      {/* 公告弹窗 */}
+      <AnnouncementModal forceShowHistory={showAnnouncements} onCloseHistory={() => setShowAnnouncements(false)} />
+      
       {/* 欢迎动画 - 固定在整个页面顶部 */}
       {(showWelcome && studentInfo) || showTopBar ? (
         <WelcomeAnimation
@@ -446,6 +483,42 @@ export default function Home() {
             >
               <Button
                 onClick={() => {
+                  console.log('📢 点击查看公告按钮')
+                  setShowAnnouncements(true)
+                }}
+                variant="outline"
+                className="border-yellow-500/50 hover:bg-yellow-500/10 text-yellow-400 hover:text-yellow-300 text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2 relative"
+              >
+                <Bell className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2" />
+                <span className="hidden sm:inline">查看公告</span>
+                <span className="sm:hidden">公告</span>
+                {hasUnviewedAnnouncements && (
+                  <span className="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full animate-pulse"></span>
+                )}
+              </Button>
+            </motion.div>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <Button
+                onClick={() => setShowSuggestionModal(true)}
+                variant="outline"
+                className="border-blue-500/50 hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
+              >
+                <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2" />
+                <span className="hidden sm:inline">建议反馈</span>
+                <span className="sm:hidden">建议</span>
+              </Button>
+            </motion.div>
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <Button
+                onClick={() => {
                   if (isAdminLoggedIn) {
                     setActiveTab('admin')
                     setShowMobileMenu(false)
@@ -537,6 +610,7 @@ export default function Home() {
                       amber: isActive ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : '',
                       blue: isActive ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : '',
                       gray: isActive ? 'bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300' : '',
+                      yellow: isActive ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300' : '',
                     }
                     return (
                       <motion.button
@@ -555,6 +629,19 @@ export default function Home() {
                       </motion.button>
                     )
                   })}
+                  {/* 查看公告按钮 */}
+                  <motion.button
+                    onClick={() => {
+                      setShowAnnouncements(true)
+                      setShowMobileMenu(false)
+                    }}
+                    className="flex items-center gap-1.5 p-1.5 rounded-md text-[10px] font-medium transition-all text-gray-700 dark:text-gray-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Bell className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">查看公告</span>
+                  </motion.button>
                 </div>
               </motion.div>
             )}
@@ -811,6 +898,12 @@ export default function Home() {
       
       {/* 性能监控组件 */}
       <PerformanceMonitor />
+
+      {/* 建议提交模态框 */}
+      <SuggestionModal
+        isOpen={showSuggestionModal}
+        onClose={() => setShowSuggestionModal(false)}
+      />
     </div>
   )
 }
