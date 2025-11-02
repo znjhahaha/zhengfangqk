@@ -8,11 +8,12 @@ export interface SchoolConfig {
 }
 
 // 支持的学校列表（动态获取，包含默认和自定义学校）
-import { getAllSchools as getAdminSchools } from './admin-school-manager'
+import { getAllSchools, getAllSchoolsSync } from './admin-school-manager'
 
+// 同步版本（用于服务端渲染或立即需要数据的地方）
 export function getSupportedSchools(): SchoolConfig[] {
   if (typeof window !== 'undefined') {
-    return getAdminSchools()
+    return getAllSchoolsSync()
   }
   // 服务端渲染时返回默认列表
   return [
@@ -31,6 +32,14 @@ export function getSupportedSchools(): SchoolConfig[] {
       description: '浙江工业大学教务系统'
     }
   ]
+}
+
+// 异步版本（支持从服务器同步）
+export async function getSupportedSchoolsAsync(sync = true): Promise<SchoolConfig[]> {
+  if (typeof window !== 'undefined') {
+    return await getAllSchools(sync)
+  }
+  return getSupportedSchools()
 }
 
 // 向后兼容：默认学校列表（服务端渲染时使用）

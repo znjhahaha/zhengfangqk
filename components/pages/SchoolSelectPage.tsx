@@ -15,7 +15,7 @@ import {
   Info,
   ExternalLink
 } from 'lucide-react'
-import { getSupportedSchools, getCurrentSchool, setCurrentSchool, type SchoolConfig } from '@/lib/global-school-state'
+import { getSupportedSchools, getSupportedSchoolsAsync, getCurrentSchool, setCurrentSchool, type SchoolConfig } from '@/lib/global-school-state'
 import { updateSchoolConfig } from '@/lib/course-api'
 import toast from 'react-hot-toast'
 
@@ -24,9 +24,35 @@ export default function SchoolSelectPage() {
   const [isSwitching, setIsSwitching] = useState(false)
   const [schools, setSchools] = useState<SchoolConfig[]>([])
 
-  // 加载学校列表
+  // 加载学校列表（支持服务器同步）
   useEffect(() => {
-    setSchools(getSupportedSchools())
+    const loadSchools = async () => {
+      try {
+        // 先显示本地学校列表，然后异步同步服务器数据
+        setSchools(getSupportedSchools())
+        const syncedSchools = await getSupportedSchoolsAsync(true)
+        if (syncedSchools.length > 0) {
+          setSchools(syncedSchools)
+        }
+      } catch (error) {
+        console.warn('同步学校列表失败:', error)
+      }
+    }
+    loadSchools()
+
+    // 定期同步（每60秒）
+    const syncInterval = setInterval(async () => {
+      try {
+        const syncedSchools = await getSupportedSchoolsAsync(true)
+        if (syncedSchools.length > 0) {
+          setSchools(syncedSchools)
+        }
+      } catch (error) {
+        console.warn('同步学校列表失败:', error)
+      }
+    }, 60000) // 60秒同步一次
+
+    return () => clearInterval(syncInterval)
   }, [])
 
   // 调试信息

@@ -37,7 +37,8 @@ import {
 import toast from 'react-hot-toast'
 import { 
   SchoolConfig, 
-  getAllSchools, 
+  getAllSchools,
+  getAllSchoolsSync, 
   addSchool, 
   updateSchool, 
   deleteSchool,
@@ -115,6 +116,20 @@ export default function AdminPage() {
       addLog('info', '后台管理页面加载', '系统初始化')
       setTimeout(() => loadLogs(), 100)
     }
+
+    // 定期同步学校列表（每30秒）
+    const syncInterval = setInterval(async () => {
+      try {
+        const syncedSchools = await getAllSchools(true)
+        if (syncedSchools.length > 0) {
+          setSchools(syncedSchools)
+        }
+      } catch (error) {
+        console.warn('同步学校列表失败:', error)
+      }
+    }, 30000) // 30秒同步一次
+
+    return () => clearInterval(syncInterval)
   }, [])
 
   // 自动刷新
@@ -153,19 +168,27 @@ export default function AdminPage() {
     setStorageUsage(usage)
   }
 
-  const loadData = () => {
-    const allSchools = getAllSchools()
-    setSchools(allSchools)
+  const loadData = async () => {
+    try {
+      // 异步加载并同步学校列表
+      const allSchools = await getAllSchools(true)
+      setSchools(allSchools)
     
-    // 加载URL配置
-    const configs: Record<string, any> = {}
-    allSchools.forEach(school => {
-      const config = getSchoolUrlConfig(school.id)
-      if (config) {
-        configs[school.id] = config
-      }
-    })
-    setUrlConfigs(configs)
+      // 加载URL配置
+      const configs: Record<string, any> = {}
+      allSchools.forEach(school => {
+        const config = getSchoolUrlConfig(school.id)
+        if (config) {
+          configs[school.id] = config
+        }
+      })
+      setUrlConfigs(configs)
+    } catch (error) {
+      console.error('加载学校数据失败:', error)
+      // 如果同步失败，使用本地数据
+      const localSchools = getAllSchoolsSync()
+      setSchools(localSchools)
+    }
   }
 
   const resetForm = () => {
@@ -226,7 +249,7 @@ export default function AdminPage() {
     resetForm()
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // 验证必填字段
     if (!formData.id || !formData.name || !formData.domain) {
       toast.error('请填写必填字段：ID、名称、域名')
@@ -260,19 +283,19 @@ export default function AdminPage() {
           protocol: formData.protocol as 'http' | 'https',
           description: formData.description || undefined
         }
-        addSchool(newSchool)
+        await addSchool(newSchool)
         addLog('success', '添加学校', `学校: ${newSchool.name} (${newSchool.id})`)
         
         // 保存URL配置
         if (formData.gradeGnmkdm || formData.courseGnmkdm || formData.scheduleGnmkdm) {
-          setSchoolUrlConfig(formData.id, {
+          await setSchoolUrlConfig(formData.id, {
             gradeGnmkdm: formData.gradeGnmkdm || undefined,
             courseGnmkdm: formData.courseGnmkdm || undefined,
             scheduleGnmkdm: formData.scheduleGnmkdm || undefined
           })
         }
         
-        toast.success('学校添加成功')
+        toast.success('学校添加成功并已同步')
         loadLogs()
       } else if (editingSchool) {
         const updatedSchool: SchoolConfig = {
@@ -282,43 +305,44 @@ export default function AdminPage() {
           protocol: formData.protocol as 'http' | 'https',
           description: formData.description || undefined
         }
-        updateSchool(editingSchool.id, updatedSchool)
+        await updateSchool(editingSchool.id, updatedSchool)
         addLog('success', '更新学校', `学校: ${updatedSchool.name} (${updatedSchool.id})`)
         
         // 保存URL配置
-        setSchoolUrlConfig(formData.id, {
+        await setSchoolUrlConfig(formData.id, {
           gradeGnmkdm: formData.gradeGnmkdm || undefined,
           courseGnmkdm: formData.courseGnmkdm || undefined,
           scheduleGnmkdm: formData.scheduleGnmkdm || undefined
         })
         
-        toast.success('学校更新成功')
+        toast.success('学校更新成功并已同步')
         loadLogs()
       }
 
       resetForm()
-      loadData()
+      await loadData()
       
-      // 提示需要刷新页面
-      toast('配置已保存，刷新页面后生效', { 
-        icon: 'ℹ️',
+      // 提示已同步
+      toast('配置已保存并同步到服务器，所有用户将在30秒内收到更新', { 
+        icon: '✅',
         duration: 4000
       })
     } catch (error: any) {
       toast.error(error.message || '操作失败')
+      addLog('error', '学校操作失败', error.message || '未知错误')
     }
   }
 
-  const handleDelete = (schoolId: string, schoolName: string) => {
+  const handleDelete = async (schoolId: string, schoolName: string) => {
     if (!confirm(`确定要删除学校 "${schoolName}" 吗？此操作不可恢复。`)) {
       return
     }
 
     try {
-      deleteSchool(schoolId)
+      await deleteSchool(schoolId)
       addLog('warning', '删除学校', `学校ID: ${schoolId}, 名称: ${schoolName}`)
-      toast.success('学校删除成功')
-      loadData()
+      toast.success('学校删除成功并已同步')
+      await loadData()
       loadLogs()
       
       if (editingSchool?.id === schoolId) {
@@ -762,7 +786,7 @@ export default function AdminPage() {
                       if (confirm('确定要清除后台管理数据吗？这将删除所有自定义学校配置。')) {
                         clearAdminData()
                         loadStorageData()
-                        loadData()
+                        loadData().catch(console.error)
                         toast.success('后台管理数据已清除')
                       }
                     }}
@@ -778,7 +802,7 @@ export default function AdminPage() {
                       if (confirm('⚠️ 警告：确定要清除所有数据吗？此操作不可恢复！')) {
                         localStorage.clear()
                         loadStorageData()
-                        loadData()
+                        loadData().catch(console.error)
                         toast.success('所有数据已清除，请刷新页面')
                       }
                     }}
@@ -837,7 +861,7 @@ export default function AdminPage() {
                             if (result.success) {
                               toast.success(result.message)
                               loadStorageData()
-                              loadData()
+                              loadData().catch(console.error)
                               setTimeout(() => window.location.reload(), 2000)
                             } else {
                               toast.error(result.message)
