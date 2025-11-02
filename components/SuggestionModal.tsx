@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import type { ComponentType } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Send, MessageSquare, Bug, Plus, Star, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -62,11 +63,18 @@ export default function SuggestionModal({ isOpen, onClose }: SuggestionModalProp
     }
   }
 
-  const typeOptions = [
-    { value: 'school', label: '添加学校', icon: Plus, desc: '建议添加新的学校教务地址' },
-    { value: 'bug', label: 'BUG反馈', icon: Bug, desc: '报告发现的错误或问题' },
-    { value: 'feature', label: '功能建议', icon: Star, desc: '提出新功能或改进建议' },
-    { value: 'other', label: '其他', icon: MessageSquare, desc: '其他意见或建议' }
+  type SuggestionType = 'school' | 'bug' | 'feature' | 'other'
+  
+  const typeOptions: Array<{
+    value: SuggestionType
+    label: string
+    icon: ComponentType<{ className?: string }>
+    desc: string
+  }> = [
+    { value: 'school' as SuggestionType, label: '添加学校', icon: Plus, desc: '建议添加新的学校教务地址' },
+    { value: 'bug' as SuggestionType, label: 'BUG反馈', icon: Bug, desc: '报告发现的错误或问题' },
+    { value: 'feature' as SuggestionType, label: '功能建议', icon: Star, desc: '提出新功能或改进建议' },
+    { value: 'other' as SuggestionType, label: '其他', icon: MessageSquare, desc: '其他意见或建议' }
   ]
 
   if (!isOpen) return null
