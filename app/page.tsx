@@ -17,11 +17,12 @@ import {
   LogIn,
   Award
 } from '@/components/ui/optimized-icons'
-import { School } from 'lucide-react'
+import { School, Menu, X, Shield } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PerformanceMonitor from '@/components/ui/PerformanceMonitor'
 import AutoLoginModal from '@/components/AutoLoginModal'
 import WelcomeAnimation from '@/components/ui/WelcomeAnimation'
+import AdminLoginModal from '@/components/AdminLoginModal'
 
 // 懒加载页面组件
 const CourseInfoPage = lazy(() => import('@/components/pages/CourseInfoPage'))
@@ -30,6 +31,7 @@ const ModernSchedulePage = lazy(() => import('@/components/pages/ModernScheduleP
 const SettingsPage = lazy(() => import('@/components/pages/SettingsPage'))
 const SchoolSelectPage = lazy(() => import('@/components/pages/SchoolSelectPage'))
 const GradePage = lazy(() => import('@/components/pages/GradePage'))
+const AdminPage = lazy(() => import('@/components/pages/AdminPage'))
 
 // 导入API和状态管理
 import { courseAPI } from '@/lib/api'
@@ -37,6 +39,7 @@ import { useStudentStore } from '@/lib/student-store'
 import { CookieValidator } from '@/lib/cookie-validator'
 import LocalCookieManager from '@/lib/local-cookie-manager'
 import { getCurrentSchool } from '@/lib/global-school-state'
+import { recordVisit } from '@/lib/visit-tracker'
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('courses') // 默认显示课程信息页面
@@ -45,6 +48,9 @@ export default function Home() {
   const [showAutoLogin, setShowAutoLogin] = useState(false)
   const [showWelcome, setShowWelcome] = useState(false)
   const [showTopBar, setShowTopBar] = useState(false)
+  const [showMobileMenu, setShowMobileMenu] = useState(false)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false)
   
   // 学生信息状态
   const { 
@@ -60,6 +66,9 @@ export default function Home() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // 记录访问（只记录一次）
+        recordVisit()
+        
         // 初始化学校配置
         const currentSchool = getCurrentSchool()
         console.log(`🏫 应用启动 - 当前学校配置: ${currentSchool.name} (${currentSchool.domain})`)
@@ -169,8 +178,43 @@ export default function Home() {
   }
 
   // 处理页面切换
+  // 定义菜单项
+  const menuItems = [
+    { value: 'courses', label: '课程信息', icon: BookOpen, color: 'green' },
+    { value: 'schedule', label: '我的课表', icon: Calendar, color: 'orange' },
+    { value: 'selection', label: '智能选课', icon: Target, color: 'pink' },
+    { value: 'grade', label: '成绩查询', icon: Award, color: 'amber' },
+    { value: 'school', label: '学校选择', icon: School, color: 'blue' },
+    { value: 'settings', label: '系统设置', icon: Settings, color: 'gray' },
+  ]
+
   const handleTabChange = (newTab: string) => {
+    // 如果切换到管理页面但未登录，显示登录框
+    if (newTab === 'admin' && !isAdminLoggedIn) {
+      setShowAdminLogin(true)
+      return
+    }
     setActiveTab(newTab)
+    setShowMobileMenu(false) // 选择后关闭移动端菜单
+  }
+
+  // 检查管理员登录状态（从 localStorage）
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const adminLoggedIn = localStorage.getItem('admin-logged-in') === 'true'
+      setIsAdminLoggedIn(adminLoggedIn)
+    }
+  }, [])
+
+  // 保存管理员登录状态
+  const handleAdminLoginSuccess = () => {
+    setIsAdminLoggedIn(true)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('admin-logged-in', 'true')
+    }
+    setShowAdminLogin(false)
+    setActiveTab('admin')
+    setShowMobileMenu(false)
   }
 
   // 欢迎动画完成处理
@@ -279,19 +323,19 @@ export default function Home() {
           duration: 0.8,
           ease: [0.25, 0.46, 0.45, 0.94]
         }}
-        className={`bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 p-4 relative transition-all duration-300 shadow-sm ${
+        className={`bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 p-2 sm:p-4 relative transition-all duration-300 shadow-sm ${
           (showWelcome && studentInfo) || showTopBar ? 'mt-20' : ''
         }`}
       >
-        <div className="max-w-7xl mx-auto flex items-center justify-between">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
           <motion.div 
-            className="flex items-center space-x-4"
+            className="flex items-center space-x-2 sm:space-x-4"
             initial={{ x: -50, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.2, duration: 0.6 }}
           >
             <motion.div 
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-1 sm:space-x-2"
               whileHover={{ scale: 1.05 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
@@ -306,22 +350,22 @@ export default function Home() {
                   repeatDelay: 3
                 }}
               >
-                <BookOpen className="h-8 w-8 text-primary" />
+                <BookOpen className="h-5 w-5 sm:h-8 sm:w-8 text-primary" />
               </motion.div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-white">
                 正方教务工具
               </h1>
             </motion.div>
             
             <motion.div 
-              className="flex items-center space-x-2"
+              className="flex items-center space-x-1 sm:space-x-2"
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.4, duration: 0.5 }}
             >
               {serverStatus === 'online' && (
                 <motion.div 
-                  className="flex items-center space-x-2 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full"
+                  className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.6, duration: 0.4 }}
@@ -338,12 +382,12 @@ export default function Home() {
                       ease: "easeInOut" 
                     }}
                   />
-                  <span className="text-sm font-medium text-green-700 dark:text-green-300">在线</span>
+                  <span className="text-[10px] sm:text-sm font-medium text-green-700 dark:text-green-300">在线</span>
                 </motion.div>
               )}
               {serverStatus === 'offline' && (
                 <motion.div 
-                  className="flex items-center space-x-2 px-3 py-1 bg-red-50 dark:bg-red-900/20 rounded-full"
+                  className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 bg-red-50 dark:bg-red-900/20 rounded-full"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.6, duration: 0.4 }}
@@ -360,7 +404,7 @@ export default function Home() {
                       ease: "easeInOut" 
                     }}
                   />
-                  <span className="text-sm font-medium text-red-700 dark:text-red-300">离线</span>
+                  <span className="text-[10px] sm:text-sm font-medium text-red-700 dark:text-red-300">离线</span>
                 </motion.div>
               )}
             </motion.div>
@@ -370,7 +414,7 @@ export default function Home() {
             initial={{ x: 50, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.6 }}
-            className="flex items-center space-x-3"
+            className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto"
           >
             {/* 自动登录按钮 */}
             <motion.div
@@ -380,7 +424,7 @@ export default function Home() {
             >
               <Button
                 onClick={() => setShowAutoLogin(true)}
-                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white relative overflow-hidden"
+                className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white relative overflow-hidden text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
               >
                 <motion.div
                   className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20"
@@ -388,8 +432,33 @@ export default function Home() {
                   whileHover={{ x: "100%" }}
                   transition={{ duration: 0.6 }}
                 />
-                <LogIn className="h-4 w-4 mr-2 relative z-10" />
-                <span className="relative z-10">自动登录</span>
+                <LogIn className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2 relative z-10" />
+                <span className="relative z-10 hidden sm:inline">自动登录</span>
+                <span className="relative z-10 sm:hidden">登录</span>
+              </Button>
+            </motion.div>
+            
+            {/* 后台管理按钮 */}
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300 }}
+            >
+              <Button
+                onClick={() => {
+                  if (isAdminLoggedIn) {
+                    setActiveTab('admin')
+                    setShowMobileMenu(false)
+                  } else {
+                    setShowAdminLogin(true)
+                  }
+                }}
+                variant="outline"
+                className="border-purple-500/50 hover:bg-purple-500/10 text-purple-400 hover:text-purple-300 text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
+              >
+                <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2" />
+                <span className="hidden sm:inline">管理</span>
+                <span className="sm:hidden">管理</span>
               </Button>
             </motion.div>
             
@@ -402,7 +471,7 @@ export default function Home() {
               <Button
                 onClick={handleRefreshAll}
                 variant="outline"
-                className="btn-hover relative overflow-hidden"
+                className="btn-hover relative overflow-hidden text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
               >
                 <motion.div
                   className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20"
@@ -410,8 +479,9 @@ export default function Home() {
                   whileHover={{ x: "100%" }}
                   transition={{ duration: 0.6 }}
                 />
-                <RefreshCw className="h-4 w-4 mr-2 relative z-10" />
-                <span className="relative z-10">刷新数据</span>
+                <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2 relative z-10" />
+                <span className="relative z-10 hidden sm:inline">刷新数据</span>
+                <span className="relative z-10 sm:hidden">刷新</span>
               </Button>
             </motion.div>
           </motion.div>
@@ -419,29 +489,101 @@ export default function Home() {
       </motion.header>
 
       {/* 主要内容 */}
-      <main className="w-full max-w-[78vw] mx-auto p-4 relative rounded-2xl overflow-hidden">
+      <main className="w-full max-w-full lg:max-w-[78vw] mx-auto p-1.5 sm:p-4 relative rounded-2xl overflow-hidden">
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          {/* 移动端菜单按钮 */}
+          <motion.div
+            className="block sm:hidden mb-2"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-lg p-2 h-9 text-xs font-medium flex items-center justify-center gap-2"
+              variant="outline"
+            >
+              {showMobileMenu ? (
+                <>
+                  <X className="h-4 w-4" />
+                  <span>关闭菜单</span>
+                </>
+              ) : (
+                <>
+                  <Menu className="h-4 w-4" />
+                  <span>功能菜单</span>
+                </>
+              )}
+            </Button>
+          </motion.div>
+
+          {/* 移动端菜单抽屉 */}
+          <AnimatePresence>
+            {showMobileMenu && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="block sm:hidden mb-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-lg p-2 shadow-lg"
+              >
+                <div className="grid grid-cols-2 gap-1.5">
+                  {menuItems.map((item) => {
+                    const Icon = item.icon
+                    const isActive = activeTab === item.value
+                    const colorClasses: Record<string, string> = {
+                      green: isActive ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : '',
+                      orange: isActive ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' : '',
+                      pink: isActive ? 'bg-pink-100 dark:bg-pink-900/30 text-pink-700 dark:text-pink-300' : '',
+                      amber: isActive ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' : '',
+                      blue: isActive ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' : '',
+                      gray: isActive ? 'bg-gray-100 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300' : '',
+                    }
+                    return (
+                      <motion.button
+                        key={item.value}
+                        onClick={() => handleTabChange(item.value)}
+                        className={`flex items-center gap-1.5 p-1.5 rounded-md text-[10px] font-medium transition-all ${
+                          isActive
+                            ? colorClasses[item.color] || ''
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                        }`}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <Icon className="h-3 w-3 flex-shrink-0" />
+                        <span className="truncate">{item.label}</span>
+                      </motion.button>
+                    )
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* 桌面端标签栏 */}
           <motion.div
             initial={{ y: 20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             transition={{ delay: 0.4, duration: 0.6 }}
+            className="hidden sm:block"
           >
-            <TabsList className="inline-flex w-full max-w-full mx-auto mb-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-2xl p-8 shadow-lg">
+            <TabsList className="inline-flex w-full max-w-full mx-auto mb-4 sm:mb-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-2 sm:p-8 shadow-lg flex-wrap sm:flex-nowrap">
               
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TabsTrigger value="courses" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-green-100 dark:data-[state=active]:bg-green-900/30 data-[state=active]:text-green-700 dark:data-[state=active]:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                <TabsTrigger value="courses" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-green-100 dark:data-[state=active]:bg-green-900/30 data-[state=active]:text-green-700 dark:data-[state=active]:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg"
                     initial={{ x: "-100%" }}
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <BookOpen className="h-6 w-6 relative z-10" />
-                  <span className="relative z-10">课程信息</span>
+                  <BookOpen className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
+                  <span className="relative z-10 hidden sm:inline">课程信息</span>
+                  <span className="relative z-10 sm:hidden">课程</span>
                 </TabsTrigger>
               </motion.div>
               
@@ -450,15 +592,16 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TabsTrigger value="schedule" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-orange-100 dark:data-[state=active]:bg-orange-900/30 data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                <TabsTrigger value="schedule" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-orange-100 dark:data-[state=active]:bg-orange-900/30 data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-red-500/10 rounded-lg"
                     initial={{ x: "-100%" }}
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <Calendar className="h-6 w-6 relative z-10" />
-                  <span className="relative z-10">我的课表</span>
+                  <Calendar className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
+                  <span className="relative z-10 hidden sm:inline">我的课表</span>
+                  <span className="relative z-10 sm:hidden">课表</span>
                 </TabsTrigger>
               </motion.div>
               
@@ -468,15 +611,16 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TabsTrigger value="selection" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-pink-100 dark:data-[state=active]:bg-pink-900/30 data-[state=active]:text-pink-700 dark:data-[state=active]:text-pink-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                <TabsTrigger value="selection" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-pink-100 dark:data-[state=active]:bg-pink-900/30 data-[state=active]:text-pink-700 dark:data-[state=active]:text-pink-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-pink-500/10 to-rose-500/10 rounded-lg"
                     initial={{ x: "-100%" }}
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <Target className="h-6 w-6 relative z-10" />
-                  <span className="relative z-10">智能选课</span>
+                  <Target className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
+                  <span className="relative z-10 hidden sm:inline">智能选课</span>
+                  <span className="relative z-10 sm:hidden">选课</span>
                 </TabsTrigger>
               </motion.div>
               
@@ -485,15 +629,16 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TabsTrigger value="grade" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-amber-100 dark:data-[state=active]:bg-amber-900/30 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                <TabsTrigger value="grade" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-amber-100 dark:data-[state=active]:bg-amber-900/30 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 rounded-lg"
                     initial={{ x: "-100%" }}
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <Award className="h-6 w-6 relative z-10" />
-                  <span className="relative z-10">成绩查询</span>
+                  <Award className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
+                  <span className="relative z-10 hidden sm:inline">成绩查询</span>
+                  <span className="relative z-10 sm:hidden">成绩</span>
                 </TabsTrigger>
               </motion.div>
               
@@ -502,15 +647,16 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TabsTrigger value="school" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                <TabsTrigger value="school" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-lg"
                     initial={{ x: "-100%" }}
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <School className="h-6 w-6 relative z-10" />
-                  <span className="relative z-10">学校选择</span>
+                  <School className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
+                  <span className="relative z-10 hidden sm:inline">学校选择</span>
+                  <span className="relative z-10 sm:hidden">学校</span>
                 </TabsTrigger>
               </motion.div>
               
@@ -519,15 +665,16 @@ export default function Home() {
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
-                <TabsTrigger value="settings" className="flex items-center justify-center space-x-4 relative overflow-hidden h-16 px-8 py-4 rounded-lg text-base font-medium transition-all duration-200 data-[state=active]:bg-gray-100 dark:data-[state=active]:bg-gray-800/50 data-[state=active]:text-gray-700 dark:data-[state=active]:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1">
+                <TabsTrigger value="settings" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-gray-100 dark:data-[state=active]:bg-gray-800/50 data-[state=active]:text-gray-700 dark:data-[state=active]:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-gray-500/10 to-slate-500/10 rounded-lg"
                     initial={{ x: "-100%" }}
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <Settings className="h-6 w-6 relative z-10" />
-                  <span className="relative z-10">系统设置</span>
+                  <Settings className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
+                  <span className="relative z-10 hidden sm:inline">系统设置</span>
+                  <span className="relative z-10 sm:hidden">设置</span>
                 </TabsTrigger>
               </motion.div>
             </TabsList>
@@ -623,30 +770,44 @@ export default function Home() {
               
               <TabsContent value="settings" className="mt-0">
                 <Suspense fallback={
-                  <div className="flex items-center justify-center py-12">
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    >
-                      <Loader2 className="h-8 w-8 text-gray-400" />
-                    </motion.div>
+                  <div className="flex items-center justify-center min-h-[400px]">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
                   </div>
                 }>
                   <SettingsPage />
                 </Suspense>
               </TabsContent>
+
+              {/* 后台管理页面 */}
+              {isAdminLoggedIn && (
+                <TabsContent value="admin" className="mt-0">
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center min-h-[400px]">
+                      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    </div>
+                  }>
+                    <AdminPage />
+                  </Suspense>
+                </TabsContent>
+              )}
             </motion.div>
           </AnimatePresence>
         </Tabs>
       </main>
       
+      {/* 后台管理登录模态框 */}
+      <AdminLoginModal
+        isOpen={showAdminLogin}
+        onClose={() => setShowAdminLogin(false)}
+        onLoginSuccess={handleAdminLoginSuccess}
+      />
+
       {/* 自动登录模态框 */}
       <AutoLoginModal
         isOpen={showAutoLogin}
         onClose={() => setShowAutoLogin(false)}
         onSuccess={handleAutoLoginSuccess}
       />
-      
       
       {/* 性能监控组件 */}
       <PerformanceMonitor />

@@ -125,22 +125,22 @@ function CustomSelect({ value, onChange, options, icon, label, delay = 0 }: Cust
       >
         {icon}
       </motion.div>
-      <label className="text-sm font-medium text-gray-300">{label}</label>
+      <label className="text-xs sm:text-sm font-medium text-gray-300">{label}</label>
       <div className="relative">
         <motion.button
           ref={buttonRef}
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-700/80 border border-purple-400/30 rounded-lg text-white cursor-pointer hover:bg-slate-700 hover:border-purple-400/60 transition-all duration-300 min-w-[180px] justify-between relative"
+          className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-slate-700/80 border border-purple-400/30 rounded-lg text-white cursor-pointer hover:bg-slate-700 hover:border-purple-400/60 transition-all duration-300 min-w-[120px] sm:min-w-[180px] justify-between relative text-xs sm:text-sm"
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
         >
-          <span className="flex-1 text-left">{selectedOption?.label || '请选择'}</span>
+          <span className="flex-1 text-left truncate">{selectedOption?.label || '请选择'}</span>
           <motion.div
             animate={{ rotate: isOpen ? 180 : 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
           >
-            <ChevronDown className="h-4 w-4 text-purple-400" />
+            <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 text-purple-400 flex-shrink-0" />
           </motion.div>
         </motion.button>
 
@@ -171,7 +171,7 @@ function CustomSelect({ value, onChange, options, icon, label, delay = 0 }: Cust
                         onChange(option.value)
                         setIsOpen(false)
                       }}
-                      className={`w-full px-4 py-3 text-left flex items-center justify-between hover:bg-purple-500/20 transition-colors ${
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-left flex items-center justify-between hover:bg-purple-500/20 transition-colors text-xs sm:text-sm ${
                         value === option.value 
                           ? 'bg-purple-500/30 text-purple-300' 
                           : 'text-gray-300'
@@ -778,8 +778,8 @@ export default function GradePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
-      <div className="w-full max-w-[78vw] mx-auto space-y-6 rounded-2xl overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-1.5 sm:p-4">
+      <div className="w-full max-w-full lg:max-w-[78vw] mx-auto space-y-3 sm:space-y-6 rounded-2xl overflow-hidden">
         {/* 标题和操作栏 */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -790,50 +790,52 @@ export default function GradePage() {
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
-                  <CardTitle className="flex items-center gap-3 text-3xl text-white mb-2">
+                  <CardTitle className="flex items-center gap-1.5 sm:gap-3 text-lg sm:text-3xl text-white mb-1 sm:mb-2">
                     <motion.div
                       animate={{ rotate: [0, 10, -10, 0] }}
                       transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
                     >
-                      <Award className="h-8 w-8 text-purple-400" />
+                      <Award className="h-5 w-5 sm:h-8 sm:w-8 text-purple-400" />
                     </motion.div>
                     成绩查询
                   </CardTitle>
-                  <CardDescription className="text-gray-300 mt-2">
+                  <CardDescription className="text-gray-300 mt-1 sm:mt-2 text-xs sm:text-base">
                     查询并查看您的课程成绩信息
                   </CardDescription>
                 </div>
-                <div className="flex items-center gap-3">
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-none">
                     <Button
                       onClick={exportGrades}
                       disabled={grades.length === 0 || isLoading}
                       variant="outline"
-                      className="border-purple-400/50 bg-slate-700/50 hover:bg-purple-500/20 text-white hover:text-white"
+                      className="border-purple-400/50 bg-slate-700/50 hover:bg-purple-500/20 text-white hover:text-white w-full sm:w-auto text-xs sm:text-sm px-3 sm:px-4"
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      导出成绩单
+                      <Download className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                      <span className="hidden sm:inline">导出成绩单</span>
+                      <span className="sm:hidden">导出</span>
                     </Button>
                   </motion.div>
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-none">
                     <Button
                       onClick={fetchGrades}
                       disabled={isLoading}
-                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg shadow-purple-500/50"
+                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg shadow-purple-500/50 w-full sm:w-auto text-xs sm:text-sm px-3 sm:px-4"
                     >
                       {isLoading ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
                       ) : (
-                        <RefreshCw className="h-4 w-4 mr-2" />
+                        <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                       )}
-                      查询成绩
+                      <span className="hidden sm:inline">查询成绩</span>
+                      <span className="sm:hidden">查询</span>
                     </Button>
                   </motion.div>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-wrap items-center gap-6">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-6">
                 {/* 学年选择 */}
                 <CustomSelect
                   value={selectedYear}
@@ -861,13 +863,14 @@ export default function GradePage() {
                 <AnimatePresence>
                   {lastUpdated && (
                     <motion.div 
-                      className="ml-auto text-sm text-gray-400 flex items-center gap-2"
+                      className="w-full sm:w-auto sm:ml-auto text-xs sm:text-sm text-gray-400 flex items-center gap-2"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
                       exit={{ opacity: 0 }}
                     >
-                      <Clock className="h-4 w-4" />
-                      最后更新: {new Date(lastUpdated).toLocaleString('zh-CN')}
+                      <Clock className="h-3 w-3 sm:h-4 sm:w-4" />
+                      <span className="hidden sm:inline">最后更新: </span>
+                      {new Date(lastUpdated).toLocaleString('zh-CN')}
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -884,37 +887,37 @@ export default function GradePage() {
                     style={{ zIndex: 1 }}
                   >
                     <motion.div 
-                      className="p-4 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl border border-purple-400/30 backdrop-blur-sm"
+                      className="p-3 sm:p-4 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl border border-purple-400/30 backdrop-blur-sm"
                       whileHover={{ scale: 1.05, y: -5 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <GraduationCap className="h-5 w-5 text-purple-400" />
-                        <div className="text-sm text-gray-300">课程总数</div>
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" />
+                        <div className="text-xs sm:text-sm text-gray-300">课程总数</div>
                       </div>
-                      <div className="text-3xl font-bold text-white">{grades.length}</div>
+                      <div className="text-2xl sm:text-3xl font-bold text-white">{grades.length}</div>
                     </motion.div>
                     <motion.div 
-                      className="p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-xl border border-blue-400/30 backdrop-blur-sm"
+                      className="p-3 sm:p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-xl border border-blue-400/30 backdrop-blur-sm"
                       whileHover={{ scale: 1.05, y: -5 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <BookOpen className="h-5 w-5 text-blue-400" />
-                        <div className="text-sm text-gray-300">总学分</div>
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
+                        <div className="text-xs sm:text-sm text-gray-300">总学分</div>
                       </div>
-                      <div className="text-3xl font-bold text-white">{calculateTotalCredits()}</div>
+                      <div className="text-2xl sm:text-3xl font-bold text-white">{calculateTotalCredits()}</div>
                     </motion.div>
                     <motion.div 
-                      className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl border border-green-400/30 backdrop-blur-sm"
+                      className="p-3 sm:p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl border border-green-400/30 backdrop-blur-sm"
                       whileHover={{ scale: 1.05, y: -5 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp className="h-5 w-5 text-green-400" />
-                        <div className="text-sm text-gray-300">平均绩点</div>
+                      <div className="flex items-center gap-2 mb-1 sm:mb-2">
+                        <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
+                        <div className="text-xs sm:text-sm text-gray-300">平均绩点</div>
                       </div>
-                      <div className="text-3xl font-bold text-green-400">{calculateAverageGPA()}</div>
+                      <div className="text-2xl sm:text-3xl font-bold text-green-400">{calculateAverageGPA()}</div>
                     </motion.div>
                   </motion.div>
                 )}
@@ -932,16 +935,16 @@ export default function GradePage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <Card className="border-purple-500/30 bg-slate-800/80 backdrop-blur-xl">
-                <CardContent className="flex items-center justify-center py-16">
+                  <Card className="border-purple-500/30 bg-slate-800/80 backdrop-blur-xl">
+                <CardContent className="flex items-center justify-center py-8 sm:py-16">
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                    className="mr-4"
+                    className="mr-2 sm:mr-4"
                   >
-                    <Loader2 className="h-8 w-8 text-purple-400" />
+                    <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 text-purple-400" />
                   </motion.div>
-                  <span className="text-gray-300 text-lg">正在加载成绩数据...</span>
+                  <span className="text-gray-300 text-sm sm:text-lg">正在加载成绩数据...</span>
                 </CardContent>
               </Card>
             </motion.div>
@@ -986,17 +989,17 @@ export default function GradePage() {
                   whileHover={{ y: -5, scale: 1.02 }}
                 >
                   <Card className={`border-purple-400/30 bg-gradient-to-br ${getGradeGradient(grade.cj)} bg-slate-800/60 backdrop-blur-xl hover:border-purple-400/60 transition-all duration-300 shadow-lg`}>
-                    <CardContent className="p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                    <CardContent className="p-3 sm:p-6">
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-6">
                         {/* 课程信息 */}
                         <div className="md:col-span-7">
                           <motion.h3 
-                            className="font-bold text-xl text-white mb-3"
+                            className="font-bold text-lg sm:text-xl text-white mb-2 sm:mb-3"
                             whileHover={{ x: 5 }}
                           >
                             {grade.kcmc}
                           </motion.h3>
-                          <div className="flex flex-wrap gap-4 text-sm text-gray-300">
+                          <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
                             <span className="flex items-center gap-1">
                               <span className="text-gray-500">课程号:</span>
                               <span className="text-white">{grade.kch}</span>
@@ -1024,14 +1027,14 @@ export default function GradePage() {
                         </div>
 
                         {/* 成绩信息 */}
-                        <div className="md:col-span-5 flex items-center justify-between">
-                          <div className="flex items-center gap-6">
+                        <div className="md:col-span-5 flex items-center justify-between mt-4 md:mt-0">
+                          <div className="flex items-center gap-4 sm:gap-6">
                             <motion.div
                               whileHover={{ scale: 1.1 }}
                               transition={{ type: "spring", stiffness: 300 }}
                             >
-                              <div className="text-xs text-gray-400 mb-2">成绩</div>
-                              <div className={`text-4xl font-bold ${getGradeColor(grade.cj)}`}>
+                              <div className="text-xs text-gray-400 mb-1 sm:mb-2">成绩</div>
+                              <div className={`text-3xl sm:text-4xl font-bold ${getGradeColor(grade.cj)}`}>
                                 {grade.cj || '未评分'}
                               </div>
                             </motion.div>

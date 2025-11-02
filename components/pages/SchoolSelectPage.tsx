@@ -15,13 +15,19 @@ import {
   Info,
   ExternalLink
 } from 'lucide-react'
-import { SUPPORTED_SCHOOLS, getCurrentSchool, setCurrentSchool, type SchoolConfig } from '@/lib/global-school-state'
+import { getSupportedSchools, getCurrentSchool, setCurrentSchool, type SchoolConfig } from '@/lib/global-school-state'
 import { updateSchoolConfig } from '@/lib/course-api'
 import toast from 'react-hot-toast'
 
 export default function SchoolSelectPage() {
   const [selectedSchool, setSelectedSchool] = useState<SchoolConfig>(getCurrentSchool())
   const [isSwitching, setIsSwitching] = useState(false)
+  const [schools, setSchools] = useState<SchoolConfig[]>([])
+
+  // 加载学校列表
+  useEffect(() => {
+    setSchools(getSupportedSchools())
+  }, [])
 
   // 调试信息
   useEffect(() => {
@@ -74,15 +80,15 @@ export default function SchoolSelectPage() {
   }, [selectedSchool.id])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <h2 className="text-3xl font-bold text-white mb-2">🏫 学校选择</h2>
-        <p className="text-muted-foreground">选择您所在的学校，系统将自动适配对应的教务系统</p>
+        <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">🏫 学校选择</h2>
+        <p className="text-xs sm:text-base text-muted-foreground">选择您所在的学校，系统将自动适配对应的教务系统</p>
       </motion.div>
 
       {/* 当前学校状态 */}
@@ -92,25 +98,25 @@ export default function SchoolSelectPage() {
         transition={{ delay: 0.1 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Check className="h-5 w-5 text-green-500" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
               <span>当前学校</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-4 p-4 bg-green-50/10 rounded-lg border border-green-500/20">
-              <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
-                <School className="h-6 w-6 text-green-500" />
+          <CardContent className="p-3 sm:p-6">
+            <div className="flex items-center space-x-3 sm:space-x-4 p-3 sm:p-4 bg-green-50/10 rounded-lg border border-green-500/20">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <School className="h-5 w-5 sm:h-6 sm:w-6 text-green-500" />
               </div>
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-green-400">{selectedSchool.name}</h3>
-                <p className="text-sm text-muted-foreground">{selectedSchool.domain}</p>
-                <p className="text-xs text-green-600 mt-1">{selectedSchool.description}</p>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-semibold text-green-400 truncate">{selectedSchool.name}</h3>
+                <p className="text-xs sm:text-sm text-muted-foreground truncate">{selectedSchool.domain}</p>
+                <p className="text-[10px] sm:text-xs text-green-600 mt-1 line-clamp-2">{selectedSchool.description}</p>
               </div>
-              <div className="text-right">
-                <div className="text-sm text-green-500 font-medium">已连接</div>
-                <div className="text-xs text-muted-foreground">教务系统</div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-xs sm:text-sm text-green-500 font-medium">已连接</div>
+                <div className="text-[10px] sm:text-xs text-muted-foreground">教务系统</div>
               </div>
             </div>
           </CardContent>
@@ -124,18 +130,18 @@ export default function SchoolSelectPage() {
         transition={{ delay: 0.2 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Globe className="h-5 w-5 text-blue-500" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
               <span>支持的学校</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               选择您所在的学校，系统将自动切换到对应的教务系统
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid gap-4">
-              {SUPPORTED_SCHOOLS.map((school, index) => (
+          <CardContent className="p-3 sm:p-6">
+            <div className="grid gap-2 sm:gap-4">
+              {schools.map((school, index) => (
                 <motion.div
                   key={school.id}
                   initial={{ opacity: 0, x: -20 }}
@@ -150,15 +156,15 @@ export default function SchoolSelectPage() {
                     }`}
                     onClick={() => handleSchoolChange(school)}
                   >
-                    <CardContent className="p-4">
-                      <div className="flex items-center space-x-4">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex items-center space-x-2 sm:space-x-4">
                         {/* 学校图标 */}
-                        <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                        <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
                           selectedSchool.id === school.id 
                             ? 'bg-green-500/20' 
                             : 'bg-blue-500/20'
                         }`}>
-                          <School className={`h-6 w-6 ${
+                          <School className={`h-5 w-5 sm:h-6 sm:w-6 ${
                             selectedSchool.id === school.id 
                               ? 'text-green-500' 
                               : 'text-blue-500'
@@ -168,28 +174,28 @@ export default function SchoolSelectPage() {
                         {/* 学校信息 */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center space-x-2">
-                            <h3 className="text-lg font-semibold text-white">{school.name}</h3>
+                            <h3 className="text-base sm:text-lg font-semibold text-white truncate">{school.name}</h3>
                             {selectedSchool.id === school.id && (
                               <motion.div
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
                                 transition={{ type: "spring", stiffness: 300 }}
                               >
-                                <Check className="h-5 w-5 text-green-500" />
+                                <Check className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 flex-shrink-0" />
                               </motion.div>
                             )}
                           </div>
-                          <p className="text-sm text-muted-foreground">{school.domain}</p>
+                          <p className="text-xs sm:text-sm text-muted-foreground truncate">{school.domain}</p>
                           {school.description && (
-                            <p className="text-xs text-blue-400 mt-1">{school.description}</p>
+                            <p className="text-[10px] sm:text-xs text-blue-400 mt-1 line-clamp-2">{school.description}</p>
                           )}
                         </div>
                         
                         {/* 操作按钮 */}
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
                           {selectedSchool.id === school.id ? (
-                            <div className="px-3 py-1 bg-green-500/20 text-green-400 text-sm rounded-full">
-                              当前学校
+                            <div className="px-2 sm:px-3 py-1 bg-green-500/20 text-green-400 text-xs sm:text-sm rounded-full whitespace-nowrap">
+                              当前
                             </div>
                           ) : (
                             <Button
@@ -200,17 +206,19 @@ export default function SchoolSelectPage() {
                               disabled={isSwitching}
                               variant="outline"
                               size="sm"
-                              className="btn-hover"
+                              className="btn-hover text-xs sm:text-sm px-2 sm:px-3"
                             >
                               {isSwitching ? (
                                 <>
-                                  <Settings className="h-4 w-4 mr-2 animate-spin" />
-                                  切换中...
+                                  <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
+                                  <span className="hidden sm:inline">切换中...</span>
+                                  <span className="sm:hidden">切换中</span>
                                 </>
                               ) : (
                                 <>
-                                  <ExternalLink className="h-4 w-4 mr-2" />
-                                  切换
+                                  <ExternalLink className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                  <span className="hidden sm:inline">切换</span>
+                                  <span className="sm:hidden">切换</span>
                                 </>
                               )}
                             </Button>
@@ -233,39 +241,39 @@ export default function SchoolSelectPage() {
         transition={{ delay: 0.4 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Info className="h-5 w-5 text-yellow-500" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Info className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" />
               <span>使用说明</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="h-5 w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-yellow-400 font-medium">切换学校后需要重新登录</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+          <CardContent className="p-3 sm:p-6">
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex items-start space-x-2 sm:space-x-3">
+                <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-yellow-400 font-medium">切换学校后需要重新登录</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                     不同学校的教务系统需要不同的Cookie，切换学校后请前往设置页面重新登录
                   </p>
                 </div>
               </div>
               
-              <div className="flex items-start space-x-3">
-                <BookOpen className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-blue-400 font-medium">系统会自动适配</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+              <div className="flex items-start space-x-2 sm:space-x-3">
+                <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-blue-400 font-medium">系统会自动适配</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                     选择学校后，所有功能（选课、课表、学生信息等）都会自动使用对应学校的系统
                   </p>
                 </div>
               </div>
               
-              <div className="flex items-start space-x-3">
-                <Users className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="text-sm text-green-400 font-medium">数据完全隔离</p>
-                  <p className="text-xs text-muted-foreground mt-1">
+              <div className="flex items-start space-x-2 sm:space-x-3">
+                <Users className="h-4 w-4 sm:h-5 sm:w-5 text-green-500 mt-0.5 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-green-400 font-medium">数据完全隔离</p>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-1">
                     不同学校的数据完全独立，切换学校不会影响其他学校的数据
                   </p>
                 </div>

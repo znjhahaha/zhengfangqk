@@ -221,35 +221,37 @@ export default function CourseSelectionPage() {
   }, [])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0"
       >
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">🎯 智能选课</h2>
-          <p className="text-muted-foreground">选择选课模式，启动智能抢课系统</p>
+          <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">🎯 智能选课</h2>
+          <p className="text-xs sm:text-base text-muted-foreground">选择选课模式，启动智能抢课系统</p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {!isRunning ? (
             <Button
               onClick={startSmartSelection}
               disabled={!selectedMode}
-              className="btn-hover"
+              className="btn-hover text-xs sm:text-sm px-3 sm:px-4"
             >
-              <Play className="h-4 w-4 mr-2" />
-              开始选课
+              <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">开始选课</span>
+              <span className="sm:hidden">开始</span>
             </Button>
           ) : (
             <Button
               onClick={stopSmartSelection}
               variant="destructive"
-              className="btn-hover"
+              className="btn-hover text-xs sm:text-sm px-3 sm:px-4"
             >
-              <Square className="h-4 w-4 mr-2" />
-              停止选课
+              <Square className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">停止选课</span>
+              <span className="sm:hidden">停止</span>
             </Button>
           )}
         </div>
@@ -260,7 +262,7 @@ export default function CourseSelectionPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        className="grid grid-cols-1 md:grid-cols-3 gap-2 sm:gap-4"
       >
         {selectionModes.map((mode) => (
           <Card
@@ -272,12 +274,12 @@ export default function CourseSelectionPage() {
             }`}
             onClick={() => setSelectedMode(mode.id)}
           >
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-3 mb-3">
+            <CardContent className="p-3 sm:p-6">
+              <div className="flex items-center space-x-2 sm:space-x-3 mb-2 sm:mb-3">
                 <div className={mode.color}>{mode.icon}</div>
-                <h3 className="text-lg font-semibold text-white">{mode.name}</h3>
+                <h3 className="text-base sm:text-lg font-semibold text-white">{mode.name}</h3>
               </div>
-              <p className="text-sm text-muted-foreground">{mode.description}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{mode.description}</p>
             </CardContent>
           </Card>
         ))}
@@ -290,19 +292,19 @@ export default function CourseSelectionPage() {
         transition={{ delay: 0.2 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Settings className="h-5 w-5 text-primary" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Settings className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               <span>选课参数设置</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               配置智能选课的参数
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">最大尝试次数</label>
+          <CardContent className="p-3 sm:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-white">最大尝试次数</label>
                 <Input
                   type="number"
                   value={maxAttempts}
@@ -312,8 +314,8 @@ export default function CourseSelectionPage() {
                   disabled={isRunning}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-white">请求间隔(秒)</label>
+              <div className="space-y-1.5 sm:space-y-2">
+                <label className="text-xs sm:text-sm font-medium text-white">请求间隔(秒)</label>
                 <Input
                   type="number"
                   value={interval}
@@ -337,21 +339,21 @@ export default function CourseSelectionPage() {
           transition={{ delay: 0.3 }}
         >
           <Card className="glass">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin text-primary" />
                 <span>选课进行中</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">运行时间</span>
-                <span className="text-sm font-medium text-white">{formatTime(elapsedTime)}</span>
+                <span className="text-xs sm:text-sm text-muted-foreground">运行时间</span>
+                <span className="text-xs sm:text-sm font-medium text-white">{formatTime(elapsedTime)}</span>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">当前模式</span>
-                <span className="text-sm font-medium text-white">
+                <span className="text-xs sm:text-sm text-muted-foreground">当前模式</span>
+                <span className="text-xs sm:text-sm font-medium text-white">
                   {selectionModes.find(m => m.id === selectedMode)?.name}
                 </span>
               </div>
@@ -359,8 +361,8 @@ export default function CourseSelectionPage() {
               {selectionStatus && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">尝试次数</span>
-                    <span className="text-sm font-medium text-white">
+                    <span className="text-xs sm:text-sm text-muted-foreground">尝试次数</span>
+                    <span className="text-xs sm:text-sm font-medium text-white">
                       {selectionStatus.attempts || 0} / {maxAttempts}
                     </span>
                   </div>
@@ -384,21 +386,21 @@ export default function CourseSelectionPage() {
           transition={{ delay: 0.4 }}
         >
           <Card className="glass">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
+            <CardHeader className="p-3 sm:p-6">
+              <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
                 {selectionStatus.status === 'completed' ? (
-                  <CheckCircle className="h-5 w-5 text-green-400" />
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
                 ) : (
-                  <AlertCircle className="h-5 w-5 text-yellow-400" />
+                  <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400" />
                 )}
                 <span>选课结果</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-3 sm:p-6">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">状态</span>
-                  <span className={`text-sm font-medium ${
+                  <span className="text-xs sm:text-sm text-muted-foreground">状态</span>
+                  <span className={`text-xs sm:text-sm font-medium ${
                     selectionStatus.status === 'completed' ? 'text-green-400' : 'text-yellow-400'
                   }`}>
                     {selectionStatus.status === 'completed' ? '已完成' : '已停止'}
@@ -406,22 +408,22 @@ export default function CourseSelectionPage() {
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">总尝试次数</span>
-                  <span className="text-sm font-medium text-white">
+                  <span className="text-xs sm:text-sm text-muted-foreground">总尝试次数</span>
+                  <span className="text-xs sm:text-sm font-medium text-white">
                     {selectionStatus.attempts || 0}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">成功次数</span>
-                  <span className="text-sm font-medium text-green-400">
+                  <span className="text-xs sm:text-sm text-muted-foreground">成功次数</span>
+                  <span className="text-xs sm:text-sm font-medium text-green-400">
                     {selectionStatus.success_count || 0}
                   </span>
                 </div>
                 
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">失败次数</span>
-                  <span className="text-sm font-medium text-red-400">
+                  <span className="text-xs sm:text-sm text-muted-foreground">失败次数</span>
+                  <span className="text-xs sm:text-sm font-medium text-red-400">
                     {selectionStatus.failed_count || 0}
                   </span>
                 </div>

@@ -7,8 +7,34 @@ export interface SchoolConfig {
   description?: string
 }
 
-// 支持的学校列表
-export const SUPPORTED_SCHOOLS: SchoolConfig[] = [
+// 支持的学校列表（动态获取，包含默认和自定义学校）
+import { getAllSchools as getAdminSchools } from './admin-school-manager'
+
+export function getSupportedSchools(): SchoolConfig[] {
+  if (typeof window !== 'undefined') {
+    return getAdminSchools()
+  }
+  // 服务端渲染时返回默认列表
+  return [
+    {
+      id: 'tyust',
+      name: '太原科技大学',
+      domain: 'newjwc.tyust.edu.cn',
+      protocol: 'https',
+      description: '太原科技大学教务系统'
+    },
+    {
+      id: 'zjut',
+      name: '浙江工业大学',
+      domain: 'www.gdjw.zjut.edu.cn',
+      protocol: 'http',
+      description: '浙江工业大学教务系统'
+    }
+  ]
+}
+
+// 向后兼容：默认学校列表（服务端渲染时使用）
+const DEFAULT_SCHOOLS_LIST: SchoolConfig[] = [
   {
     id: 'tyust',
     name: '太原科技大学',
@@ -25,8 +51,13 @@ export const SUPPORTED_SCHOOLS: SchoolConfig[] = [
   }
 ]
 
+// 向后兼容：保留 SUPPORTED_SCHOOLS，但在客户端使用动态列表
+export const SUPPORTED_SCHOOLS: SchoolConfig[] = typeof window !== 'undefined' 
+  ? getSupportedSchools() 
+  : DEFAULT_SCHOOLS_LIST
+
 // 默认学校
-export const DEFAULT_SCHOOL = SUPPORTED_SCHOOLS[0]
+export const DEFAULT_SCHOOL = DEFAULT_SCHOOLS_LIST[0]
 
 // 全局学校状态
 let currentSchool: SchoolConfig = DEFAULT_SCHOOL
@@ -38,7 +69,8 @@ export function getCurrentSchool(): SchoolConfig {
     try {
       const savedSchoolId = localStorage.getItem('selected-school-id')
       if (savedSchoolId) {
-        const school = SUPPORTED_SCHOOLS.find(s => s.id === savedSchoolId)
+        const schools = getSupportedSchools()
+        const school = schools.find(s => s.id === savedSchoolId)
         if (school) {
           currentSchool = school
           return school
@@ -68,7 +100,7 @@ export function setCurrentSchool(school: SchoolConfig): void {
 
 // 根据ID获取学校
 export function getSchoolById(id: string): SchoolConfig | undefined {
-  return SUPPORTED_SCHOOLS.find(school => school.id === id)
+  return getSupportedSchools().find(school => school.id === id)
 }
 
 // 生成完整的学校URL
@@ -78,8 +110,8 @@ export function getSchoolUrl(path: string = ''): string {
   return path ? `${baseUrl}${path}` : baseUrl
 }
 
-// 学校特定的URL配置
-const SCHOOL_URL_CONFIG: Record<string, {
+// 学校特定的URL配置（默认配置，可以在后台管理页面动态添加）
+const DEFAULT_SCHOOL_URL_CONFIG: Record<string, {
   gradeGnmkdm?: string
   courseGnmkdm?: string
   scheduleGnmkdm?: string
@@ -90,17 +122,37 @@ const SCHOOL_URL_CONFIG: Record<string, {
     scheduleGnmkdm: 'N253508'
   },
   zjut: {
-    gradeGnmkdm: 'N305005', // 如果浙江工业大学的参数不同，可以在这里修改
+    gradeGnmkdm: 'N305005',
     courseGnmkdm: 'N253512',
     scheduleGnmkdm: 'N253508'
   }
+}
+
+// 获取学校URL配置（优先从后台管理获取）
+function getSchoolUrlConfig(schoolId: string): {
+  gradeGnmkdm?: string
+  courseGnmkdm?: string
+  scheduleGnmkdm?: string
+} {
+  if (typeof window !== 'undefined') {
+    try {
+      const { getSchoolUrlConfig } = require('./admin-school-manager')
+      const config = getSchoolUrlConfig(schoolId)
+      if (config) {
+        return config
+      }
+    } catch (error) {
+      console.error('获取学校URL配置失败:', error)
+    }
+  }
+  return DEFAULT_SCHOOL_URL_CONFIG[schoolId] || DEFAULT_SCHOOL_URL_CONFIG['tyust']
 }
 
 // 生成具体的API URL
 export function getApiUrls() {
   const school = getCurrentSchool()
   const baseUrl = `${school.protocol}://${school.domain}`
-  const urlConfig = SCHOOL_URL_CONFIG[school.id] || SCHOOL_URL_CONFIG['tyust']
+  const urlConfig = getSchoolUrlConfig(school.id)
   
   return {
     // 学生信息

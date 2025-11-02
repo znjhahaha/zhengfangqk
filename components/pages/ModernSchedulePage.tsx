@@ -680,7 +680,7 @@ export default function ModernSchedulePage() {
         onClick={() => selectCourse(course)}
       >
         <div className={`
-          relative overflow-hidden rounded-xl p-3 shadow-lg
+          relative overflow-hidden rounded-lg sm:rounded-xl p-1.5 sm:p-3 shadow-lg
           bg-gradient-to-br ${periodInfo?.color || 'from-gray-500 to-gray-600'}
           border border-white/20 backdrop-blur-sm
           hover:shadow-2xl hover:border-white/40
@@ -695,30 +695,30 @@ export default function ModernSchedulePage() {
               e.stopPropagation()
               toggleFavorite(course.name)
             }}
-            className="absolute top-2 right-2 p-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
+            className="absolute top-1 right-1 sm:top-2 sm:right-2 p-0.5 sm:p-1 rounded-full bg-white/20 hover:bg-white/30 transition-colors"
           >
             <Heart 
-              className={`h-4 w-4 ${isFavorite ? 'text-red-500 fill-red-500' : 'text-white'}`} 
+              className={`h-3 w-3 sm:h-4 sm:w-4 ${isFavorite ? 'text-red-500 fill-red-500' : 'text-white'}`} 
             />
           </button>
 
           {/* 课程信息 */}
-          <div className="relative z-10">
-            <h4 className="font-bold text-white text-sm mb-1 truncate">
+          <div className="relative z-10 pr-4 sm:pr-0">
+            <h4 className="font-bold text-white text-[10px] sm:text-sm mb-0.5 sm:mb-1 truncate leading-tight">
               {course.name}
             </h4>
-            <div className="space-y-1 text-xs text-white/90">
-              <div className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                <span className="truncate">{course.teacher}</span>
+            <div className="space-y-0.5 sm:space-y-1 text-[9px] sm:text-xs text-white/90">
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                <User className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+                <span className="truncate leading-tight">{course.teacher}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                <span className="truncate">{course.location}</span>
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                <MapPin className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+                <span className="truncate leading-tight">{course.location}</span>
               </div>
-              <div className="flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                <span>{course.time}</span>
+              <div className="flex items-center gap-0.5 sm:gap-1">
+                <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 flex-shrink-0" />
+                <span className="leading-tight">{course.time}</span>
               </div>
             </div>
           </div>
@@ -738,16 +738,16 @@ export default function ModernSchedulePage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="h-20 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center"
+        className="h-10 sm:h-20 border-2 border-dashed border-white/20 rounded-lg flex items-center justify-center"
       >
-        <span className="text-white/40 text-xs">空闲</span>
+        <span className="text-white/40 text-[9px] sm:text-xs">空闲</span>
       </motion.div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-4">
-      <div className="w-full max-w-[78vw] mx-auto space-y-6 rounded-2xl overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-2 sm:p-4">
+      <div className="w-full max-w-full lg:max-w-[78vw] mx-auto space-y-4 sm:space-y-6 rounded-2xl overflow-hidden">
         {/* 页面标题 */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -755,16 +755,16 @@ export default function ModernSchedulePage() {
           transition={{ duration: 0.5 }}
           className="text-center space-y-2"
         >
-          <h1 className="text-4xl font-bold text-white flex items-center justify-center gap-3">
+          <h1 className="text-2xl sm:text-4xl font-bold text-white flex items-center justify-center gap-2 sm:gap-3">
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
             >
-              <Calendar className="h-10 w-10 text-blue-400" />
+              <Calendar className="h-6 w-6 sm:h-10 sm:w-10 text-blue-400" />
             </motion.div>
             我的课表
           </h1>
-          <p className="text-white/70 text-lg">现代化课程安排管理</p>
+          <p className="text-white/70 text-sm sm:text-lg">现代化课程安排管理</p>
         </motion.div>
 
         {/* 控制面板 */}
@@ -925,61 +925,61 @@ export default function ModernSchedulePage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="grid grid-cols-1 md:grid-cols-4 gap-4"
+          className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4"
         >
           <Card className="bg-gradient-to-r from-blue-500/20 to-blue-600/20 border-blue-400/30">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-blue-500/20 rounded-lg">
-                  <BookOpen className="h-6 w-6 text-blue-400" />
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="p-1 sm:p-2 bg-blue-500/20 rounded-lg">
+                  <BookOpen className="h-4 w-4 sm:h-6 sm:w-6 text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{scheduleData.length}</p>
-                  <p className="text-sm text-white/70">总课程数</p>
+                  <p className="text-lg sm:text-2xl font-bold text-white">{scheduleData.length}</p>
+                  <p className="text-[10px] sm:text-sm text-white/70">总课程数</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-r from-green-500/20 to-green-600/20 border-green-400/30">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-500/20 rounded-lg">
-                  <Calendar className="h-6 w-6 text-green-400" />
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="p-1 sm:p-2 bg-green-500/20 rounded-lg">
+                  <Calendar className="h-4 w-4 sm:h-6 sm:w-6 text-green-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">
+                  <p className="text-lg sm:text-2xl font-bold text-white">
                     {new Set(scheduleData.map(c => c.day)).size}
                   </p>
-                  <p className="text-sm text-white/70">上课天数</p>
+                  <p className="text-[10px] sm:text-sm text-white/70">上课天数</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-r from-purple-500/20 to-purple-600/20 border-purple-400/30">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-purple-500/20 rounded-lg">
-                  <Star className="h-6 w-6 text-purple-400" />
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="p-1 sm:p-2 bg-purple-500/20 rounded-lg">
+                  <Star className="h-4 w-4 sm:h-6 sm:w-6 text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{favoriteCourses.size}</p>
-                  <p className="text-sm text-white/70">收藏课程</p>
+                  <p className="text-lg sm:text-2xl font-bold text-white">{favoriteCourses.size}</p>
+                  <p className="text-[10px] sm:text-sm text-white/70">收藏课程</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-r from-orange-500/20 to-orange-600/20 border-orange-400/30">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-orange-500/20 rounded-lg">
-                  <Search className="h-6 w-6 text-orange-400" />
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="p-1 sm:p-2 bg-orange-500/20 rounded-lg">
+                  <Search className="h-4 w-4 sm:h-6 sm:w-6 text-orange-400" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-white">{filteredCourses.length}</p>
-                  <p className="text-sm text-white/70">筛选结果</p>
+                  <p className="text-lg sm:text-2xl font-bold text-white">{filteredCourses.length}</p>
+                  <p className="text-[10px] sm:text-sm text-white/70">筛选结果</p>
                 </div>
               </div>
             </CardContent>
@@ -997,12 +997,12 @@ export default function ModernSchedulePage() {
             >
               <Card className="bg-white/5 backdrop-blur-sm border-white/10">
                 <CardHeader>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-blue-400" />
+                  <CardTitle className="text-white flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
+                    <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
                     课程表
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-4">
+                <CardContent className="p-2 sm:p-4">
                   {isLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <motion.div
@@ -1032,76 +1032,78 @@ export default function ModernSchedulePage() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full border-collapse schedule-table">
-                        <thead>
-                          <motion.tr
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3 }}
-                          >
-                            <th className="border border-white/20 bg-white/10 text-white p-3 text-center font-semibold rounded-l-lg">
-                              时间
-                            </th>
-                            {weekdays.slice(1).map((day, index) => (
-                              <motion.th 
-                                key={index}
-                                initial={{ opacity: 0, y: -20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.3, delay: index * 0.05 }}
-                                className="border border-white/20 bg-white/10 text-white p-3 text-center font-semibold"
-                              >
-                                {day}
-                              </motion.th>
-                            ))}
-                          </motion.tr>
-                        </thead>
-                        <tbody>
-                          {periods.map((period, periodIndex) => (
-                            <motion.tr 
-                              key={periodIndex}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ 
-                                duration: 0.3,
-                                delay: periodIndex * 0.1
-                              }}
+                    <div className="overflow-x-auto sm:overflow-x-visible">
+                      <div className="min-w-full inline-block">
+                        <table className="w-full border-collapse schedule-table">
+                          <thead>
+                            <motion.tr
+                              initial={{ opacity: 0, y: -20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ duration: 0.3 }}
                             >
-                              <td className="border border-white/20 bg-white/10 text-white p-3 text-center font-semibold">
-                                <div className="space-y-1">
-                                  <div className="text-sm font-bold">{period.name}</div>
-                                  <div className="text-xs text-white/70">{period.time}</div>
-                                </div>
-                              </td>
-                              {weekdays.slice(1).map((_, dayIndex) => {
-                                const day = dayIndex + 1
-                                const courses = getCourseAtTime(day, period.start)
-                                return (
-                                  <td 
-                                    key={dayIndex} 
-                                    className="border border-white/20 p-2 min-h-[100px] align-top"
-                                  >
-                                    <div className="space-y-2">
-                                      <AnimatePresence>
-                                        {courses.map((course, courseIndex) => (
-                                          <CourseCard 
-                                            key={`${course.name}-${courseIndex}`}
-                                            course={course}
-                                            index={courseIndex}
-                                          />
-                                        ))}
-                                      </AnimatePresence>
-                                      {courses.length === 0 && (
-                                        <EmptySlot day={day} period={period.start} />
-                                      )}
-                                    </div>
-                                  </td>
-                                )
-                              })}
+                              <th className="border border-white/20 bg-white/10 text-white p-1.5 sm:p-3 text-center font-semibold rounded-l-lg text-[10px] sm:text-sm">
+                                时间
+                              </th>
+                              {weekdays.slice(1).map((day, index) => (
+                                <motion.th 
+                                  key={index}
+                                  initial={{ opacity: 0, y: -20 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                                  className="border border-white/20 bg-white/10 text-white p-1.5 sm:p-3 text-center font-semibold text-[10px] sm:text-sm"
+                                >
+                                  {day}
+                                </motion.th>
+                              ))}
                             </motion.tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {periods.map((period, periodIndex) => (
+                              <motion.tr 
+                                key={periodIndex}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ 
+                                  duration: 0.3,
+                                  delay: periodIndex * 0.1
+                                }}
+                              >
+                                <td className="border border-white/20 bg-white/10 text-white p-1.5 sm:p-3 text-center font-semibold">
+                                  <div className="space-y-0.5 sm:space-y-1">
+                                    <div className="text-[10px] sm:text-sm font-bold leading-tight">{period.name}</div>
+                                    <div className="text-[9px] sm:text-xs text-white/70 leading-tight">{period.time}</div>
+                                  </div>
+                                </td>
+                                {weekdays.slice(1).map((_, dayIndex) => {
+                                  const day = dayIndex + 1
+                                  const courses = getCourseAtTime(day, period.start)
+                                  return (
+                                    <td 
+                                      key={dayIndex} 
+                                      className="border border-white/20 p-0.5 sm:p-2 min-h-[50px] sm:min-h-[100px] align-top"
+                                    >
+                                      <div className="space-y-1 sm:space-y-2">
+                                        <AnimatePresence>
+                                          {courses.map((course, courseIndex) => (
+                                            <CourseCard 
+                                              key={`${course.name}-${courseIndex}`}
+                                              course={course}
+                                              index={courseIndex}
+                                            />
+                                          ))}
+                                        </AnimatePresence>
+                                        {courses.length === 0 && (
+                                          <EmptySlot day={day} period={period.start} />
+                                        )}
+                                      </div>
+                                    </td>
+                                  )
+                                })}
+                              </motion.tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </CardContent>

@@ -601,11 +601,11 @@ export default function CourseInfoPage() {
           className="flex items-center justify-center min-h-[400px]"
         >
           <Card className="glass max-w-md w-full">
-            <CardContent className="p-8 text-center">
+            <CardContent className="p-4 sm:p-8 text-center">
               <div className="mb-4">
-                <BookOpen className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-xl font-bold text-white mb-2">请先配置Cookie</h3>
-                <p className="text-muted-foreground mb-6">
+                <BookOpen className="h-12 w-12 sm:h-16 sm:w-16 mx-auto text-muted-foreground mb-3 sm:mb-4" />
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-1 sm:mb-2">请先配置Cookie</h3>
+                <p className="text-xs sm:text-base text-muted-foreground mb-4 sm:mb-6">
                   您需要先在"系统设置"页面配置有效的Cookie才能查看课程信息
                 </p>
                 <Button 
@@ -613,9 +613,9 @@ export default function CourseInfoPage() {
                     // 这里可以添加跳转到设置页面的逻辑
                     toast('请切换到"系统设置"页面配置Cookie')
                   }}
-                  className="w-full"
+                  className="w-full text-xs sm:text-sm"
                 >
-                  <Settings className="h-4 w-4 mr-2" />
+                  <Settings className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                   前往设置页面
                 </Button>
               </div>
@@ -627,18 +627,18 @@ export default function CourseInfoPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0"
       >
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">📚 课程信息</h2>
-          <p className="text-muted-foreground">查看可选课程和已选课程，支持快速抢课</p>
+          <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">📚 课程信息</h2>
+          <p className="text-xs sm:text-base text-muted-foreground">查看可选课程和已选课程，支持快速抢课</p>
         </div>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           <Button
             onClick={() => {
               if (selectedTab === 'available') {
@@ -649,14 +649,15 @@ export default function CourseInfoPage() {
             }}
             disabled={isLoading}
             variant="default"
-            className="btn-hover"
+            className="btn-hover text-xs sm:text-sm px-3 sm:px-4"
           >
             {isLoading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
             ) : (
-              <Search className="h-4 w-4 mr-2" />
+              <Search className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
             )}
-            {selectedTab === 'available' ? '查询可选课程' : '查询已选课程'}
+            <span className="hidden sm:inline">{selectedTab === 'available' ? '查询可选课程' : '查询已选课程'}</span>
+            <span className="sm:hidden">{selectedTab === 'available' ? '查询可选' : '查询已选'}</span>
           </Button>
           <Button
             onClick={() => {
@@ -685,18 +686,18 @@ export default function CourseInfoPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex items-center space-x-4"
+        className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4"
       >
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
           <Input
             placeholder="搜索课程名称、教师姓名或课程类别..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+            className="pl-8 sm:pl-10 text-xs sm:text-sm"
           />
         </div>
-        <div className="flex space-x-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => {
               const newTab = selectedTab === 'available' ? 'selected' : 'available'
@@ -709,33 +710,36 @@ export default function CourseInfoPage() {
               }
             }}
             variant="outline"
-            className="btn-hover"
+            className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
           >
-            <Filter className="h-4 w-4 mr-2" />
-            {selectedTab === 'available' ? '查看已选课程' : '查看可选课程'}
+            <Filter className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">{selectedTab === 'available' ? '查看已选课程' : '查看可选课程'}</span>
+            <span className="sm:hidden">{selectedTab === 'available' ? '已选' : '可选'}</span>
           </Button>
           
           <Button
             onClick={() => setGroupByCategory(!groupByCategory)}
             variant={groupByCategory ? "default" : "outline"}
-            className="btn-hover"
+            className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
           >
-            {groupByCategory ? <FolderOpen className="h-4 w-4 mr-2" /> : <Folder className="h-4 w-4 mr-2" />}
-            {groupByCategory ? '取消分类' : '按名称'}
+            {groupByCategory ? <FolderOpen className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" /> : <Folder className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />}
+            <span className="hidden sm:inline">{groupByCategory ? '取消分类' : '按名称'}</span>
+            <span className="sm:hidden">分类</span>
           </Button>
           
           {groupByCategory && (
             <Button
               onClick={toggleAllCategories}
               variant="outline"
-              className="btn-hover"
+              className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
             >
               {expandedCategories.size === 0 ? (
-                <ChevronRight className="h-4 w-4 mr-2" />
+                <ChevronRight className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               ) : (
-                <ChevronDown className="h-4 w-4 mr-2" />
+                <ChevronDown className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
               )}
-              {expandedCategories.size === 0 ? '展开全部' : '收起全部'}
+              <span className="hidden sm:inline">{expandedCategories.size === 0 ? '展开全部' : '收起全部'}</span>
+              <span className="sm:hidden">{expandedCategories.size === 0 ? '展开' : '收起'}</span>
             </Button>
           )}
           
@@ -751,20 +755,22 @@ export default function CourseInfoPage() {
               }
             }}
             variant="outline"
-            className="btn-hover"
+            className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
             disabled={isLoading}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            刷新
+            <RefreshCw className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">刷新</span>
+            <span className="sm:hidden">刷新</span>
           </Button>
 
           <Button
             onClick={clearAllCache}
             variant="outline"
-            className="btn-hover"
+            className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
           >
-            <AlertCircle className="h-4 w-4 mr-2" />
-            清理缓存
+            <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">清理缓存</span>
+            <span className="sm:hidden">清理</span>
           </Button>
 
           {/* 多选功能按钮 */}
@@ -773,10 +779,11 @@ export default function CourseInfoPage() {
               <Button
                 onClick={toggleMultiSelect}
                 variant={isMultiSelectMode ? "default" : "outline"}
-                className="btn-hover"
+                className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
               >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                {isMultiSelectMode ? '退出多选' : '多选模式'}
+                <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">{isMultiSelectMode ? '退出多选' : '多选模式'}</span>
+                <span className="sm:hidden">{isMultiSelectMode ? '退出' : '多选'}</span>
               </Button>
               
               {isMultiSelectMode && (
@@ -784,35 +791,38 @@ export default function CourseInfoPage() {
                   <Button
                     onClick={selectAllCourses}
                     variant="outline"
-                    className="btn-hover"
+                    className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
                     disabled={filteredCourses.length === 0}
                   >
-                    <CheckCircle className="h-4 w-4 mr-2" />
-                    全选
+                    <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">全选</span>
+                    <span className="sm:hidden">全选</span>
                   </Button>
                   
                   <Button
                     onClick={clearAllSelections}
                     variant="outline"
-                    className="btn-hover"
+                    className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
                     disabled={multiSelectedCourses.size === 0}
                   >
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    清空选择
+                    <AlertCircle className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">清空选择</span>
+                    <span className="sm:hidden">清空</span>
                   </Button>
                   
                   <Button
                     onClick={batchGrabCourses}
                     variant="default"
-                    className="btn-hover bg-green-600 hover:bg-green-700"
+                    className="btn-hover bg-green-600 hover:bg-green-700 text-xs sm:text-sm px-2 sm:px-4"
                     disabled={multiSelectedCourses.size === 0 || isBatchGrabbing}
                   >
                     {isBatchGrabbing ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
                     ) : (
-                      <Play className="h-4 w-4 mr-2" />
+                      <Play className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                     )}
-                    批量抢课 ({multiSelectedCourses.size})
+                    <span className="hidden sm:inline">批量抢课 ({multiSelectedCourses.size})</span>
+                    <span className="sm:hidden">抢课({multiSelectedCourses.size})</span>
                   </Button>
                 </>
               )}
@@ -826,39 +836,39 @@ export default function CourseInfoPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.2 }}
-        className={`grid grid-cols-1 gap-4 ${isMultiSelectMode ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
+        className={`grid grid-cols-2 sm:grid-cols-3 ${isMultiSelectMode ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-2 sm:gap-4`}
       >
         <Card className="glass">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <BookOpen className="h-5 w-5 text-blue-400" />
-              <div>
-                <div className="text-2xl font-bold text-white">{availableCourses.length}</div>
-                <div className="text-sm text-muted-foreground">可选课程</div>
+          <CardContent className="p-2 sm:p-4">
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
+              <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-lg sm:text-2xl font-bold text-white">{availableCourses.length}</div>
+                <div className="text-[10px] sm:text-sm text-muted-foreground">可选课程</div>
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="glass">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <CheckCircle className="h-5 w-5 text-green-400" />
-              <div>
-                <div className="text-2xl font-bold text-white">{selectedCourses.length}</div>
-                <div className="text-sm text-muted-foreground">已选课程</div>
+          <CardContent className="p-2 sm:p-4">
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-lg sm:text-2xl font-bold text-white">{selectedCourses.length}</div>
+                <div className="text-[10px] sm:text-sm text-muted-foreground">已选课程</div>
               </div>
             </div>
           </CardContent>
         </Card>
         
         <Card className="glass">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Search className="h-5 w-5 text-purple-400" />
-              <div>
-                <div className="text-2xl font-bold text-white">{filteredCourses.length}</div>
-                <div className="text-sm text-muted-foreground">筛选结果</div>
+          <CardContent className="p-2 sm:p-4">
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
+              <Search className="h-4 w-4 sm:h-5 sm:w-5 text-purple-400 flex-shrink-0" />
+              <div className="min-w-0">
+                <div className="text-lg sm:text-2xl font-bold text-white">{filteredCourses.length}</div>
+                <div className="text-[10px] sm:text-sm text-muted-foreground">筛选结果</div>
               </div>
             </div>
           </CardContent>
@@ -867,12 +877,12 @@ export default function CourseInfoPage() {
         {/* 多选统计卡片 */}
         {isMultiSelectMode && (
           <Card className="glass border-green-500/20">
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="h-5 w-5 text-green-400" />
-                <div>
-                  <div className="text-2xl font-bold text-white">{multiSelectedCourses.size}</div>
-                  <div className="text-sm text-muted-foreground">已选择</div>
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-lg sm:text-2xl font-bold text-white">{multiSelectedCourses.size}</div>
+                  <div className="text-[10px] sm:text-sm text-muted-foreground">已选择</div>
                 </div>
               </div>
             </CardContent>
@@ -888,16 +898,16 @@ export default function CourseInfoPage() {
           transition={{ delay: 0.3 }}
         >
           <Card className="glass border-blue-500/20 bg-blue-500/5">
-            <CardContent className="p-4">
-              <div className="flex items-start space-x-3">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-start space-x-2 sm:space-x-3">
                 <div className="flex-shrink-0">
-                  <div className="w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                    <CheckCircle className="h-5 w-5 text-blue-400" />
+                  <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
+                    <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-white mb-2">多选模式已启用</h3>
-                  <div className="text-sm text-muted-foreground space-y-1">
+                  <h3 className="text-base sm:text-lg font-semibold text-white mb-1 sm:mb-2">多选模式已启用</h3>
+                  <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
                     <p>• 直接点击课程卡片来选择/取消选择课程</p>
                     <p>• 选中的课程会显示绿色边框和勾选标记</p>
                     <p>• 使用"全选"按钮选择所有筛选结果</p>
@@ -1341,7 +1351,7 @@ function CourseCard({
           whileHover={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
         />
-        <CardContent className="p-6 relative z-10">
+        <CardContent className="p-4 sm:p-6 relative z-10">
           <div className="flex items-start justify-between">
             <div className="flex-1 space-y-3">
               <motion.div 
@@ -1380,7 +1390,7 @@ function CourseCard({
                 )}
                 
                 <motion.h3 
-                  className={`text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}
+                  className={`text-base sm:text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}
                   whileHover={{ scale: 1.05 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >

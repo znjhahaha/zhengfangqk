@@ -198,26 +198,26 @@ export default function SettingsPage() {
   }, [])
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between"
+        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0"
       >
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">⚙️ 系统设置</h2>
-          <p className="text-muted-foreground">配置系统参数和个性化设置</p>
+          <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">⚙️ 系统设置</h2>
+          <p className="text-xs sm:text-base text-muted-foreground">配置系统参数和个性化设置</p>
         </div>
         <Button
           onClick={toggleTheme}
           variant="outline"
-          className="btn-hover"
+          className="btn-hover text-xs sm:text-sm px-3 sm:px-4 w-full sm:w-auto"
         >
           {theme === 'dark' ? (
-            <Sun className="h-4 w-4 mr-2" />
+            <Sun className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
           ) : (
-            <Moon className="h-4 w-4 mr-2" />
+            <Moon className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
           )}
           切换主题
         </Button>
@@ -230,12 +230,12 @@ export default function SettingsPage() {
         transition={{ delay: 0.1 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Key className="h-5 w-5 text-primary" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Key className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               <span>Cookie配置</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               设置您的登录Cookie，用于访问选课系统。请先在浏览器中登录选课系统，然后复制Cookie值。
             </CardDescription>
             <div className="flex justify-end">
@@ -249,9 +249,9 @@ export default function SettingsPage() {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Cookie值</label>
+          <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+            <div className="space-y-1.5 sm:space-y-2">
+              <label className="text-xs sm:text-sm font-medium text-white">Cookie值</label>
               <Input
                 type="password"
                 placeholder="请输入您的Cookie..."
@@ -267,7 +267,7 @@ export default function SettingsPage() {
               )}
             </div>
             
-            <div className="flex space-x-2">
+            <div className="flex flex-wrap gap-2">
               <motion.div
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -390,70 +390,70 @@ export default function SettingsPage() {
         transition={{ delay: 0.2 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Server className="h-5 w-5 text-primary" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Server className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               <span>服务器状态</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               检查后端服务器和模块状态
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
+          <CardContent className="p-3 sm:p-6">
+            <div className="space-y-3 sm:space-y-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">后端服务器</span>
+                <span className="text-xs sm:text-sm text-muted-foreground">后端服务器</span>
                 <div className="flex items-center space-x-2">
                   {serverStatus === 'online' && (
                     <div className="flex items-center space-x-1 text-green-400">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm">在线</span>
+                      <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-xs sm:text-sm">在线</span>
                     </div>
                   )}
                   {serverStatus === 'offline' && (
                     <div className="flex items-center space-x-1 text-red-400">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">离线</span>
+                      <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-xs sm:text-sm">离线</span>
                     </div>
                   )}
                   {serverStatus === 'checking' && (
                     <div className="flex items-center space-x-1 text-yellow-400">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm">检查中</span>
+                      <Loader2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                      <span className="text-xs sm:text-sm">检查中</span>
                     </div>
                   )}
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Python模块</span>
+                <span className="text-xs sm:text-sm text-muted-foreground">Python模块</span>
                 <div className="flex items-center space-x-2">
                   {serverStatus === 'online' ? (
                     <div className="flex items-center space-x-1 text-green-400">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm">可用</span>
+                      <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-xs sm:text-sm">可用</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-1 text-red-400">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">不可用</span>
+                      <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-xs sm:text-sm">不可用</span>
                     </div>
                   )}
                 </div>
               </div>
               
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">API接口</span>
+                <span className="text-xs sm:text-sm text-muted-foreground">API接口</span>
                 <div className="flex items-center space-x-2">
                   {serverStatus === 'online' ? (
                     <div className="flex items-center space-x-1 text-green-400">
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="text-sm">正常</span>
+                      <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-xs sm:text-sm">正常</span>
                     </div>
                   ) : (
                     <div className="flex items-center space-x-1 text-red-400">
-                      <AlertCircle className="h-4 w-4" />
-                      <span className="text-sm">异常</span>
+                      <AlertCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      <span className="text-xs sm:text-sm">异常</span>
                     </div>
                   )}
                 </div>
@@ -470,20 +470,20 @@ export default function SettingsPage() {
         transition={{ delay: 0.3 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Palette className="h-5 w-5 text-primary" />
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Palette className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               <span>界面设置</span>
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               个性化界面显示设置
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-white">主题模式</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs sm:text-sm font-medium text-white">主题模式</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">
                   当前使用{theme === 'dark' ? '深色' : '浅色'}主题
                 </div>
               </div>
@@ -491,40 +491,41 @@ export default function SettingsPage() {
                 onClick={toggleTheme}
                 variant="outline"
                 size="sm"
-                className="btn-hover"
+                className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
               >
                 {theme === 'dark' ? (
-                  <Sun className="h-4 w-4 mr-2" />
+                  <Sun className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 ) : (
-                  <Moon className="h-4 w-4 mr-2" />
+                  <Moon className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 )}
-                切换到{theme === 'dark' ? '浅色' : '深色'}
+                <span className="hidden sm:inline">切换到{theme === 'dark' ? '浅色' : '深色'}</span>
+                <span className="sm:hidden">切换</span>
               </Button>
             </div>
             
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-white">动画效果</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs sm:text-sm font-medium text-white">动画效果</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">
                   页面切换和交互动画
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-green-400">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-sm">已启用</span>
+                <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="text-xs sm:text-sm">已启用</span>
               </div>
             </div>
             
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium text-white">响应式布局</div>
-                <div className="text-sm text-muted-foreground">
+                <div className="text-xs sm:text-sm font-medium text-white">响应式布局</div>
+                <div className="text-xs sm:text-sm text-muted-foreground">
                   自适应不同屏幕尺寸
                 </div>
               </div>
               <div className="flex items-center space-x-1 text-green-400">
-                <CheckCircle className="h-4 w-4" />
-                <span className="text-sm">已启用</span>
+                <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                <span className="text-xs sm:text-sm">已启用</span>
               </div>
             </div>
           </CardContent>
@@ -538,37 +539,37 @@ export default function SettingsPage() {
         transition={{ delay: 0.4 }}
       >
         <Card className="glass">
-          <CardHeader>
-            <CardTitle>📖 使用说明</CardTitle>
-            <CardDescription>
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">📖 使用说明</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               快速了解如何使用选课工具
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-white">1. 配置Cookie</h4>
-              <p className="text-sm text-muted-foreground">
+          <CardContent className="p-3 sm:p-6 space-y-2 sm:space-y-3">
+            <div className="space-y-1.5 sm:space-y-2">
+              <h4 className="text-xs sm:text-sm font-medium text-white">1. 配置Cookie</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 在浏览器中登录选课系统，按F12打开开发者工具，在Network标签页中找到请求，复制Cookie值到上方输入框
               </p>
             </div>
             
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-white">2. 查看学生信息</h4>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-1.5 sm:space-y-2">
+              <h4 className="text-xs sm:text-sm font-medium text-white">2. 查看学生信息</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 在"学生信息"页面查看和刷新您的个人信息
               </p>
             </div>
             
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-white">3. 浏览课程</h4>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-1.5 sm:space-y-2">
+              <h4 className="text-xs sm:text-sm font-medium text-white">3. 浏览课程</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 在"课程信息"页面查看可选课程和已选课程
               </p>
             </div>
             
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium text-white">4. 智能选课</h4>
-              <p className="text-sm text-muted-foreground">
+            <div className="space-y-1.5 sm:space-y-2">
+              <h4 className="text-xs sm:text-sm font-medium text-white">4. 智能选课</h4>
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 在"智能选课"页面选择模式，启动自动抢课
               </p>
             </div>
