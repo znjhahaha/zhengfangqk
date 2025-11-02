@@ -56,9 +56,9 @@ export default function AnnouncementBanner() {
 
   const handleDismiss = (id: string) => {
     setDismissedIds(prev => {
-      const newSet = new Set([...prev, id])
+      const newSet = new Set(Array.from(prev).concat([id]))
       try {
-        localStorage.setItem('dismissed-announcements', JSON.stringify([...newSet]))
+        localStorage.setItem('dismissed-announcements', JSON.stringify(Array.from(newSet)))
       } catch (error) {
         console.warn('保存已关闭公告失败:', error)
       }

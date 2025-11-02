@@ -13,7 +13,9 @@ interface Announcement {
   type: 'info' | 'warning' | 'error' | 'success'
   priority: 'low' | 'normal' | 'high'
   createdAt: number
+  updatedAt?: number
   expiresAt?: number
+  isActive: boolean
 }
 
 interface AnnouncementModalProps {
@@ -136,9 +138,9 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
 
   const handleDismiss = (id: string) => {
     setDismissedIds(prev => {
-      const newSet = new Set([...prev, id])
+      const newSet = new Set(Array.from(prev).concat([id]))
       try {
-        localStorage.setItem('dismissed-announcements', JSON.stringify([...newSet]))
+        localStorage.setItem('dismissed-announcements', JSON.stringify(Array.from(newSet)))
       } catch (error) {
         console.warn('保存已关闭公告失败:', error)
       }
@@ -158,9 +160,9 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
 
   const markAsViewed = (id: string) => {
     setViewedIds(prev => {
-      const newSet = new Set([...prev, id])
+      const newSet = new Set(Array.from(prev).concat([id]))
       try {
-        localStorage.setItem('viewed-announcements', JSON.stringify([...newSet]))
+        localStorage.setItem('viewed-announcements', JSON.stringify(Array.from(newSet)))
       } catch (error) {
         console.warn('保存已查看公告失败:', error)
       }
@@ -190,9 +192,9 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
       const result = await response.json()
       if (result.success) {
         setConfirmedIds(prev => {
-          const newSet = new Set([...prev, id])
+          const newSet = new Set(Array.from(prev).concat([id]))
           try {
-            localStorage.setItem('confirmed-announcements', JSON.stringify([...newSet]))
+            localStorage.setItem('confirmed-announcements', JSON.stringify(Array.from(newSet)))
           } catch (error) {
             console.warn('保存已确认公告失败:', error)
           }
