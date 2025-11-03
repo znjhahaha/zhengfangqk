@@ -51,10 +51,10 @@ function getCosInstance(): COS {
     throw new Error('COS 配置未设置')
   }
 
+  // COS SDK 初始化时不传递 Region，而是在每次 API 调用时传递
   cosInstance = new COS({
     SecretId: config.SecretId,
-    SecretKey: config.SecretKey,
-    Region: config.Region
+    SecretKey: config.SecretKey
   })
 
   return cosInstance
