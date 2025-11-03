@@ -200,7 +200,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
           }
           return newSet
         })
-        markAsViewed(id)
+        // 确认后不自动标记为已查看，让用户可以选择继续查看或关闭
         toast.success('确认收到')
       } else {
         toast.error(result.message || '确认失败')

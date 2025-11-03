@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { 
   Settings, 
   Plus, 
@@ -225,7 +226,7 @@ export default function AdminPage() {
   const [editingSchool, setEditingSchool] = useState<SchoolConfig | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [urlConfigs, setUrlConfigs] = useState<Record<string, any>>({})
-  const [activeTab, setActiveTab] = useState<'schools' | 'data' | 'stats' | 'config' | 'logs' | 'monitor' | 'announcements' | 'suggestions'>('schools')
+  const [activeTab, setActiveTab] = useState<'schools' | 'data' | 'stats' | 'config' | 'logs' | 'monitor' | 'announcements' | 'suggestions' | 'cos'>('schools')
   const [storageData, setStorageData] = useState<any[]>([])
   const [storageUsage, setStorageUsage] = useState({ used: 0, total: 0, percentage: 0 })
   const [logs, setLogs] = useState<AdminLog[]>([])
@@ -244,6 +245,14 @@ export default function AdminPage() {
   const [suggestions, setSuggestions] = useState<any[]>([])
   const [isLoadingAnnouncements, setIsLoadingAnnouncements] = useState(false)
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [isLoadingCosFiles, setIsLoadingCosFiles] = useState(false)
+  const [cosFiles, setCosFiles] = useState<Array<{
+    key: string
+    name: string
+    size: number
+    lastModified: number
+    contentType?: string
+  }>>([])
   const [isAddingAnnouncement, setIsAddingAnnouncement] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
   const [confirmationStats, setConfirmationStats] = useState<Record<string, number>>({})
@@ -358,6 +367,34 @@ export default function AdminPage() {
       }
     } catch (error) {
       console.error('加载确认统计失败:', error)
+    }
+  }
+
+  // 加载 COS 存储文件列表
+  const loadCosFiles = async () => {
+    setIsLoadingCosFiles(true)
+    try {
+      const adminToken = typeof window !== 'undefined' && localStorage.getItem('admin-logged-in') === 'true' 
+        ? 'Znj00751_admin_2024' 
+        : ''
+      
+      const response = await fetch(`/api/admin/cos-files?t=${Date.now()}`, {
+        headers: {
+          'x-admin-token': adminToken
+        }
+      })
+      const result = await response.json()
+      if (result.success) {
+        setCosFiles(result.data || [])
+        console.log('✅ 加载 COS 文件成功:', result.data?.length || 0, '个文件')
+      } else {
+        toast.error(result.message || '加载 COS 文件失败')
+      }
+    } catch (error) {
+      console.error('加载 COS 文件失败:', error)
+      toast.error('加载 COS 文件失败')
+    } finally {
+      setIsLoadingCosFiles(false)
     }
   }
 
@@ -2374,6 +2411,107 @@ export default function AdminPage() {
                               </Button>
                             </div>
                           )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* COS 存储管理 */}
+        {activeTab === 'cos' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 sm:space-y-6"
+          >
+            <Card className="glass">
+              <CardHeader className="p-3 sm:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Server className="h-4 w-4 sm:h-5 sm:w-5" />
+                  腾讯云 COS 存储文件列表
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  查看存储在腾讯云 COS 中的数据文件
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Button
+                    onClick={loadCosFiles}
+                    disabled={isLoadingCosFiles}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingCosFiles ? 'animate-spin' : ''}`} />
+                    刷新
+                  </Button>
+                  <span className="text-xs sm:text-sm text-gray-400">
+                    共 {cosFiles.length} 个文件
+                  </span>
+                </div>
+                {isLoadingCosFiles ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
+                    <p className="text-sm text-gray-400">加载中...</p>
+                  </div>
+                ) : cosFiles.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Server className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-sm text-gray-400">暂无文件</p>
+                    <p className="text-xs text-gray-500 mt-2">COS 存储未配置或文件为空</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {cosFiles.map((file, index) => (
+                      <div
+                        key={file.key}
+                        className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/50 hover:border-slate-600/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-2">
+                              <FileText className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                              <h3 className="font-medium text-sm sm:text-base text-white truncate">
+                                {file.name}
+                              </h3>
+                            </div>
+                            <div className="space-y-1 text-xs sm:text-sm text-gray-400">
+                              <p>
+                                <span className="text-gray-500">路径:</span>{' '}
+                                <span className="text-gray-300 font-mono">{file.key}</span>
+                              </p>
+                              <p>
+                                <span className="text-gray-500">大小:</span>{' '}
+                                <span className="text-gray-300">
+                                  {(file.size / 1024).toFixed(2)} KB
+                                </span>
+                              </p>
+                              <p>
+                                <span className="text-gray-500">更新时间:</span>{' '}
+                                <span className="text-gray-300">
+                                  {new Date(file.lastModified).toLocaleString('zh-CN')}
+                                </span>
+                              </p>
+                              {file.contentType && (
+                                <p>
+                                  <span className="text-gray-500">类型:</span>{' '}
+                                  <span className="text-gray-300">{file.contentType}</span>
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex-shrink-0">
+                            <Badge
+                              variant="outline"
+                              className="bg-green-500/10 border-green-500/30 text-green-300"
+                            >
+                              已同步
+                            </Badge>
+                          </div>
                         </div>
                       </div>
                     ))}
