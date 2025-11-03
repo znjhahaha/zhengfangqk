@@ -42,8 +42,12 @@ import { CookieValidator } from '@/lib/cookie-validator'
 import LocalCookieManager from '@/lib/local-cookie-manager'
 import { getCurrentSchool } from '@/lib/global-school-state'
 import { recordVisit } from '@/lib/visit-tracker'
+import { useDeviceDetection, getAnimationConfig } from '@/lib/device-detector'
 
 export default function Home() {
+  // 设备检测和动画配置
+  const { isMobile, isLowPerformance } = useDeviceDetection()
+  const animationConfig = getAnimationConfig(isMobile, isLowPerformance)
   const [activeTab, setActiveTab] = useState('courses') // 默认显示课程信息页面
   const [isLoading, setIsLoading] = useState(true)
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking')
@@ -354,41 +358,45 @@ export default function Home() {
       ) : null}
       {/* 头部导航 */}
       <motion.header
-        initial={{ y: -100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ 
-          duration: 0.8,
+        initial={animationConfig.enabled ? { y: -100, opacity: 0 } : false}
+        animate={animationConfig.enabled ? { y: 0, opacity: 1 } : {}}
+        transition={animationConfig.enabled ? { 
+          duration: animationConfig.duration,
           ease: [0.25, 0.46, 0.45, 0.94]
-        }}
-        className={`bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-b border-gray-200/50 dark:border-gray-700/50 p-2 sm:p-4 relative transition-all duration-300 shadow-sm ${
+        } : {}}
+        className={`bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border-b border-gray-200/50 dark:border-gray-700/50 p-2 sm:p-4 relative transition-all duration-300 shadow-sm ${
           (showWelcome && studentInfo) || showTopBar ? 'mt-20' : ''
         }`}
       >
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
           <motion.div 
             className="flex items-center space-x-2 sm:space-x-4"
-            initial={{ x: -50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.2, duration: 0.6 }}
+            initial={animationConfig.enabled ? { x: -50, opacity: 0 } : false}
+            animate={animationConfig.enabled ? { x: 0, opacity: 1 } : {}}
+            transition={animationConfig.enabled ? { delay: animationConfig.reduceMotion ? 0 : 0.2, duration: animationConfig.duration } : {}}
           >
             <motion.div 
               className="flex items-center space-x-1 sm:space-x-2"
-              whileHover={{ scale: 1.05 }}
+              whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
-              <motion.div
-                animate={{ 
-                  rotate: [0, 5, -5, 0],
-                  scale: [1, 1.1, 1]
-                }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  repeatDelay: 3
-                }}
-              >
+              {animationConfig.reduceMotion ? (
                 <BookOpen className="h-5 w-5 sm:h-8 sm:w-8 text-primary" />
-              </motion.div>
+              ) : (
+                <motion.div
+                  animate={{ 
+                    rotate: [0, 5, -5, 0],
+                    scale: [1, 1.1, 1]
+                  }}
+                  transition={{ 
+                    duration: 2,
+                    repeat: Infinity,
+                    repeatDelay: 3
+                  }}
+                >
+                  <BookOpen className="h-5 w-5 sm:h-8 sm:w-8 text-primary" />
+                </motion.div>
+              )}
               <h1 className="text-base sm:text-2xl font-bold text-gray-900 dark:text-white">
                 正方教务工具
               </h1>
@@ -396,9 +404,9 @@ export default function Home() {
             
             <motion.div 
               className="flex items-center space-x-1 sm:space-x-2"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4, duration: 0.5 }}
+              initial={animationConfig.enabled ? { opacity: 0, scale: 0.8 } : false}
+              animate={animationConfig.enabled ? { opacity: 1, scale: 1 } : {}}
+              transition={animationConfig.enabled ? { delay: animationConfig.reduceMotion ? 0 : 0.4, duration: animationConfig.duration } : {}}
             >
               {serverStatus === 'online' && (
                 <motion.div 
@@ -448,27 +456,29 @@ export default function Home() {
           </motion.div>
           
           <motion.div
-            initial={{ x: 50, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            transition={{ delay: 0.3, duration: 0.6 }}
+            initial={animationConfig.enabled ? { x: 50, opacity: 0 } : false}
+            animate={animationConfig.enabled ? { x: 0, opacity: 1 } : {}}
+            transition={animationConfig.enabled ? { delay: animationConfig.reduceMotion ? 0 : 0.3, duration: animationConfig.duration } : {}}
             className="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto"
           >
             {/* 自动登录按钮 */}
             <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
+              whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
               <Button
                 onClick={() => setShowAutoLogin(true)}
                 className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white relative overflow-hidden text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
               >
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20"
-                  initial={{ x: "-100%" }}
-                  whileHover={{ x: "100%" }}
-                  transition={{ duration: 0.6 }}
-                />
+                {!animationConfig.disableHoverEffects && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20"
+                    initial={{ x: "-100%" }}
+                    whileHover={{ x: "100%" }}
+                    transition={{ duration: 0.6 }}
+                  />
+                )}
                 <LogIn className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2 relative z-10" />
                 <span className="relative z-10 hidden sm:inline">自动登录</span>
                 <span className="relative z-10 sm:hidden">登录</span>
@@ -477,8 +487,8 @@ export default function Home() {
             
             {/* 后台管理按钮 */}
             <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
+              whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
               <Button
@@ -498,8 +508,8 @@ export default function Home() {
               </Button>
             </motion.div>
             <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
+              whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
               <Button
@@ -513,8 +523,8 @@ export default function Home() {
               </Button>
             </motion.div>
             <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
+              whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
               <Button
@@ -537,8 +547,8 @@ export default function Home() {
             
             {/* 刷新按钮 */}
             <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
+              whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
               <Button
@@ -546,12 +556,14 @@ export default function Home() {
                 variant="outline"
                 className="btn-hover relative overflow-hidden text-[10px] sm:text-sm px-2 sm:px-4 py-1.5 sm:py-2"
               >
-                <motion.div
-                  className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20"
-                  initial={{ x: "-100%" }}
-                  whileHover={{ x: "100%" }}
-                  transition={{ duration: 0.6 }}
-                />
+                {!animationConfig.disableHoverEffects && (
+                  <motion.div
+                    className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-blue-500/20"
+                    initial={{ x: "-100%" }}
+                    whileHover={{ x: "100%" }}
+                    transition={{ duration: 0.6 }}
+                  />
+                )}
                 <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-0.5 sm:mr-2 relative z-10" />
                 <span className="relative z-10 hidden sm:inline">刷新数据</span>
                 <span className="relative z-10 sm:hidden">刷新</span>
@@ -567,12 +579,12 @@ export default function Home() {
           {/* 移动端菜单按钮 */}
           <motion.div
             className="block sm:hidden mb-2"
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={animationConfig.enabled ? { opacity: 0, y: -10 } : false}
+            animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
           >
             <Button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="w-full bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-lg p-2 h-9 text-xs font-medium flex items-center justify-center gap-2"
+              className={`w-full bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border border-gray-200/50 dark:border-gray-700/50 rounded-lg p-2 h-9 text-xs font-medium flex items-center justify-center gap-2`}
               variant="outline"
             >
               {showMobileMenu ? (
@@ -593,11 +605,11 @@ export default function Home() {
           <AnimatePresence>
             {showMobileMenu && (
               <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.2 }}
-                className="block sm:hidden mb-3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-lg p-2 shadow-lg"
+                initial={animationConfig.enabled ? { opacity: 0, y: -20 } : false}
+                animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+                exit={animationConfig.enabled ? { opacity: 0, y: -20 } : {}}
+                transition={{ duration: animationConfig.duration }}
+                className={`block sm:hidden mb-3 bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border border-gray-200/50 dark:border-gray-700/50 rounded-lg p-2 shadow-lg`}
               >
                 <div className="grid grid-cols-2 gap-1.5">
                   {menuItems.map((item) => {
@@ -636,8 +648,8 @@ export default function Home() {
                       setShowMobileMenu(false)
                     }}
                     className="flex items-center gap-1.5 p-1.5 rounded-md text-[10px] font-medium transition-all text-gray-700 dark:text-gray-300 hover:bg-yellow-50 dark:hover:bg-yellow-900/20"
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
+                    whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                    whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                   >
                     <Bell className="h-3 w-3 flex-shrink-0" />
                     <span className="truncate">查看公告</span>
@@ -649,25 +661,27 @@ export default function Home() {
 
           {/* 桌面端标签栏 */}
           <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.4, duration: 0.6 }}
+            initial={animationConfig.enabled ? { y: 20, opacity: 0 } : false}
+            animate={animationConfig.enabled ? { y: 0, opacity: 1 } : {}}
+            transition={animationConfig.enabled ? { delay: animationConfig.reduceMotion ? 0 : 0.4, duration: animationConfig.duration } : {}}
             className="hidden sm:block"
           >
-            <TabsList className="inline-flex w-full max-w-full mx-auto mb-4 sm:mb-8 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border border-gray-200/50 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-2 sm:p-8 shadow-lg flex-wrap sm:flex-nowrap">
+            <TabsList className={`inline-flex w-full max-w-full mx-auto mb-4 sm:mb-8 bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border border-gray-200/50 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-2 sm:p-8 shadow-lg flex-wrap sm:flex-nowrap`}>
               
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <TabsTrigger value="courses" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-green-100 dark:data-[state=active]:bg-green-900/30 data-[state=active]:text-green-700 dark:data-[state=active]:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  {!animationConfig.disableHoverEffects && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-green-500/10 to-emerald-500/10 rounded-lg"
+                      initial={{ x: "-100%" }}
+                      whileHover={{ x: "100%" }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
                   <BookOpen className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
                   <span className="relative z-10 hidden sm:inline">课程信息</span>
                   <span className="relative z-10 sm:hidden">课程</span>
@@ -675,17 +689,19 @@ export default function Home() {
               </motion.div>
               
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <TabsTrigger value="schedule" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-orange-100 dark:data-[state=active]:bg-orange-900/30 data-[state=active]:text-orange-700 dark:data-[state=active]:text-orange-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-red-500/10 rounded-lg"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  {!animationConfig.disableHoverEffects && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-orange-500/10 to-red-500/10 rounded-lg"
+                      initial={{ x: "-100%" }}
+                      whileHover={{ x: "100%" }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
                   <Calendar className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
                   <span className="relative z-10 hidden sm:inline">我的课表</span>
                   <span className="relative z-10 sm:hidden">课表</span>
@@ -694,17 +710,19 @@ export default function Home() {
               
               
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <TabsTrigger value="selection" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-pink-100 dark:data-[state=active]:bg-pink-900/30 data-[state=active]:text-pink-700 dark:data-[state=active]:text-pink-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-pink-500/10 to-rose-500/10 rounded-lg"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  {!animationConfig.disableHoverEffects && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-pink-500/10 to-rose-500/10 rounded-lg"
+                      initial={{ x: "-100%" }}
+                      whileHover={{ x: "100%" }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
                   <Target className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
                   <span className="relative z-10 hidden sm:inline">智能选课</span>
                   <span className="relative z-10 sm:hidden">选课</span>
@@ -712,17 +730,19 @@ export default function Home() {
               </motion.div>
               
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <TabsTrigger value="grade" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-amber-100 dark:data-[state=active]:bg-amber-900/30 data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 rounded-lg"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  {!animationConfig.disableHoverEffects && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 rounded-lg"
+                      initial={{ x: "-100%" }}
+                      whileHover={{ x: "100%" }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
                   <Award className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
                   <span className="relative z-10 hidden sm:inline">成绩查询</span>
                   <span className="relative z-10 sm:hidden">成绩</span>
@@ -730,17 +750,19 @@ export default function Home() {
               </motion.div>
               
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <TabsTrigger value="school" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-blue-100 dark:data-[state=active]:bg-blue-900/30 data-[state=active]:text-blue-700 dark:data-[state=active]:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-lg"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  {!animationConfig.disableHoverEffects && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-cyan-500/10 rounded-lg"
+                      initial={{ x: "-100%" }}
+                      whileHover={{ x: "100%" }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
                   <School className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
                   <span className="relative z-10 hidden sm:inline">学校选择</span>
                   <span className="relative z-10 sm:hidden">学校</span>
@@ -748,17 +770,19 @@ export default function Home() {
               </motion.div>
               
               <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
+                whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
+                whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
                 <TabsTrigger value="settings" className="flex items-center justify-center space-x-1 sm:space-x-4 relative overflow-hidden h-10 sm:h-16 px-3 sm:px-8 py-2 sm:py-4 rounded-lg text-xs sm:text-base font-medium transition-all duration-200 data-[state=active]:bg-gray-100 dark:data-[state=active]:bg-gray-800/50 data-[state=active]:text-gray-700 dark:data-[state=active]:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 flex-1 min-w-[80px] sm:min-w-0">
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-gray-500/10 to-slate-500/10 rounded-lg"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.5 }}
-                  />
+                  {!animationConfig.disableHoverEffects && (
+                    <motion.div
+                      className="absolute inset-0 bg-gradient-to-r from-gray-500/10 to-slate-500/10 rounded-lg"
+                      initial={{ x: "-100%" }}
+                      whileHover={{ x: "100%" }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  )}
                   <Settings className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
                   <span className="relative z-10 hidden sm:inline">系统设置</span>
                   <span className="relative z-10 sm:hidden">设置</span>
@@ -770,11 +794,11 @@ export default function Home() {
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
-              initial={{ opacity: 0, y: 30, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -30, scale: 0.95 }}
+              initial={animationConfig.enabled ? { opacity: 0, y: animationConfig.reduceMotion ? 0 : 30, scale: animationConfig.reduceMotion ? 1 : 0.95 } : false}
+              animate={animationConfig.enabled ? { opacity: 1, y: 0, scale: 1 } : {}}
+              exit={animationConfig.enabled ? { opacity: 0, y: animationConfig.reduceMotion ? 0 : -30, scale: animationConfig.reduceMotion ? 1 : 0.95 } : {}}
               transition={{ 
-                duration: 0.5,
+                duration: animationConfig.duration,
                 ease: [0.25, 0.46, 0.45, 0.94]
               }}
             >

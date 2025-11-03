@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -30,6 +30,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
+import { useDeviceDetection, getAnimationConfig } from '@/lib/device-detector'
 
 interface ScheduleCourse {
   name: string
@@ -56,6 +57,10 @@ interface ScheduleCourse {
 }
 
 export default function ModernSchedulePage() {
+  // 设备检测和动画配置
+  const { isMobile, isLowPerformance } = useDeviceDetection()
+  const animationConfig = getAnimationConfig(isMobile, isLowPerformance)
+  
   const [scheduleData, setScheduleData] = useState<ScheduleCourse[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -692,40 +697,59 @@ export default function ModernSchedulePage() {
     fetchScheduleData()
   }, []) // 空依赖数组，只在挂载时执行一次
 
-  // 课程卡片组件
-  const CourseCard = ({ course, index }: { course: ScheduleCourse; index: number }) => {
+  // 课程卡片组件（使用memo优化，减少重复渲染）
+  const CourseCard = memo(({ course, index, animationConfig, onSelectCourse }: { 
+    course: ScheduleCourse
+    index: number
+    animationConfig: ReturnType<typeof getAnimationConfig>
+    onSelectCourse: (course: ScheduleCourse) => void
+  }) => {
     const isFavorite = favoriteCourses.has(course.name)
     const periodInfo = periods.find(p => p.start === course.period)
     
     return (
       <motion.div
-        initial={{ opacity: 0, scale: 0.8, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.8, y: -20 }}
+        initial={animationConfig.enabled ? { 
+          opacity: 0, 
+          scale: animationConfig.reduceMotion ? 1 : 0.8, 
+          y: animationConfig.reduceMotion ? 0 : 20 
+        } : false}
+        animate={animationConfig.enabled ? { opacity: 1, scale: 1, y: 0 } : {}}
+        exit={animationConfig.enabled ? { 
+          opacity: 0, 
+          scale: animationConfig.reduceMotion ? 1 : 0.8, 
+          y: animationConfig.reduceMotion ? 0 : -20 
+        } : {}}
         transition={{ 
-          duration: 0.3,
-          delay: index * 0.1,
-          type: "spring",
-          stiffness: 100
+          duration: animationConfig.duration,
+          delay: animationConfig.reduceMotion ? 0 : index * 0.05, // 减少延迟
+          type: "tween", // 使用tween而不是spring，性能更好
+          ease: "easeOut"
         }}
-        whileHover={{ 
+        whileHover={animationConfig.disableHoverEffects ? {} : { 
           scale: 1.05,
           y: -5,
           transition: { duration: 0.2 }
         }}
-        whileTap={{ scale: 0.95 }}
+        whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }}
         className="relative group cursor-pointer"
-        onClick={() => selectCourse(course)}
+        onClick={() => onSelectCourse(course)}
+        style={animationConfig.useGPU ? {
+          transform: 'translateZ(0)',
+          willChange: 'transform'
+        } : {}}
       >
         <div className={`
           relative overflow-hidden rounded-lg sm:rounded-xl p-1.5 sm:p-3 shadow-lg
           bg-gradient-to-br ${periodInfo?.color || 'from-gray-500 to-gray-600'}
-          border border-white/20 backdrop-blur-sm
-          hover:shadow-2xl hover:border-white/40
+          border border-white/20 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-sm'}
+          ${animationConfig.disableHoverEffects ? '' : 'hover:shadow-2xl hover:border-white/40'}
           transition-all duration-300
         `}>
-          {/* 背景装饰 */}
-          <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          {/* 背景装饰 - 移动端禁用 */}
+          {!animationConfig.disableHoverEffects && (
+            <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+          )}
           
           {/* 收藏按钮 */}
           <button
@@ -761,12 +785,16 @@ export default function ModernSchedulePage() {
             </div>
           </div>
 
-          {/* 悬浮效果 */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+          {/* 悬浮效果 - 移动端禁用 */}
+          {!animationConfig.disableHoverEffects && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+          )}
         </div>
       </motion.div>
     )
-  }
+  })
+  
+  CourseCard.displayName = 'CourseCard'
 
   // 空时间段组件
   const EmptySlot = ({ day, period }: { day: number; period: number }) => {
@@ -807,9 +835,9 @@ export default function ModernSchedulePage() {
 
         {/* 控制面板 */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
+          initial={animationConfig.enabled ? { opacity: 0, y: 20 } : false}
+          animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: animationConfig.duration, delay: animationConfig.reduceMotion ? 0 : 0.1 }}
           className="flex flex-col lg:flex-row gap-4 items-center justify-between"
         >
           {/* 搜索和筛选 */}
@@ -960,9 +988,9 @@ export default function ModernSchedulePage() {
 
         {/* 统计信息 */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          initial={animationConfig.enabled ? { opacity: 0, y: 20 } : false}
+          animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: animationConfig.duration, delay: animationConfig.reduceMotion ? 0 : 0.2 }}
           className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4"
         >
           <Card className="bg-gradient-to-r from-blue-500/20 to-blue-600/20 border-blue-400/30">
@@ -1127,6 +1155,8 @@ export default function ModernSchedulePage() {
                                               key={`${course.name}-${courseIndex}`}
                                               course={course}
                                               index={courseIndex}
+                                              animationConfig={animationConfig}
+                                              onSelectCourse={selectCourse}
                                             />
                                           ))}
                                         </AnimatePresence>
