@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
 import path from 'path'
+import { getDataDir, loadDataFromFile, saveDataToFile } from '@/lib/data-storage'
 
 // 公告数据结构
 export interface Announcement {
@@ -16,95 +15,29 @@ export interface Announcement {
   isActive: boolean
 }
 
-// 数据存储路径 - 优先使用项目目录，如果不可写则使用 /tmp
-function getDataDir() {
-  const projectDataDir = path.join(process.cwd(), 'data')
-  // 检查项目目录是否可写，如果不可写则使用 /tmp
-  try {
-    if (existsSync(projectDataDir)) {
-      return projectDataDir
-    }
-  } catch (error) {
-    console.warn('无法访问项目数据目录，尝试使用 /tmp:', error)
-  }
-  
-  // 在云环境中，/tmp 通常是唯一可写的目录
-  const tmpDir = process.platform === 'win32' 
-    ? path.join(process.env.TEMP || process.env.TMP || process.cwd(), 'data')
-    : path.join('/tmp', 'qiangke-data')
-  
-  return tmpDir
-}
+// 数据目录和文件路径（延迟初始化）
+let DATA_DIR: string | null = null
+let ANNOUNCEMENTS_FILE: string | null = null
 
-const DATA_DIR = getDataDir()
-const ANNOUNCEMENTS_FILE = path.join(DATA_DIR, 'announcements.json')
-
-// 确保数据目录存在
-async function ensureDataDir() {
-  try {
-    if (!existsSync(DATA_DIR)) {
-      await mkdir(DATA_DIR, { recursive: true })
-      console.log('✅ 数据目录已创建:', DATA_DIR)
-    }
-  } catch (error: any) {
-    console.error('❌ 无法创建数据目录:', DATA_DIR, error)
-    throw new Error(`无法创建数据目录: ${error.message}`)
+// 初始化数据目录和文件路径
+async function initDataPaths() {
+  if (!DATA_DIR) {
+    DATA_DIR = await getDataDir()
+    ANNOUNCEMENTS_FILE = path.join(DATA_DIR, 'announcements.json')
   }
+  return { dataDir: DATA_DIR, filePath: ANNOUNCEMENTS_FILE! }
 }
 
 // 从文件加载公告
 async function loadAnnouncements(): Promise<Announcement[]> {
-  try {
-    // 尝试确保目录存在，但不抛出错误（允许目录创建失败）
-    try {
-      await ensureDataDir()
-    } catch (dirError: any) {
-      console.warn('⚠️ 数据目录可能不存在或无法创建，尝试继续:', dirError?.message)
-      // 继续执行，尝试读取文件（如果文件在其他位置）
-    }
-    
-    if (existsSync(ANNOUNCEMENTS_FILE)) {
-      const content = await readFile(ANNOUNCEMENTS_FILE, 'utf-8')
-      const data = JSON.parse(content)
-      return data.announcements || []
-    }
-    // 文件不存在是正常情况（首次运行），返回空数组
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    // 文件不存在（ENOENT）是正常情况，不记录错误
-    if (error?.code === 'ENOENT') {
-      return []
-    }
-    console.error('⚠️ 加载公告数据失败:', {
-      file: ANNOUNCEMENTS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-  }
-  return []
+  const { filePath } = await initDataPaths()
+  return loadDataFromFile<Announcement>(filePath, 'announcements', [])
 }
 
 // 保存公告到文件
 async function saveAnnouncements(announcements: Announcement[]) {
-  try {
-    await ensureDataDir()
-    const data = {
-      announcements,
-      lastUpdated: Date.now()
-    }
-    await writeFile(ANNOUNCEMENTS_FILE, JSON.stringify(data, null, 2), 'utf-8')
-    console.log('📢 公告数据已保存到文件:', ANNOUNCEMENTS_FILE)
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    console.error('❌ 保存公告数据失败:', {
-      file: ANNOUNCEMENTS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-    throw new Error(`保存公告数据失败: ${errorMessage}. 目录: ${DATA_DIR}`)
-  }
+  const { dataDir, filePath } = await initDataPaths()
+  await saveDataToFile<Announcement>(filePath, 'announcements', announcements, dataDir)
 }
 
 // 获取下一个公告ID

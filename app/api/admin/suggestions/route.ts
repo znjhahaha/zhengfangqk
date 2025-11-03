@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
 import path from 'path'
+import { getDataDir, loadDataFromFile, saveDataToFile } from '@/lib/data-storage'
 
 // 建议数据结构
 export interface Suggestion {
@@ -17,95 +16,29 @@ export interface Suggestion {
   reviewNote?: string // 审核备注
 }
 
-// 数据存储路径 - 优先使用项目目录，如果不可写则使用 /tmp
-function getDataDir() {
-  const projectDataDir = path.join(process.cwd(), 'data')
-  // 检查项目目录是否可写，如果不可写则使用 /tmp
-  try {
-    if (existsSync(projectDataDir)) {
-      return projectDataDir
-    }
-  } catch (error) {
-    console.warn('无法访问项目数据目录，尝试使用 /tmp:', error)
-  }
-  
-  // 在云环境中，/tmp 通常是唯一可写的目录
-  const tmpDir = process.platform === 'win32' 
-    ? path.join(process.env.TEMP || process.env.TMP || process.cwd(), 'data')
-    : path.join('/tmp', 'qiangke-data')
-  
-  return tmpDir
-}
+// 数据目录和文件路径（延迟初始化）
+let DATA_DIR: string | null = null
+let SUGGESTIONS_FILE: string | null = null
 
-const DATA_DIR = getDataDir()
-const SUGGESTIONS_FILE = path.join(DATA_DIR, 'suggestions.json')
-
-// 确保数据目录存在
-async function ensureDataDir() {
-  try {
-    if (!existsSync(DATA_DIR)) {
-      await mkdir(DATA_DIR, { recursive: true })
-      console.log('✅ 数据目录已创建:', DATA_DIR)
-    }
-  } catch (error: any) {
-    console.error('❌ 无法创建数据目录:', DATA_DIR, error)
-    throw new Error(`无法创建数据目录: ${error.message}`)
+// 初始化数据目录和文件路径
+async function initDataPaths() {
+  if (!DATA_DIR) {
+    DATA_DIR = await getDataDir()
+    SUGGESTIONS_FILE = path.join(DATA_DIR, 'suggestions.json')
   }
+  return { dataDir: DATA_DIR, filePath: SUGGESTIONS_FILE! }
 }
 
 // 从文件加载建议
 async function loadSuggestions(): Promise<Suggestion[]> {
-  try {
-    // 尝试确保目录存在，但不抛出错误（允许目录创建失败）
-    try {
-      await ensureDataDir()
-    } catch (dirError: any) {
-      console.warn('⚠️ 数据目录可能不存在或无法创建，尝试继续:', dirError?.message)
-      // 继续执行，尝试读取文件（如果文件在其他位置）
-    }
-    
-    if (existsSync(SUGGESTIONS_FILE)) {
-      const content = await readFile(SUGGESTIONS_FILE, 'utf-8')
-      const data = JSON.parse(content)
-      return data.suggestions || []
-    }
-    // 文件不存在是正常情况（首次运行），返回空数组
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    // 文件不存在（ENOENT）是正常情况，不记录错误
-    if (error?.code === 'ENOENT') {
-      return []
-    }
-    console.error('⚠️ 加载建议数据失败:', {
-      file: SUGGESTIONS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-  }
-  return []
+  const { filePath } = await initDataPaths()
+  return loadDataFromFile<Suggestion>(filePath, 'suggestions', [])
 }
 
 // 保存建议到文件
 async function saveSuggestions(suggestions: Suggestion[]) {
-  try {
-    await ensureDataDir()
-    const data = {
-      suggestions,
-      lastUpdated: Date.now()
-    }
-    await writeFile(SUGGESTIONS_FILE, JSON.stringify(data, null, 2), 'utf-8')
-    console.log('💡 建议数据已保存到文件:', SUGGESTIONS_FILE)
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    console.error('❌ 保存建议数据失败:', {
-      file: SUGGESTIONS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-    throw new Error(`保存建议数据失败: ${errorMessage}. 目录: ${DATA_DIR}`)
-  }
+  const { dataDir, filePath } = await initDataPaths()
+  await saveDataToFile<Suggestion>(filePath, 'suggestions', suggestions, dataDir)
 }
 
 // 获取下一个建议ID
@@ -123,17 +56,11 @@ async function getNextSuggestionId(): Promise<number> {
 let suggestions: Suggestion[] = []
 let isLoaded = false
 
-// 初始化加载
+// 初始化加载（始终从文件加载最新数据）
 async function initSuggestions() {
-  if (!isLoaded) {
-    suggestions = await loadSuggestions()
-    isLoaded = true
-    console.log('💡 已加载建议数据:', suggestions.length, '条')
-  } else {
-    // 如果已经加载过，重新加载以确保数据最新
-    const freshData = await loadSuggestions()
-    suggestions = freshData
-  }
+  suggestions = await loadSuggestions()
+  isLoaded = true
+  console.log('💡 已加载建议数据:', suggestions.length, '条')
   return suggestions
 }
 

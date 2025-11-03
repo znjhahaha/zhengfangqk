@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SchoolConfig } from '@/lib/admin-school-manager'
-import { readFile, writeFile, mkdir } from 'fs/promises'
-import { existsSync } from 'fs'
 import path from 'path'
+import { getDataDir, loadDataFromFile, saveDataToFile, ensureDataDir } from '@/lib/data-storage'
+import { readFile, writeFile } from 'fs/promises'
+import { existsSync } from 'fs'
+import { isCosEnabled, saveToCos, loadFromCos } from '@/lib/cos-storage'
 
 // 初始化默认学校
 const defaultSchools: SchoolConfig[] = [
@@ -22,148 +24,95 @@ const defaultSchools: SchoolConfig[] = [
   }
 ]
 
-// 数据存储路径 - 优先使用项目目录，如果不可写则使用 /tmp
-function getDataDir() {
-  const projectDataDir = path.join(process.cwd(), 'data')
-  // 检查项目目录是否可写，如果不可写则使用 /tmp
-  try {
-    if (existsSync(projectDataDir)) {
-      return projectDataDir
-    }
-  } catch (error) {
-    console.warn('无法访问项目数据目录，尝试使用 /tmp:', error)
-  }
-  
-  // 在云环境中，/tmp 通常是唯一可写的目录
-  const tmpDir = process.platform === 'win32' 
-    ? path.join(process.env.TEMP || process.env.TMP || process.cwd(), 'data')
-    : path.join('/tmp', 'qiangke-data')
-  
-  return tmpDir
-}
+// 数据目录和文件路径（延迟初始化）
+let DATA_DIR: string | null = null
+let SCHOOLS_FILE: string | null = null
+let URL_CONFIGS_FILE: string | null = null
 
-const DATA_DIR = getDataDir()
-const SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json')
-const URL_CONFIGS_FILE = path.join(DATA_DIR, 'url-configs.json')
-
-// 确保数据目录存在
-async function ensureDataDir() {
-  try {
-    if (!existsSync(DATA_DIR)) {
-      await mkdir(DATA_DIR, { recursive: true })
-      console.log('✅ 数据目录已创建:', DATA_DIR)
-    }
-  } catch (error: any) {
-    console.error('❌ 无法创建数据目录:', DATA_DIR, error)
-    throw new Error(`无法创建数据目录: ${error.message}`)
+// 初始化数据目录和文件路径
+async function initDataPaths() {
+  if (!DATA_DIR) {
+    DATA_DIR = await getDataDir()
+    SCHOOLS_FILE = path.join(DATA_DIR, 'schools.json')
+    URL_CONFIGS_FILE = path.join(DATA_DIR, 'url-configs.json')
   }
+  return { dataDir: DATA_DIR, schoolsFile: SCHOOLS_FILE!, urlConfigsFile: URL_CONFIGS_FILE! }
 }
 
 // 从文件加载学校列表
 async function loadSchools(): Promise<SchoolConfig[]> {
-  try {
-    // 尝试确保目录存在，但不抛出错误（允许目录创建失败）
-    try {
-      await ensureDataDir()
-    } catch (dirError: any) {
-      console.warn('⚠️ 数据目录可能不存在或无法创建，尝试继续:', dirError?.message)
-    }
-    
-    if (existsSync(SCHOOLS_FILE)) {
-      const content = await readFile(SCHOOLS_FILE, 'utf-8')
-      const data = JSON.parse(content)
-      return data.schools || []
-    }
-    // 文件不存在是正常情况（首次运行），返回默认学校
-    return [...defaultSchools]
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    // 文件不存在（ENOENT）是正常情况，返回默认学校
-    if (error?.code === 'ENOENT') {
-      return [...defaultSchools]
-    }
-    console.error('⚠️ 加载学校数据失败:', {
-      file: SCHOOLS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-    // 出错时返回默认学校
-    return [...defaultSchools]
-  }
+  const { schoolsFile } = await initDataPaths()
+  const loaded = await loadDataFromFile<SchoolConfig>(schoolsFile, 'schools', [])
+  // 如果文件为空，返回默认学校
+  return loaded.length > 0 ? loaded : [...defaultSchools]
 }
 
 // 保存学校列表到文件
 async function saveSchools(schools: SchoolConfig[]) {
-  try {
-    await ensureDataDir()
-    const data = {
-      schools,
-      lastUpdated: Date.now()
-    }
-    await writeFile(SCHOOLS_FILE, JSON.stringify(data, null, 2), 'utf-8')
-    console.log('✅ 学校数据已保存到文件:', SCHOOLS_FILE)
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    console.error('❌ 保存学校数据失败:', {
-      file: SCHOOLS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-    throw new Error(`保存学校数据失败: ${errorMessage}. 目录: ${DATA_DIR}`)
-  }
+  const { dataDir, schoolsFile } = await initDataPaths()
+  await saveDataToFile<SchoolConfig>(schoolsFile, 'schools', schools, dataDir)
 }
 
-// 从文件加载URL配置
+// 从文件或 COS 加载URL配置
 async function loadUrlConfigs(): Promise<Record<string, any>> {
-  try {
+  const { urlConfigsFile } = await initDataPaths()
+  
+  // 优先使用 COS 存储
+  if (isCosEnabled()) {
     try {
-      await ensureDataDir()
-    } catch (dirError: any) {
-      console.warn('⚠️ 数据目录可能不存在或无法创建，尝试继续:', dirError?.message)
+      const cosKey = `qiangke-data/${path.basename(urlConfigsFile)}`
+      const data = await loadFromCos(cosKey)
+      if (data && data.urlConfigs) {
+        console.log(`✅ 从 COS 加载URL配置: ${cosKey}`)
+        return data.urlConfigs
+      }
+    } catch (error: any) {
+      console.warn('⚠️ 从 COS 加载URL配置失败，尝试使用文件系统:', error?.message)
     }
-    
-    if (existsSync(URL_CONFIGS_FILE)) {
-      const content = await readFile(URL_CONFIGS_FILE, 'utf-8')
+  }
+
+  // 使用文件系统
+  try {
+    if (existsSync(urlConfigsFile)) {
+      const content = await readFile(urlConfigsFile, 'utf-8')
       const data = JSON.parse(content)
       return data.urlConfigs || {}
     }
-    return {}
   } catch (error: any) {
-    if (error?.code === 'ENOENT') {
-      return {}
+    if (error?.code !== 'ENOENT') {
+      console.error('⚠️ 加载URL配置失败:', {
+        file: urlConfigsFile,
+        error: error?.message
+      })
     }
-    console.error('⚠️ 加载URL配置失败:', {
-      file: URL_CONFIGS_FILE,
-      dir: DATA_DIR,
-      error: error?.message,
-      code: error?.code
-    })
-    return {}
   }
+  return {}
 }
 
-// 保存URL配置到文件
+// 保存URL配置到文件或 COS
 async function saveUrlConfigs(urlConfigs: Record<string, any>) {
-  try {
-    await ensureDataDir()
-    const data = {
-      urlConfigs,
-      lastUpdated: Date.now()
-    }
-    await writeFile(URL_CONFIGS_FILE, JSON.stringify(data, null, 2), 'utf-8')
-    console.log('✅ URL配置已保存到文件:', URL_CONFIGS_FILE)
-  } catch (error: any) {
-    const errorMessage = error?.message || String(error)
-    console.error('❌ 保存URL配置失败:', {
-      file: URL_CONFIGS_FILE,
-      dir: DATA_DIR,
-      error: errorMessage,
-      code: error?.code
-    })
-    throw new Error(`保存URL配置失败: ${errorMessage}. 目录: ${DATA_DIR}`)
+  const { dataDir, urlConfigsFile } = await initDataPaths()
+  const data = {
+    urlConfigs,
+    lastUpdated: Date.now()
   }
+
+  // 优先使用 COS 存储
+  if (isCosEnabled()) {
+    try {
+      const cosKey = `qiangke-data/${path.basename(urlConfigsFile)}`
+      await saveToCos(cosKey, data)
+      console.log(`✅ URL配置已保存到 COS: ${cosKey}`)
+      return
+    } catch (error: any) {
+      console.warn('⚠️ 保存URL配置到 COS 失败，尝试使用文件系统:', error?.message)
+    }
+  }
+
+  // 使用文件系统
+  await ensureDataDir(dataDir)
+  await writeFile(urlConfigsFile, JSON.stringify(data, null, 2), 'utf-8')
+  console.log('✅ URL配置已保存到文件:', urlConfigsFile)
 }
 
 // 服务器端存储（内存缓存 + 文件持久化）
