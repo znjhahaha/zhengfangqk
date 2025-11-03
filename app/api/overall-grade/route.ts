@@ -4,7 +4,7 @@ import { getOverallGrades } from '@/lib/course-api'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { sessionId } = body
+    const { sessionId, schoolId } = body
 
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const result = await getOverallGrades(sessionId || undefined, cookieHeader)
+      // 直接传递schoolId参数，不再修改服务器端状态
+      const result = await getOverallGrades(sessionId || undefined, cookieHeader, schoolId || undefined)
       
       return NextResponse.json({
         success: true,

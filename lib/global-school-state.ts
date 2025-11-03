@@ -157,9 +157,10 @@ function getSchoolUrlConfig(schoolId: string): {
   return DEFAULT_SCHOOL_URL_CONFIG[schoolId] || DEFAULT_SCHOOL_URL_CONFIG['tyust']
 }
 
-// 生成具体的API URL
-export function getApiUrls() {
-  const school = getCurrentSchool()
+// 生成具体的API URL（支持传入schoolId参数，不依赖全局状态）
+export function getApiUrls(schoolId?: string) {
+  // 如果提供了schoolId，使用指定的学校；否则使用当前选择的学校
+  const school = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
   const baseUrl = `${school.protocol}://${school.domain}`
   const urlConfig = getSchoolUrlConfig(school.id)
   

@@ -18,13 +18,8 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 如果提供了学校ID，先更新学校配置
-    if (schoolId) {
-      const { updateSchoolConfig } = require('@/lib/course-api')
-      updateSchoolConfig(schoolId)
-    }
-
-    const courses = await getAvailableCourses(undefined, cookieHeader)
+    // 直接传递schoolId参数，不再修改服务器端状态
+    const courses = await getAvailableCourses(undefined, cookieHeader, schoolId || undefined)
     
     return NextResponse.json({
       success: true,

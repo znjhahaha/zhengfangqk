@@ -16,12 +16,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 如果提供了学校ID，先更新学校配置
-    if (schoolId) {
-      const { updateSchoolConfig } = require('@/lib/course-api')
-      updateSchoolConfig(schoolId)
-    }
-
+    // 直接传递schoolId参数，不再修改服务器端状态
     const body = await request.json()
     const { courses, batchSize = 3, delay = 500 } = body
     
@@ -74,7 +69,7 @@ export async function POST(request: NextRequest) {
             kklxdm: kklxdm || '01',
             kcmc: kcmc || '未知课程',
             jxbmc: jxbmc || '未知教学班'
-          }, undefined, cookieHeader)
+          }, undefined, cookieHeader, schoolId || undefined)
 
           return {
             success: result.success,

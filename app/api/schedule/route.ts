@@ -20,13 +20,8 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
     
-    // 如果提供了学校ID，先更新学校配置
-    if (schoolId) {
-      const { updateSchoolConfig } = require('@/lib/course-api')
-      updateSchoolConfig(schoolId)
-    }
-    
-    const scheduleData = await getScheduleData(undefined, cookieHeader)
+    // 直接传递schoolId参数，不再修改服务器端状态
+    const scheduleData = await getScheduleData(undefined, cookieHeader, schoolId || undefined)
     const formattedData = formatScheduleData(scheduleData)
     
     console.log(`📅 API: 课表数据获取成功，共 ${formattedData.length} 门课程`)

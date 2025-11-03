@@ -302,8 +302,12 @@ export default function GradePage() {
         }, 30000)
       })
       
+      // 获取当前学校ID（从localStorage读取，确保用户隔离）
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      
       const data: GradeResponse = await Promise.race([
-        courseAPI.getGrades(currentYear, currentTerm),
+        courseAPI.getGrades(currentYear, currentTerm, undefined, currentSchool.id),
         timeoutPromise
       ]) as GradeResponse
 
@@ -466,8 +470,12 @@ export default function GradePage() {
         }, 60000) // 总体成绩可能需要更长时间
       })
       
+      // 获取当前学校ID（从localStorage读取，确保用户隔离）
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      
       const data: OverallGradeResponse = await Promise.race([
-        courseAPI.getOverallGrades(),
+        courseAPI.getOverallGrades(undefined, currentSchool.id),
         timeoutPromise
       ]) as OverallGradeResponse
 

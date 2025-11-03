@@ -19,14 +19,8 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 如果提供了学校ID，先更新学校配置
-    if (schoolId) {
-      const { updateSchoolConfig } = require('@/lib/course-api')
-      updateSchoolConfig(schoolId)
-    }
-
-    // 临时设置Cookie用于此次请求
-    const studentInfo = await getStudentInfo(sessionId || undefined, cookieHeader)
+    // 直接传递schoolId参数，不再修改服务器端状态
+    const studentInfo = await getStudentInfo(sessionId || undefined, cookieHeader, schoolId || undefined)
     
     return NextResponse.json({
       success: true,

@@ -16,12 +16,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 如果提供了学校ID，先更新学校配置
-    if (schoolId) {
-      const { updateSchoolConfig } = require('@/lib/course-api')
-      updateSchoolConfig(schoolId)
-    }
-
+    // 直接传递schoolId参数，不再修改服务器端状态
     const courseData = await request.json()
     
     if (!courseData || typeof courseData !== 'object') {
@@ -40,7 +35,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // 使用带验证的选课功能
+    // 使用带验证的选课功能（传入schoolId）
     const result = await selectCourseWithVerification({
       jxb_id,
       do_jxb_id,
@@ -49,7 +44,7 @@ export async function POST(request: NextRequest) {
       kklxdm: kklxdm || '01', // 课程类型代码 (01=必修, 10=选修)
       kcmc: kcmc || '未知课程',
       jxbmc: jxbmc || '未知教学班'
-    }, undefined, cookieHeader)
+    }, undefined, cookieHeader, schoolId || undefined)
     
     return NextResponse.json({
       success: result.success,

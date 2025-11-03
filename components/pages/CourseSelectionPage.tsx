@@ -79,7 +79,10 @@ export default function CourseSelectionPage() {
   // 获取可选课程
   const fetchAvailableCourses = async () => {
     try {
-      const response = await courseAPI.getAvailableCourses() as any
+      // 获取当前学校ID（从localStorage读取，确保用户隔离）
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+      const response = await courseAPI.getAvailableCourses(currentSchool.id) as any
       if (response.success) {
         setAvailableCourses(response.data || [])
       }

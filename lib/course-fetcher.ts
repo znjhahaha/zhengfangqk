@@ -32,14 +32,15 @@ export interface FetchResult {
   courses: CourseData[]
 }
 
-// 获取初始页面参数
-export async function getInitialParameters(cookie: string): Promise<{
+// 获取初始页面参数（支持传入schoolId参数）
+export async function getInitialParameters(cookie: string, schoolId?: string): Promise<{
   initialParams: Record<string, string>
   tabParams: TabParam[]
 } | null> {
   try {
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
+    const urls = getApiUrls(schoolId)
+    const { getSchoolById, getCurrentSchool } = require('./global-school-state')
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
     console.log('🔍 正在获取原始页面参数...')
     
@@ -138,10 +139,13 @@ export async function getInitialParameters(cookie: string): Promise<{
 export async function getCompleteParameters(
   initialParams: Record<string, string>,
   tabParam: TabParam,
-  cookie: string
+  cookie: string,
+  schoolId?: string
 ): Promise<Record<string, string> | null> {
   try {
-    const urls = getApiUrls()
+    const urls = getApiUrls(schoolId)
+    const { getSchoolById, getCurrentSchool } = require('./global-school-state')
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
     console.log(`正在获取完整参数页面，使用参数:`, tabParam)
     
@@ -162,7 +166,7 @@ export async function getCompleteParameters(
         'Accept-Language': 'zh-CN,zh;q=0.9',
         'Cache-Control': 'no-cache',
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Origin': `${getCurrentSchool().protocol}://${getCurrentSchool().domain}`,
+        'Origin': `${currentSchool.protocol}://${currentSchool.domain}`,
         'Pragma': 'no-cache',
         'Referer': urls.courseSelectionParams,
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
@@ -315,11 +319,15 @@ export function buildFormDataPart1(
 // 发送请求获取课程数据
 export async function sendCourseRequest(
   formData: Record<string, string>,
-  cookie: string
+  cookie: string,
+  schoolId?: string
 ): Promise<any> {
   try {
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
+    // 这个函数需要schoolId参数，但为了兼容性，如果没有传入则使用当前学校
+    // 注意：这里不应该修改全局状态，应该使用传入的schoolId
+    const { getSchoolById, getCurrentSchool } = require('./global-school-state')
+    const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
     const url = `${urls.availableCourses}`
     
@@ -406,13 +414,13 @@ export function extractEssentialData(courseData: any[], urlParams?: Record<strin
   return essentialData
 }
 
-// 主函数：获取所有课程数据
-export async function fetchAllCourses(cookie: string): Promise<FetchResult[]> {
+// 主函数：获取所有课程数据（支持传入schoolId参数）
+export async function fetchAllCourses(cookie: string, schoolId?: string): Promise<FetchResult[]> {
   try {
     console.log('🚀 开始获取课程数据...')
     
-    // 1. 获取初始页面参数
-    const initialResult = await getInitialParameters(cookie)
+    // 1. 获取初始页面参数（传入schoolId）
+    const initialResult = await getInitialParameters(cookie, schoolId)
     if (!initialResult) {
       throw new Error('无法获取初始参数')
     }
@@ -427,9 +435,9 @@ export async function fetchAllCourses(cookie: string): Promise<FetchResult[]> {
       const tabParam = tabParams[i]
       console.log(`\n=== 处理第 ${i + 1}/${tabParams.length} 个xkkz_id: ${tabParam.xkkz_id} ===`)
       
-      // 3. 获取完整参数
+      // 3. 获取完整参数（传入schoolId）
       console.log('正在获取完整参数...')
-      const completeParams = await getCompleteParameters(initialParams, tabParam, cookie)
+      const completeParams = await getCompleteParameters(initialParams, tabParam, cookie, schoolId)
       if (!completeParams) {
         console.error(`无法获取xkkz_id ${tabParam.xkkz_id} 的完整参数`)
         continue
@@ -474,7 +482,7 @@ export async function fetchAllCourses(cookie: string): Promise<FetchResult[]> {
         
         // 发送请求
         console.log('发送请求...')
-        const response = await sendCourseRequest(formData, cookie)
+        const response = await sendCourseRequest(formData, cookie, schoolId)
         
         if (response) {
           console.log('请求完成')

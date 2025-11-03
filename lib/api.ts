@@ -111,18 +111,18 @@ export const courseAPI = {
   getScheduleData: (schoolId?: string) => 
     request(`/schedule${schoolId ? `?schoolId=${schoolId}` : ''}`),
   
-  // 成绩查询
-  getGrades: (xnm: string, xqm: string, sessionId?: string) =>
+  // 成绩查询（支持传入schoolId参数）
+  getGrades: (xnm: string, xqm: string, sessionId?: string, schoolId?: string) =>
     request('/grade', {
       method: 'POST',
-      body: JSON.stringify({ xnm, xqm, sessionId }),
+      body: JSON.stringify({ xnm, xqm, sessionId, schoolId }),
     }),
   
-  // 总体成绩查询
-  getOverallGrades: (sessionId?: string) =>
+  // 总体成绩查询（支持传入schoolId参数）
+  getOverallGrades: (sessionId?: string, schoolId?: string) =>
     request('/overall-grade', {
       method: 'POST',
-      body: JSON.stringify({ sessionId }),
+      body: JSON.stringify({ sessionId, schoolId }),
     }),
   
   // 选课功能

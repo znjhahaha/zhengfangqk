@@ -35,10 +35,10 @@ export function getGlobalCookie(): string {
   return getSessionCookie('default') || ''
 }
 
-// 创建robust HTTP请求配置
-function createRequestConfig(method: string = 'GET', body?: string, sessionId?: string, tempCookie?: string) {
-  const urls = getApiUrls()
-  const currentSchool = getCurrentSchool()
+// 创建robust HTTP请求配置（支持传入schoolId参数）
+function createRequestConfig(method: string = 'GET', body?: string, sessionId?: string, tempCookie?: string, schoolId?: string) {
+  const urls = getApiUrls(schoolId)
+  const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
   
   const headers: Record<string, string> = {
     'Accept': 'application/json, text/javascript, */*; q=0.01',
@@ -105,16 +105,16 @@ async function robustFetch(url: string, config: RequestInit, maxRetries: number 
   throw lastError || new Error('请求失败')
 }
 
-// 获取学生信息 - 基于原始Python项目的完整实现
-export async function getStudentInfo(sessionId?: string, tempCookie?: string) {
-  const cacheKey = sessionId ? `${cacheKeys.studentInfo}_${sessionId}` : cacheKeys.studentInfo
+// 获取学生信息 - 基于原始Python项目的完整实现（支持传入schoolId参数）
+export async function getStudentInfo(sessionId?: string, tempCookie?: string, schoolId?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.studentInfo}_${sessionId}_${schoolId || 'default'}` : `${cacheKeys.studentInfo}_${schoolId || 'default'}`
   return withCache(cacheKey, async () => {
     try {
-      const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
+      const config = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
       
-      // 使用新的URL生成机制
-      const urls = getApiUrls()
-      const currentSchool = getCurrentSchool()
+      // 使用新的URL生成机制（支持schoolId参数）
+      const urls = getApiUrls(schoolId)
+      const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
       
       console.log(`🔍 获取学生信息 - 当前学校: ${currentSchool.name} (${currentSchool.id})`)
       console.log(`🌐 获取学生信息URL: ${urls.studentInfo}`)
@@ -198,9 +198,9 @@ export async function getStudentInfo(sessionId?: string, tempCookie?: string) {
   }, 10 * 60 * 1000) // 学生信息缓存10分钟
 }
 
-// 获取可选课程 - 基于Python版本fetch_course_json.py的完整实现
-export async function getAvailableCourses(sessionId?: string, tempCookie?: string) {
-  const cacheKey = sessionId ? `${cacheKeys.availableCourses('all')}_${sessionId}` : cacheKeys.availableCourses('all')
+// 获取可选课程 - 基于Python版本fetch_course_json.py的完整实现（支持传入schoolId参数）
+export async function getAvailableCourses(sessionId?: string, tempCookie?: string, schoolId?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.availableCourses('all')}_${sessionId}_${schoolId || 'default'}` : `${cacheKeys.availableCourses('all')}_${schoolId || 'default'}`
   return withCache(cacheKey, async () => {
     try {
       console.log('🚀 开始获取可选课程（基于Python版本fetch_course_json.py）...')
@@ -212,9 +212,9 @@ export async function getAvailableCourses(sessionId?: string, tempCookie?: strin
         throw new Error('Cookie未设置')
       }
       
-      // 使用新的课程获取器
+      // 使用新的课程获取器（传入schoolId）
       const { fetchAllCourses } = require('./course-fetcher')
-      const results = await fetchAllCourses(cookie)
+      const results = await fetchAllCourses(cookie, schoolId)
       
       // 合并所有课程
       const allCourses: any[] = []
@@ -233,12 +233,12 @@ export async function getAvailableCourses(sessionId?: string, tempCookie?: strin
   }, 10 * 60 * 1000) // 可选课程缓存10分钟
 }
 
-// 获取已选课程动态参数
-async function getSelectedCoursesDynamicParams(sessionId?: string, tempCookie?: string) {
+// 获取已选课程动态参数（支持传入schoolId参数）
+async function getSelectedCoursesDynamicParams(sessionId?: string, tempCookie?: string, schoolId?: string) {
   try {
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
-    const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
+    const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
+    const config = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
     
     console.log('🔍 获取已选课程动态参数...')
     
@@ -290,21 +290,21 @@ async function getSelectedCoursesDynamicParams(sessionId?: string, tempCookie?: 
 }
 
 // 获取已选课程 - 基于Python版本的实现
-export async function getSelectedCourses(sessionId?: string, tempCookie?: string) {
-  const cacheKey = sessionId ? `${cacheKeys.selectedCourses}_${sessionId}` : cacheKeys.selectedCourses
+export async function getSelectedCourses(sessionId?: string, tempCookie?: string, schoolId?: string) {
+  const cacheKey = sessionId ? `${cacheKeys.selectedCourses}_${sessionId}_${schoolId || 'default'}` : `${cacheKeys.selectedCourses}_${schoolId || 'default'}`
   return withCache(cacheKey, async () => {
     try {
-      const urls = getApiUrls()
-      const currentSchool = getCurrentSchool()
+      const urls = getApiUrls(schoolId)
+      const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
       
       console.log(`🔍 获取已选课程 - 当前学校: ${currentSchool.name} (${currentSchool.id})`)
       
-      // 动态获取已选课程参数
-      const selectedParams = await getSelectedCoursesDynamicParams(sessionId, tempCookie)
+      // 动态获取已选课程参数（传入schoolId）
+      const selectedParams = await getSelectedCoursesDynamicParams(sessionId, tempCookie, schoolId)
       console.log('🔍 已选课程动态参数:', selectedParams)
       
-      // 构建请求配置
-      const config = createRequestConfig('POST', undefined, sessionId, tempCookie)
+      // 构建请求配置（传入schoolId）
+      const config = createRequestConfig('POST', undefined, sessionId, tempCookie, schoolId)
       
       // 设置特定的请求头
       config.headers = {
@@ -584,14 +584,15 @@ export async function selectCourseWithVerification(
     xkkz_id?: string
   },
   sessionId?: string,
-  tempCookie?: string
+  tempCookie?: string,
+  schoolId?: string
 ) {
   try {
     console.log(`🎯 开始选课: ${courseData.kcmc || courseData.kch_id}`)
     
-    // 1. 先获取课程抢课详细信息
+    // 1. 先获取课程抢课详细信息（传入schoolId）
     console.log('🔍 获取课程抢课详细信息...')
-    const selectionDetails = await getCourseSelectionDetails(courseData, sessionId, tempCookie)
+    const selectionDetails = await getCourseSelectionDetails(courseData, sessionId, tempCookie, schoolId)
     
     if (!selectionDetails) {
       return {
@@ -601,12 +602,12 @@ export async function selectCourseWithVerification(
       }
     }
     
-    // 2. 使用详细信息执行选课
-    const result = await executeCourseSelection(courseData, sessionId, tempCookie)
+    // 2. 使用详细信息执行选课（传入schoolId）
+    const result = await executeCourseSelection(courseData, sessionId, tempCookie, schoolId)
     
     if (result.success) {
-      // 验证选课结果
-      const verification = await verifyCourseSelection(courseData, sessionId, tempCookie)
+      // 验证选课结果（传入schoolId）
+      const verification = await verifyCourseSelection(courseData, sessionId, tempCookie, schoolId)
       return {
         success: true,
         message: `课程 "${courseData.kcmc || courseData.kch_id}" 选课成功！`,
@@ -632,7 +633,7 @@ export async function selectCourseWithVerification(
   }
 }
 
-// 执行选课
+// 执行选课（支持传入schoolId参数）
 async function executeCourseSelection(
   courseData: {
     jxb_id: string
@@ -644,11 +645,12 @@ async function executeCourseSelection(
     jxbmc?: string
   },
   sessionId?: string,
-  tempCookie?: string
+  tempCookie?: string,
+  schoolId?: string
 ) {
   try {
-    const config = createRequestConfig('POST', undefined, sessionId, tempCookie)
-    const urls = getApiUrls()
+    const config = createRequestConfig('POST', undefined, sessionId, tempCookie, schoolId)
+    const urls = getApiUrls(schoolId)
     
     // 构建选课请求数据
     const formData = new URLSearchParams({
@@ -687,7 +689,7 @@ async function executeCourseSelection(
   }
 }
 
-// 验证选课结果
+// 验证选课结果（支持传入schoolId参数）
 async function verifyCourseSelection(
   courseData: {
     jxb_id: string
@@ -699,11 +701,12 @@ async function verifyCourseSelection(
     jxbmc?: string
   },
   sessionId?: string,
-  tempCookie?: string
+  tempCookie?: string,
+  schoolId?: string
 ) {
   try {
-    // 获取已选课程列表进行验证
-    const selectedCourses = await getSelectedCourses(sessionId, tempCookie)
+    // 获取已选课程列表进行验证（传入schoolId）
+    const selectedCourses = await getSelectedCourses(sessionId, tempCookie, schoolId)
     const isSelected = selectedCourses.some(course => 
       course.jxb_id === courseData.jxb_id || course.kch_id === courseData.kch_id
     )
@@ -722,14 +725,15 @@ async function verifyCourseSelection(
 }
 
 // 获取课表数据 - 使用正确的API端点
-export async function getScheduleData(sessionId?: string, tempCookie?: string) {
-  const cacheKey = sessionId ? `schedule_${sessionId}` : 'schedule'
+export async function getScheduleData(sessionId?: string, tempCookie?: string, schoolId?: string) {
+  const cacheKey = sessionId ? `schedule_${sessionId}_${schoolId || 'default'}` : `schedule_${schoolId || 'default'}`
   return withCache(cacheKey, async () => {
     try {
       console.log('📅 开始获取课表数据（使用新的API端点）...')
       const startTime = Date.now()
       
-      const currentSchool = getCurrentSchool()
+      // 使用传入的schoolId或当前选择的学校（不修改全局状态）
+      const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
       const cookie = tempCookie || getGlobalCookie()
       
       if (!cookie) {
@@ -744,7 +748,7 @@ export async function getScheduleData(sessionId?: string, tempCookie?: string) {
       let xqm = '3'
       
       try {
-        const dynamicParams = await getScheduleDynamicParams(cookie)
+        const dynamicParams = await getScheduleDynamicParams(cookie, schoolId)
         xnm = dynamicParams.xnm
         xqm = dynamicParams.xqm
         console.log('📋 课表动态参数获取成功:', { xnm, xqm })
@@ -806,10 +810,10 @@ export async function getScheduleData(sessionId?: string, tempCookie?: string) {
   }, 10 * 60 * 1000) // 课表数据缓存10分钟
 }
 
-// 获取课表动态参数
-async function getScheduleDynamicParams(cookie: string) {
+// 获取课表动态参数（支持传入schoolId参数）
+async function getScheduleDynamicParams(cookie: string, schoolId?: string) {
   try {
-    const currentSchool = getCurrentSchool()
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
     // 获取课表页面来提取参数
     const scheduleIndexUrl = `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/kbcx/xskbcx_cxXskbcxIndex.html?gnmkdm=N2151&layout=default`
@@ -1030,7 +1034,7 @@ export function formatSelectedCoursesData(data: any) {
   return parseSelectedCourseData(data)
 }
 
-// 获取课程抢课详细信息 - 动态获取所有参数
+// 获取课程抢课详细信息 - 动态获取所有参数（支持传入schoolId参数）
 export async function getCourseSelectionDetails(
   courseData: {
     kch_id: string
@@ -1039,7 +1043,8 @@ export async function getCourseSelectionDetails(
     [key: string]: any
   },
   sessionId?: string,
-  tempCookie?: string
+  tempCookie?: string,
+  schoolId?: string
 ) {
   try {
     console.log(`🔍 开始获取课程抢课详细信息: ${courseData.kch_id}`)
@@ -1049,17 +1054,17 @@ export async function getCourseSelectionDetails(
       throw new Error('Cookie未设置')
     }
     
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
+    const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
-    // 1. 获取选课参数
+    // 1. 获取选课参数（传入schoolId）
     console.log('📋 获取选课参数...')
-    const courseParams = await getCourseSelectionParams(sessionId, tempCookie)
+    const courseParams = await getCourseSelectionParams(sessionId, tempCookie, schoolId)
     console.log('选课参数:', courseParams)
     
-    // 2. 获取页面隐藏数据
+    // 2. 获取页面隐藏数据（传入schoolId）
     console.log('🔍 获取页面隐藏数据...')
-    const hiddenParams = await getPageHiddenParams(cookie)
+    const hiddenParams = await getPageHiddenParams(cookie, schoolId)
     console.log('页面隐藏参数:', hiddenParams)
     
     // 3. 根据kklxdm设置不同的rwlx和xklc值
@@ -1168,10 +1173,10 @@ export async function getCourseSelectionDetails(
 }
 
 // 获取页面隐藏参数
-async function getPageHiddenParams(cookie: string): Promise<Record<string, string>> {
+async function getPageHiddenParams(cookie: string, schoolId?: string): Promise<Record<string, string>> {
   try {
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
+    const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
     console.log('🔍 正在获取页面隐藏参数...')
     
@@ -1216,12 +1221,12 @@ async function getPageHiddenParams(cookie: string): Promise<Record<string, strin
 }
 
 // 获取选课参数
-async function getCourseSelectionParams(sessionId?: string, tempCookie?: string): Promise<Record<string, string>> {
+async function getCourseSelectionParams(sessionId?: string, tempCookie?: string, schoolId?: string): Promise<Record<string, string>> {
   try {
     console.log('📋 正在获取选课参数...')
     
-    const config = createRequestConfig('GET', undefined, sessionId, tempCookie)
-    const urls = getApiUrls()
+    const config = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
+    const urls = getApiUrls(schoolId)
     
     const response = await robustFetch(urls.courseSelectionParams, config)
     
@@ -1294,13 +1299,14 @@ export async function getGrades(
   xnm: string,  // 学年名，如2024表示2024-2025学年
   xqm: string,  // 学期：3为上学期，12为下学期
   sessionId?: string,
-  tempCookie?: string
+  tempCookie?: string,
+  schoolId?: string
 ): Promise<GradeItem[]> {
   try {
     console.log(`📊 正在查询成绩: 学年=${xnm}, 学期=${xqm}`)
     
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
+    const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
     // 生成时间戳（nd参数）
     const nd = Date.now().toString()
@@ -1312,8 +1318,8 @@ export async function getGrades(
       nd: nd
     })
     
-    // 创建请求配置
-    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie)
+    // 创建请求配置（传入schoolId）
+    const config = createRequestConfig('POST', formData.toString(), sessionId, tempCookie, schoolId)
     config.headers = {
       ...config.headers,
       'Referer': urls.getRefererHeader('grade'),
@@ -1442,16 +1448,17 @@ interface OverallGradeParams {
 // 获取总体成绩数据
 export async function getOverallGrades(
   sessionId?: string,
-  tempCookie?: string
+  tempCookie?: string,
+  schoolId?: string
 ): Promise<OverallGradesResult> {
   try {
     console.log('📊 开始获取总体成绩数据')
     
-    const urls = getApiUrls()
-    const currentSchool = getCurrentSchool()
+    const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
-    // 第一步：获取参数页面
-    const indexConfig = createRequestConfig('GET', undefined, sessionId, tempCookie)
+    // 第一步：获取参数页面（传入schoolId）
+    const indexConfig = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
     indexConfig.headers = {
       ...indexConfig.headers,
       'Referer': urls.getRefererHeader('overallGrade'),

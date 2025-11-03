@@ -124,15 +124,10 @@ let isLoaded = false
 
 // 初始化加载
 async function initAnnouncements() {
-  if (!isLoaded) {
-    announcements = await loadAnnouncements()
-    isLoaded = true
-    console.log('📢 已加载公告数据:', announcements.length, '条')
-  } else {
-    // 如果已经加载过，重新加载以确保数据最新（但限制频率）
-    const freshData = await loadAnnouncements()
-    announcements = freshData
-  }
+  // 始终从文件加载最新数据，确保数据一致性
+  announcements = await loadAnnouncements()
+  isLoaded = true
+  console.log('📢 已加载公告数据:', announcements.length, '条')
   return announcements
 }
 

@@ -144,8 +144,31 @@ export default function ModernSchedulePage() {
     setIsLoading(true)
     try {
       console.log('🚀 开始获取课表数据...')
+      
+      // 获取当前学校ID（从localStorage读取，确保用户隔离）
       const { getCurrentSchool } = require('@/lib/global-school-state')
       const currentSchool = getCurrentSchool()
+      
+      // 如果不是强制刷新，尝试从本地存储加载
+      if (!forceRefresh && typeof window !== 'undefined') {
+        try {
+          const storageKey = `schedule-${currentSchool.id}`
+          const cachedData = localStorage.getItem(storageKey)
+          if (cachedData) {
+            const parsed = JSON.parse(cachedData)
+            // 检查缓存是否有效（1小时内）
+            if (parsed.timestamp && Date.now() - parsed.timestamp < 60 * 60 * 1000) {
+              setScheduleData(parsed.data)
+              scheduleDataRef.current = parsed.data
+              console.log('✅ 从本地缓存加载课表数据')
+              setIsLoading(false)
+              return
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ 从本地存储加载课表数据失败:', error)
+        }
+      }
       
       // 检查Cookie是否设置 - 使用LocalCookieManager
       const { default: LocalCookieManager } = await import('@/lib/local-cookie-manager')
@@ -155,11 +178,12 @@ export default function ModernSchedulePage() {
       
       if (!cookie) {
         toast.error('请先在设置页面配置Cookie')
+        setIsLoading(false)
         return
       }
       
-      // 直接调用API而不是通过courseAPI
-      const response = await fetch('/api/schedule', {
+      // 直接调用API而不是通过courseAPI，传递schoolId参数
+      const response = await fetch(`/api/schedule?schoolId=${currentSchool.id}`, {
         method: 'GET',
         headers: {
           'x-course-cookie': cookie
@@ -185,6 +209,20 @@ export default function ModernSchedulePage() {
         
         setScheduleData(result.data)
         scheduleDataRef.current = result.data
+        
+        // 保存课表数据到本地存储（以学校ID为键，确保用户隔离）
+        try {
+          const storageKey = `schedule-${currentSchool.id}`
+          localStorage.setItem(storageKey, JSON.stringify({
+            data: result.data,
+            timestamp: Date.now(),
+            schoolId: currentSchool.id
+          }))
+          console.log('✅ 课表数据已保存到本地存储')
+        } catch (error) {
+          console.warn('⚠️ 保存课表数据到本地存储失败:', error)
+        }
+        
         toast.success(`成功获取课表，共 ${result.data.length} 门课程`)
         console.log('✅ 课表数据获取成功:', result.data)
         

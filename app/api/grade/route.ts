@@ -4,7 +4,7 @@ import { getGrades } from '@/lib/course-api'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { xnm, xqm, sessionId } = body
+    const { xnm, xqm, sessionId, schoolId } = body
 
     if (!xnm || !xqm) {
       return NextResponse.json({
@@ -27,7 +27,8 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-      const grades = await getGrades(xnm, xqm, sessionId || undefined, cookieHeader)
+      // 直接传递schoolId参数，不再修改服务器端状态
+      const grades = await getGrades(xnm, xqm, sessionId || undefined, cookieHeader, schoolId || undefined)
       
       return NextResponse.json({
         success: true,
