@@ -18,7 +18,7 @@ let cosInstance: COS | null = null
 /**
  * 初始化 COS 配置（从环境变量读取）
  */
-function getCosConfig(): CosConfig | null {
+export function getCosConfig(): CosConfig | null {
   if (cosConfig) return cosConfig
 
   const secretId = process.env.COS_SECRET_ID
@@ -43,7 +43,7 @@ function getCosConfig(): CosConfig | null {
 /**
  * 获取 COS 实例
  */
-function getCosInstance(): COS {
+export function getCosInstance(): COS {
   if (cosInstance) return cosInstance
 
   const config = getCosConfig()
