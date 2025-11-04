@@ -326,6 +326,13 @@ export default function AdminPage() {
     return () => {}
   }, [activeTab])
 
+  // 切换到 COS 标签页时自动加载文件列表
+  useEffect(() => {
+    if (activeTab === 'cos') {
+      loadCosFiles()
+    }
+  }, [activeTab])
+
   // 加载日志
   const loadLogs = () => {
     const allLogs = getAllLogs()
@@ -830,6 +837,18 @@ export default function AdminPage() {
           >
             <MessageSquare className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
             建议管理
+          </Button>
+          <Button
+            variant={activeTab === 'cos' ? 'default' : 'outline'}
+            onClick={() => {
+              setActiveTab('cos')
+              loadCosFiles()
+            }}
+            className="text-xs sm:text-sm"
+            size="sm"
+          >
+            <Server className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            COS 存储
           </Button>
         </motion.div>
 
