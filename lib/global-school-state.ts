@@ -137,7 +137,7 @@ export function getSchoolById(id: string): SchoolConfig | undefined {
       }
       // 缓存中有数据但没找到，记录警告
       console.warn(`⚠️ 服务器端：缓存中有 ${serverSchoolsCache.length} 所学校，但未找到 ID "${id}"`)
-      console.warn(`⚠️ 缓存中的学校:`, serverSchoolsCache.map(s => `${s.name} (${s.id})`).join(', '))
+      console.warn(`⚠️ 缓存中的学校:`, serverSchoolsCache.map((s: SchoolConfig) => `${s.name} (${s.id})`).join(', '))
     } else {
       // 缓存未加载，记录警告
       console.warn(`⚠️ 服务器端：学校列表缓存未加载，尝试从默认列表查找 ID "${id}"`)
@@ -238,7 +238,7 @@ export async function getSchoolsFromServer(): Promise<SchoolConfig[]> {
           serverSchoolsCache = data.schools
           serverSchoolsCacheTime = now
           console.log(`✅ 从 COS 加载学校列表: ${data.schools.length} 所学校`)
-          console.log(`📝 学校列表:`, data.schools.map(s => `${s.name} (${s.id})`).join(', '))
+          console.log(`📝 学校列表:`, data.schools.map((s: SchoolConfig) => `${s.name} (${s.id})`).join(', '))
           return data.schools
         }
       } catch (error: any) {
@@ -252,7 +252,7 @@ export async function getSchoolsFromServer(): Promise<SchoolConfig[]> {
       serverSchoolsCache = loaded
       serverSchoolsCacheTime = now
       console.log(`✅ 从文件系统加载学校列表: ${loaded.length} 所学校`)
-      console.log(`📝 学校列表:`, loaded.map(s => `${s.name} (${s.id})`).join(', '))
+      console.log(`📝 学校列表:`, loaded.map((s: SchoolConfig) => `${s.name} (${s.id})`).join(', '))
       return loaded
     }
     
@@ -555,13 +555,13 @@ export async function getApiUrlsAsync(schoolId?: string) {
       
       console.log(`🔍 [服务器端] 请求的 schoolId: "${schoolId}"`)
       console.log(`🔍 [服务器端] 已加载 ${schools.length} 所学校`)
-      console.log(`🔍 [服务器端] 学校列表:`, schools.map(s => `${s.name} (${s.id})`).join(', '))
+      console.log(`🔍 [服务器端] 学校列表:`, schools.map((s: SchoolConfig) => `${s.name} (${s.id})`).join(', '))
       
       school = schools.find(s => s.id === schoolId)
       
       if (!school) {
         console.error(`❌ 服务器端：找不到学校 ID "${schoolId}"`)
-        console.error(`❌ 可用的学校列表:`, schools.map(s => `${s.name} (${s.id})`).join(', '))
+        console.error(`❌ 可用的学校列表:`, schools.map((s: SchoolConfig) => `${s.name} (${s.id})`).join(', '))
         console.error(`❌ 这可能是数据同步问题，请检查 schools.json 文件或 COS 存储`)
         // 使用默认学校
         school = DEFAULT_SCHOOL
