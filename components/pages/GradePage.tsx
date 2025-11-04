@@ -1370,13 +1370,13 @@ export default function GradePage() {
                                  {/* 课程列表（可展开/折叠） */}
                                  <AnimatePresence>
                                    {isExpanded && (
-                                     <motion.div
-                                       initial={animationConfig.enabled ? { height: 0, opacity: 0 } : false}
-                                       animate={animationConfig.enabled ? { height: 'auto', opacity: 1 } : {}}
-                                       exit={animationConfig.enabled ? { height: 0, opacity: 0 } : false}
-                                       transition={{ duration: animationConfig.duration, type: "tween" }}
-                                       className="overflow-hidden"
-                                     >
+                                    <motion.div
+                                      initial={animationConfig.enabled ? { height: 0, opacity: 0 } : false}
+                                      animate={animationConfig.enabled ? { height: 'auto', opacity: 1 } : {}}
+                                      exit={animationConfig.enabled ? { height: 0, opacity: 0 } : undefined}
+                                      transition={{ duration: animationConfig.duration, type: "tween" }}
+                                      className="overflow-hidden"
+                                    >
                                        <div className="border-t border-slate-600/50 p-4 space-y-2">
                                          {/* 表头 */}
                                          <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-300 mb-3 pb-2 border-b border-slate-500/50 bg-slate-700/30 px-2 py-2 rounded">
