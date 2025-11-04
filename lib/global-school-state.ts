@@ -317,7 +317,7 @@ async function getSchoolUrlConfigFromServer(schoolId: string): Promise<{
       const data = JSON.parse(content)
       serverUrlConfigsCache = data.urlConfigs || {}
       serverUrlConfigsCacheTime = now
-      return serverUrlConfigsCache[schoolId] || null
+      return serverUrlConfigsCache?.[schoolId] || null
     }
   } catch (error: any) {
     console.error('从服务器获取URL配置失败:', error)
