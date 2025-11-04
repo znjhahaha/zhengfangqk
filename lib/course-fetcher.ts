@@ -449,36 +449,25 @@ export async function fetchAllCourses(cookie: string, schoolId?: string): Promis
       console.log('构建请求表单数据...')
       const formDataPart1 = buildFormDataPart1(completeParams, tabParam)
       
-      // 5. 获取所有页面的课程数据
-      console.log('开始获取所有页面的课程数据...')
+      // 5. 获取所有页面的课程数据（动态检测，直到没有数据）
+      console.log('开始获取所有页面的课程数据（动态检测）...')
       const allCourses: CourseData[] = []
       
       const kklxdm = tabParam.kklxdm
-      let jspage = 10
-      if (kklxdm === '01') {
-        jspage = 10
-      } else if (kklxdm === '10') {
-        jspage = 120 // 120页，每10页为一组
-      } else if (kklxdm === '05') {
-        jspage = 10
-      }
+      let currentJspage = 10  // 从jspage=10开始
+      let currentKspage = 0   // kspage从0开始
+      let hasMoreData = true
       
-      console.log(`根据kklxdm=${kklxdm}设置jspage=${jspage}`)
+      console.log(`根据kklxdm=${kklxdm}，开始动态获取数据`)
       
-      // 计算需要多少组
-      const groups = Math.ceil(jspage / 10)
-      console.log(`需要获取 ${groups} 组数据`)
-      
-      for (let group = 0; group < groups; group++) {
-        const startPage = group * 10 + 1
-        const endPage = Math.min((group + 1) * 10, jspage)
-        console.log(`\n=== 获取第 ${group + 1}/${groups} 组数据 (第${startPage}-${endPage}页) ===`)
+      while (hasMoreData) {
+        console.log(`\n=== 获取 kspage=${currentKspage}, jspage=${currentJspage} ===`)
         
         // 设置这一批的kspage和jspage参数
         const formData = { ...formDataPart1 }
-        formData['kspage'] = startPage.toString()
-        formData['jspage'] = endPage.toString()
-        console.log(`设置kspage=${startPage}, jspage=${endPage}`)
+        formData['kspage'] = currentKspage.toString()
+        formData['jspage'] = currentJspage.toString()
+        console.log(`设置kspage=${currentKspage}, jspage=${currentJspage}`)
         
         // 发送请求
         console.log('发送请求...')
@@ -495,11 +484,22 @@ export async function fetchAllCourses(cookie: string, schoolId?: string): Promis
             courses = response
           }
           
-          const essentialCourses = extractEssentialData(courses)
-          allCourses.push(...essentialCourses)
-          console.log(`第${startPage}-${endPage}页获取到 ${essentialCourses.length} 个课程`)
+          // 检查是否有数据
+          if (courses.length === 0) {
+            console.log(`kspage=${currentKspage}, jspage=${currentJspage} 没有数据，停止获取`)
+            hasMoreData = false
+          } else {
+            const essentialCourses = extractEssentialData(courses)
+            allCourses.push(...essentialCourses)
+            console.log(`kspage=${currentKspage}, jspage=${currentJspage} 获取到 ${essentialCourses.length} 个课程`)
+            
+            // 准备下一批：kspage = jspage + 1，jspage增加10
+            currentKspage = currentJspage + 1  // kspage应该是当前jspage+1
+            currentJspage += 10  // jspage增加10
+          }
         } else {
-          console.error(`第${startPage}-${endPage}页请求失败`)
+          console.error(`kspage=${currentKspage}, jspage=${currentJspage} 请求失败，停止获取`)
+          hasMoreData = false
         }
       }
       

@@ -42,7 +42,9 @@ import {
   EyeOff,
   ChevronDown,
   Check,
-  Loader2
+  Loader2,
+  Shield,
+  Copy
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { 
@@ -227,7 +229,7 @@ export default function AdminPage() {
   const [editingSchool, setEditingSchool] = useState<SchoolConfig | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [urlConfigs, setUrlConfigs] = useState<Record<string, any>>({})
-  const [activeTab, setActiveTab] = useState<'schools' | 'data' | 'stats' | 'config' | 'logs' | 'monitor' | 'announcements' | 'suggestions' | 'cos'>('schools')
+  const [activeTab, setActiveTab] = useState<'schools' | 'data' | 'stats' | 'config' | 'logs' | 'monitor' | 'announcements' | 'suggestions' | 'cos' | 'activation-codes' | 'server-selection'>('schools')
   const [storageData, setStorageData] = useState<any[]>([])
   const [storageUsage, setStorageUsage] = useState({ used: 0, total: 0, percentage: 0 })
   const [logs, setLogs] = useState<AdminLog[]>([])
@@ -257,6 +259,18 @@ export default function AdminPage() {
   const [isAddingAnnouncement, setIsAddingAnnouncement] = useState(false)
   const [editingAnnouncement, setEditingAnnouncement] = useState<any>(null)
   const [confirmationStats, setConfirmationStats] = useState<Record<string, number>>({})
+
+  // 激活码管理状态
+  const [activationCodes, setActivationCodes] = useState<any[]>([])
+  const [isLoadingActivationCodes, setIsLoadingActivationCodes] = useState(false)
+  const [isAddingActivationCode, setIsAddingActivationCode] = useState(false)
+  const [editingActivationCode, setEditingActivationCode] = useState<any>(null)
+  
+  // 服务器端抢课任务状态
+  const [serverSelectionTasks, setServerSelectionTasks] = useState<any[]>([])
+  const [isLoadingServerTasks, setIsLoadingServerTasks] = useState(false)
+  const [serverSelectionStats, setServerSelectionStats] = useState<any>(null)
+  const [maxConcurrentTasks, setMaxConcurrentTasks] = useState(5)
 
   // 表单状态
   const [formData, setFormData] = useState({
@@ -430,6 +444,66 @@ export default function AdminPage() {
       toast.error('加载建议失败')
     } finally {
       setIsLoadingSuggestions(false)
+    }
+  }
+
+  // 加载激活码列表
+  const loadActivationCodes = async () => {
+    setIsLoadingActivationCodes(true)
+    try {
+      const adminToken = 'Znj00751_admin_2024'
+      const response = await fetch(`/api/admin/activation-codes?t=${Date.now()}`, {
+        headers: {
+          'x-admin-token': adminToken
+        }
+      })
+      const result = await response.json()
+      if (result.success) {
+        setActivationCodes(result.data || [])
+      } else {
+        toast.error(result.message || '加载激活码失败')
+      }
+    } catch (error) {
+      console.error('加载激活码失败:', error)
+      toast.error('加载激活码失败')
+    } finally {
+      setIsLoadingActivationCodes(false)
+    }
+  }
+
+  // 加载服务器端抢课任务
+  const loadServerSelectionTasks = async () => {
+    setIsLoadingServerTasks(true)
+    try {
+      const adminToken = 'Znj00751_admin_2024'
+      const response = await fetch(`/api/server-selection/tasks?t=${Date.now()}`, {
+        headers: {
+          'x-admin-token': adminToken
+        }
+      })
+      const result = await response.json()
+      if (result.success) {
+        setServerSelectionTasks(result.data || [])
+        setServerSelectionStats(result.stats || null)
+      } else {
+        toast.error(result.message || '加载任务失败')
+      }
+
+      // 加载配置
+      const configResponse = await fetch(`/api/admin/server-selection/config`, {
+        headers: {
+          'x-admin-token': adminToken
+        }
+      })
+      const configResult = await configResponse.json()
+      if (configResult.success) {
+        setMaxConcurrentTasks(configResult.data?.maxConcurrentTasks || 5)
+      }
+    } catch (error) {
+      console.error('加载服务器端抢课任务失败:', error)
+      toast.error('加载任务失败')
+    } finally {
+      setIsLoadingServerTasks(false)
     }
   }
 
@@ -849,6 +923,30 @@ export default function AdminPage() {
           >
             <Server className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
             COS 存储
+          </Button>
+          <Button
+            variant={activeTab === 'activation-codes' ? 'default' : 'outline'}
+            onClick={() => {
+              setActiveTab('activation-codes')
+              loadActivationCodes()
+            }}
+            className="text-xs sm:text-sm"
+            size="sm"
+          >
+            <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            激活码管理
+          </Button>
+          <Button
+            variant={activeTab === 'server-selection' ? 'default' : 'outline'}
+            onClick={() => {
+              setActiveTab('server-selection')
+              loadServerSelectionTasks()
+            }}
+            className="text-xs sm:text-sm"
+            size="sm"
+          >
+            <Zap className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            服务器抢课
           </Button>
         </motion.div>
 
@@ -2585,6 +2683,521 @@ export default function AdminPage() {
                     </div>
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* 激活码管理 */}
+        {activeTab === 'activation-codes' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 sm:space-y-6"
+          >
+            <Card className="glass">
+              <CardHeader className="p-3 sm:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Shield className="h-4 w-4 sm:h-5 sm:w-5" />
+                  激活码管理
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  管理服务器端抢课功能的激活码
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <Button
+                    onClick={() => {
+                      setIsAddingActivationCode(true)
+                      // 自动生成激活码
+                      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                      let code = ''
+                      for (let i = 0; i < 32; i++) {
+                        code += chars.charAt(Math.floor(Math.random() * chars.length))
+                      }
+                      const formattedCode = `${code.slice(0, 8)}-${code.slice(8, 12)}-${code.slice(12, 16)}-${code.slice(16, 20)}-${code.slice(20, 32)}`
+                      setEditingActivationCode({
+                        code: formattedCode,
+                        name: '',
+                        description: '',
+                        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000, // 默认30天后过期
+                        maxUses: undefined,
+                        maxCourses: undefined,
+                        usedCourses: 0,
+                        isActive: true
+                      })
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    添加激活码
+                  </Button>
+                  <Button
+                    onClick={loadActivationCodes}
+                    disabled={isLoadingActivationCodes}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingActivationCodes ? 'animate-spin' : ''}`} />
+                    刷新
+                  </Button>
+                </div>
+
+                {/* 添加/编辑激活码表单 */}
+                {(isAddingActivationCode || editingActivationCode) && (
+                  <Card className="mb-4 bg-slate-800/30 border-slate-700">
+                    <CardHeader className="p-3 sm:p-4">
+                      <CardTitle className="text-sm sm:text-base">
+                        {editingActivationCode ? '编辑激活码' : '添加激活码'}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 sm:p-4 space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs sm:text-sm text-gray-400 mb-1 block">激活码 *</label>
+                          <div className="flex gap-2">
+                            <Input
+                              value={editingActivationCode?.code || ''}
+                              onChange={(e) => setEditingActivationCode({ ...editingActivationCode, code: e.target.value })}
+                              placeholder="输入激活码或点击生成"
+                              disabled={!!editingActivationCode?.usedCount}
+                              className="bg-slate-900/50 border-slate-700 flex-1"
+                            />
+                            {!editingActivationCode?.usedCount && (
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  // 生成随机激活码：32位字符，包含字母和数字
+                                  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+                                  let code = ''
+                                  for (let i = 0; i < 32; i++) {
+                                    code += chars.charAt(Math.floor(Math.random() * chars.length))
+                                  }
+                                  // 格式化为8-4-4-4-12的格式，更易读
+                                  const formattedCode = `${code.slice(0, 8)}-${code.slice(8, 12)}-${code.slice(12, 16)}-${code.slice(16, 20)}-${code.slice(20, 32)}`
+                                  setEditingActivationCode({ ...editingActivationCode, code: formattedCode })
+                                }}
+                                variant="outline"
+                                size="sm"
+                                className="shrink-0"
+                              >
+                                <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                                生成
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs sm:text-sm text-gray-400 mb-1 block">名称</label>
+                          <Input
+                            value={editingActivationCode?.name || ''}
+                            onChange={(e) => setEditingActivationCode({ ...editingActivationCode, name: e.target.value })}
+                            placeholder="激活码名称（可选）"
+                            className="bg-slate-900/50 border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs sm:text-sm text-gray-400 mb-1 block">过期时间 *</label>
+                          <Input
+                            type="datetime-local"
+                            value={editingActivationCode?.expiresAt ? new Date(editingActivationCode.expiresAt).toISOString().slice(0, 16) : ''}
+                            onChange={(e) => setEditingActivationCode({ ...editingActivationCode, expiresAt: new Date(e.target.value).getTime() })}
+                            className="bg-slate-900/50 border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs sm:text-sm text-gray-400 mb-1 block">最大使用次数</label>
+                          <Input
+                            type="number"
+                            value={editingActivationCode?.maxUses || ''}
+                            onChange={(e) => setEditingActivationCode({ ...editingActivationCode, maxUses: e.target.value ? parseInt(e.target.value) : undefined })}
+                            placeholder="留空表示无限制"
+                            className="bg-slate-900/50 border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs sm:text-sm text-gray-400 mb-1 block">可抢课程数</label>
+                          <Input
+                            type="number"
+                            value={editingActivationCode?.maxCourses || ''}
+                            onChange={(e) => setEditingActivationCode({ ...editingActivationCode, maxCourses: e.target.value ? parseInt(e.target.value) : undefined })}
+                            placeholder="留空表示无限制"
+                            className="bg-slate-900/50 border-slate-700"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs sm:text-sm text-gray-400 mb-1 block">描述</label>
+                        <Input
+                          value={editingActivationCode?.description || ''}
+                          onChange={(e) => setEditingActivationCode({ ...editingActivationCode, description: e.target.value })}
+                          placeholder="激活码描述（可选）"
+                          className="bg-slate-900/50 border-slate-700"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={editingActivationCode?.isActive !== false}
+                          onChange={(e) => setEditingActivationCode({ ...editingActivationCode, isActive: e.target.checked })}
+                          className="rounded"
+                        />
+                        <label className="text-xs sm:text-sm text-gray-400">激活状态</label>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={async () => {
+                            if (!editingActivationCode.code || !editingActivationCode.expiresAt) {
+                              toast.error('请填写激活码和过期时间')
+                              return
+                            }
+                            try {
+                              const adminToken = 'Znj00751_admin_2024'
+                              const response = await fetch('/api/admin/activation-codes', {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  'x-admin-token': adminToken
+                                },
+                                body: JSON.stringify({
+                                  action: editingActivationCode.usedCount !== undefined ? 'update' : 'add',
+                                  code: editingActivationCode.code,
+                                  activationCode: editingActivationCode
+                                })
+                              })
+                              const result = await response.json()
+                              if (result.success) {
+                                toast.success(editingActivationCode.usedCount !== undefined ? '激活码已更新' : '激活码已添加')
+                                setIsAddingActivationCode(false)
+                                setEditingActivationCode(null)
+                                loadActivationCodes()
+                              } else {
+                                toast.error(result.message || '操作失败')
+                              }
+                            } catch (error) {
+                              toast.error('操作失败')
+                            }
+                          }}
+                          size="sm"
+                        >
+                          <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                          保存
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setIsAddingActivationCode(false)
+                            setEditingActivationCode(null)
+                          }}
+                          variant="outline"
+                          size="sm"
+                        >
+                          <X className="h-3 w-3 sm:h-4 sm:w-4 mr-2" />
+                          取消
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {isLoadingActivationCodes ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
+                    <p className="text-sm text-gray-400">加载中...</p>
+                  </div>
+                ) : activationCodes.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Shield className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-sm text-gray-400">暂无激活码</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {activationCodes.map((code) => (
+                      <div
+                        key={code.code}
+                        className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/50"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-medium text-sm sm:text-base text-white font-mono">
+                                {code.code}
+                              </h3>
+                              {code.isActive ? (
+                                <Badge variant="outline" className="text-green-400 border-green-400">
+                                  激活
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="text-red-400 border-red-400">
+                                  禁用
+                                </Badge>
+                              )}
+                              <Button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(code.code)
+                                    toast.success('激活码已复制到剪贴板')
+                                  } catch (error) {
+                                    // 降级方案：使用临时textarea
+                                    const textarea = document.createElement('textarea')
+                                    textarea.value = code.code
+                                    textarea.style.position = 'fixed'
+                                    textarea.style.opacity = '0'
+                                    document.body.appendChild(textarea)
+                                    textarea.select()
+                                    try {
+                                      document.execCommand('copy')
+                                      toast.success('激活码已复制到剪贴板')
+                                    } catch (err) {
+                                      toast.error('复制失败，请手动复制')
+                                    }
+                                    document.body.removeChild(textarea)
+                                  }
+                                }}
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 px-2 text-xs"
+                              >
+                                <Copy className="h-3 w-3 sm:h-4 sm:w-4" />
+                              </Button>
+                            </div>
+                            <div className="space-y-1 text-xs sm:text-sm text-gray-400">
+                              {code.name && <p>名称: {code.name}</p>}
+                              {code.description && <p>描述: {code.description}</p>}
+                              <p>过期时间: {new Date(code.expiresAt).toLocaleString('zh-CN')}</p>
+                              <p>使用次数: {code.usedCount} / {code.maxUses || '∞'}</p>
+                              <p>可抢课程数: {code.maxCourses !== undefined ? `${code.usedCourses || 0} / ${code.maxCourses}` : '∞'}</p>
+                              <p>创建时间: {new Date(code.createdAt).toLocaleString('zh-CN')}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              onClick={() => setEditingActivationCode(code)}
+                              variant="outline"
+                              size="sm"
+                            >
+                              <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                            <Button
+                              onClick={async () => {
+                                if (confirm('确定要删除该激活码吗？')) {
+                                  try {
+                                    const adminToken = 'Znj00751_admin_2024'
+                                    const response = await fetch('/api/admin/activation-codes', {
+                                      method: 'POST',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'x-admin-token': adminToken
+                                      },
+                                      body: JSON.stringify({
+                                        action: 'delete',
+                                        code: code.code
+                                      })
+                                    })
+                                    const result = await response.json()
+                                    if (result.success) {
+                                      toast.success('激活码已删除')
+                                      loadActivationCodes()
+                                    } else {
+                                      toast.error(result.message || '删除失败')
+                                    }
+                                  } catch (error) {
+                                    toast.error('删除失败')
+                                  }
+                                }
+                              }}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
+        {/* 服务器端抢课任务监控 */}
+        {activeTab === 'server-selection' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 sm:space-y-6"
+          >
+            <Card className="glass">
+              <CardHeader className="p-3 sm:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <Zap className="h-4 w-4 sm:h-5 sm:w-5" />
+                  服务器端抢课任务监控
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  监控和管理服务器端抢课任务
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                {serverSelectionStats && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-1">总任务数</p>
+                      <p className="text-lg font-bold text-white">{serverSelectionStats.total}</p>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-1">运行中</p>
+                      <p className="text-lg font-bold text-yellow-400">{serverSelectionStats.running}</p>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-1">已完成</p>
+                      <p className="text-lg font-bold text-green-400">{serverSelectionStats.completed}</p>
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-lg">
+                      <p className="text-xs text-gray-400 mb-1">等待中</p>
+                      <p className="text-lg font-bold text-blue-400">{serverSelectionStats.pending}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs sm:text-sm text-gray-400">最大并发:</span>
+                      <Input
+                        type="number"
+                        value={maxConcurrentTasks}
+                        onChange={(e) => setMaxConcurrentTasks(parseInt(e.target.value) || 5)}
+                        onBlur={async () => {
+                          try {
+                            const adminToken = 'Znj00751_admin_2024'
+                            const response = await fetch('/api/admin/server-selection/config', {
+                              method: 'POST',
+                              headers: {
+                                'Content-Type': 'application/json',
+                                'x-admin-token': adminToken
+                              },
+                              body: JSON.stringify({
+                                maxConcurrentTasks: maxConcurrentTasks
+                              })
+                            })
+                            const result = await response.json()
+                            if (result.success) {
+                              toast.success('配置已更新')
+                            } else {
+                              toast.error(result.message || '更新失败')
+                            }
+                          } catch (error) {
+                            toast.error('更新失败')
+                          }
+                        }}
+                        className="w-20 h-8 text-xs"
+                        min={1}
+                        max={50}
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    onClick={loadServerSelectionTasks}
+                    disabled={isLoadingServerTasks}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingServerTasks ? 'animate-spin' : ''}`} />
+                    刷新
+                  </Button>
+                </div>
+                {isLoadingServerTasks ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
+                    <p className="text-sm text-gray-400">加载中...</p>
+                  </div>
+                ) : serverSelectionTasks.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Zap className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-sm text-gray-400">暂无任务</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {serverSelectionTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="p-4 bg-slate-800/50 rounded-lg border border-slate-700/50"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs font-mono text-gray-400">{task.id}</span>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  task.status === 'running' ? 'text-yellow-400 border-yellow-400' :
+                                  task.status === 'completed' ? 'text-green-400 border-green-400' :
+                                  task.status === 'failed' ? 'text-red-400 border-red-400' :
+                                  'text-gray-400 border-gray-400'
+                                }
+                              >
+                                {task.status === 'pending' ? '等待中' :
+                                 task.status === 'running' ? '运行中' :
+                                 task.status === 'completed' ? '已完成' :
+                                 task.status === 'failed' ? '失败' :
+                                 '已取消'}
+                              </Badge>
+                            </div>
+                            <div className="space-y-1 text-xs sm:text-sm text-gray-400">
+                              <p>用户ID: {task.userId}</p>
+                              <p>课程数: {task.courses?.length || 0}</p>
+                              <p>尝试次数: {task.attemptCount}</p>
+                              <p>创建时间: {new Date(task.createdAt).toLocaleString('zh-CN')}</p>
+                              {task.result && (
+                                <p className={task.result.success ? 'text-green-400' : 'text-red-400'}>
+                                  {task.result.message}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          {(task.status === 'pending' || task.status === 'running') && (
+                            <Button
+                              onClick={async () => {
+                                if (confirm('确定要取消该任务吗？')) {
+                                  try {
+                                    const adminToken = 'Znj00751_admin_2024'
+                                    const response = await fetch('/api/server-selection/tasks', {
+                                      method: 'DELETE',
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                        'x-admin-token': adminToken
+                                      },
+                                      body: JSON.stringify({
+                                        taskId: task.id,
+                                        userId: task.userId
+                                      })
+                                    })
+                                    const result = await response.json()
+                                    if (result.success) {
+                                      toast.success('任务已取消')
+                                      loadServerSelectionTasks()
+                                    } else {
+                                      toast.error(result.message || '取消失败')
+                                    }
+                                  } catch (error) {
+                                    toast.error('取消失败')
+                                  }
+                                }
+                              }}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>

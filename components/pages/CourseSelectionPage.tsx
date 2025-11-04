@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
+import { Badge } from '@/components/ui/badge'
 import { 
   Target, 
   Play, 
@@ -17,7 +18,10 @@ import {
   Loader2,
   Zap,
   BookOpen,
-  Users
+  Users,
+  Server,
+  Shield,
+  RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
@@ -50,6 +54,13 @@ export default function CourseSelectionPage() {
   const [elapsedTime, setElapsedTime] = useState(0)
   const [availableCourses, setAvailableCourses] = useState<any[]>([])
   const [selectedCourses, setSelectedCourses] = useState<Set<string>>(new Set())
+
+  // 服务器端抢课相关状态
+  const [useServerSelection, setUseServerSelection] = useState(false)
+  const [activationCode, setActivationCode] = useState('')
+  const [isActivated, setIsActivated] = useState(false)
+  const [serverTasks, setServerTasks] = useState<any[]>([])
+  const [isLoadingActivation, setIsLoadingActivation] = useState(false)
 
   // 选课模式配置
   const selectionModes: SelectionMode[] = [
@@ -223,6 +234,229 @@ export default function CourseSelectionPage() {
     fetchAvailableCourses()
   }, [])
 
+  // 加载用户任务
+  const loadUserTasks = useCallback(async () => {
+    try {
+      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+      const response = await fetch(`/api/server-selection/tasks?userId=${userId}`)
+      const result = await response.json()
+      if (result.success) {
+        setServerTasks(result.data || [])
+      }
+    } catch (error) {
+      console.error('加载任务失败:', error)
+    }
+  }, [])
+
+  // 检查激活状态
+  useEffect(() => {
+    const checkActivationStatus = async () => {
+      try {
+        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+        if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+          localStorage.setItem('userId', userId)
+        }
+        const response = await fetch(`/api/activation/verify?userId=${userId}`)
+        const result = await response.json()
+        if (result.success && result.activated) {
+          setIsActivated(true)
+          // 加载用户任务
+          loadUserTasks()
+        }
+      } catch (error) {
+        console.error('检查激活状态失败:', error)
+      }
+    }
+    checkActivationStatus()
+  }, [loadUserTasks])
+
+  // 激活激活码
+  const activateCode = async () => {
+    if (!activationCode.trim()) {
+      toast.error('请输入激活码')
+      return
+    }
+
+    setIsLoadingActivation(true)
+    try {
+      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+      if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+        localStorage.setItem('userId', userId)
+      }
+
+      const response = await fetch('/api/activation/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          code: activationCode.trim().replace(/\s+/g, ''), // 去除空格和换行符
+          userId
+        })
+      })
+
+      const result = await response.json()
+      
+      console.log('激活码验证结果:', result)
+      
+      if (result.success) {
+        // 检查是否激活成功（可能是新激活或已激活）
+        if (result.activated !== false) {
+          setIsActivated(true)
+          setActivationCode('')
+          toast.success(result.message || '激活码激活成功！')
+          loadUserTasks()
+        } else {
+          toast.error(result.message || '激活失败')
+        }
+      } else {
+        toast.error(result.message || result.error || '激活失败')
+      }
+    } catch (error) {
+      console.error('激活失败:', error)
+      toast.error('激活失败')
+    } finally {
+      setIsLoadingActivation(false)
+    }
+  }
+
+  // 轮询任务状态
+  useEffect(() => {
+    if (isActivated && serverTasks.some(task => task.status === 'pending' || task.status === 'running')) {
+      const interval = setInterval(() => {
+        loadUserTasks()
+      }, 5000) // 每5秒刷新一次
+
+      return () => clearInterval(interval)
+    }
+  }, [isActivated, serverTasks, loadUserTasks])
+  const startServerSelection = async () => {
+    if (!selectedMode) {
+      toast.error('请选择选课模式')
+      return
+    }
+
+    if (!isActivated) {
+      toast.error('请先激活服务器端抢课功能')
+      return
+    }
+
+    try {
+      // 根据模式筛选课程
+      let coursesToSelect = []
+      
+      switch (selectedMode) {
+        case 'steal':
+          coursesToSelect = availableCourses.filter(course => 
+            course.kclb === 'D' && course.kkzt === '1'
+          )
+          break
+        case 'online':
+          coursesToSelect = availableCourses.filter(course => 
+            course.kclb === 'D' && course.kkzt === '1'
+          )
+          break
+        case 'keyword':
+          coursesToSelect = availableCourses.filter(course => 
+            course.kkzt === '1'
+          )
+          break
+      }
+
+      if (coursesToSelect.length === 0) {
+        toast.error('没有找到符合条件的课程')
+        return
+      }
+
+      // 获取用户Cookie和学校ID
+      const cookie = typeof window !== 'undefined' ? localStorage.getItem('course-cookie') || '' : ''
+      if (!cookie) {
+        toast.error('请先配置Cookie')
+        return
+      }
+
+      const { getCurrentSchool } = require('@/lib/global-school-state')
+      const currentSchool = getCurrentSchool()
+
+      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+      if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+        localStorage.setItem('userId', userId)
+      }
+
+      // 提交任务到服务器
+      const response = await fetch('/api/server-selection/tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId,
+          schoolId: currentSchool.id,
+          courses: coursesToSelect.map(course => ({
+            kch: course.kch_id || course.kch,
+            kxh: course.jxb_id || course.kxh,
+            name: course.kcmc
+          })),
+          cookie
+        })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        toast.success('服务器端抢课任务已提交！')
+        loadUserTasks()
+        // 开始轮询任务状态
+        setTimeout(() => {
+          loadUserTasks()
+        }, 3000)
+      } else {
+        toast.error(result.message || '提交任务失败')
+      }
+    } catch (error: any) {
+      console.error('提交服务器端抢课任务失败:', error)
+      toast.error('提交任务失败')
+    }
+  }
+
+  // 取消任务
+  const cancelServerTask = async (taskId: string) => {
+    try {
+      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 'unknown' : 'unknown'
+      const response = await fetch('/api/server-selection/tasks', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          taskId,
+          userId
+        })
+      })
+
+      const result = await response.json()
+      if (result.success) {
+        toast.success('任务已取消')
+        loadUserTasks()
+      } else {
+        toast.error(result.message || '取消失败')
+      }
+    } catch (error) {
+      console.error('取消任务失败:', error)
+      toast.error('取消失败')
+    }
+  }
+
+  // 轮询任务状态
+  useEffect(() => {
+    if (isActivated && serverTasks.some(task => task.status === 'pending' || task.status === 'running')) {
+      const interval = setInterval(() => {
+        loadUserTasks()
+      }, 5000) // 每5秒刷新一次
+
+      return () => clearInterval(interval)
+    }
+  }, [isActivated, serverTasks])
+
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
@@ -330,6 +564,147 @@ export default function CourseSelectionPage() {
                 />
               </div>
             </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* 服务器端抢课功能 */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Card className="glass">
+          <CardHeader className="p-3 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Server className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+              <span>服务器端抢课</span>
+            </CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              将抢课任务提交到服务器，无需保持网页打开（需要激活码）
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-6 space-y-4">
+            {!isActivated ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <Shield className="h-4 w-4 text-yellow-400" />
+                  <p className="text-xs sm:text-sm text-yellow-300">需要激活码才能使用服务器端抢课功能</p>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={activationCode}
+                    onChange={(e) => setActivationCode(e.target.value)}
+                    placeholder="请输入激活码"
+                    className="flex-1 bg-slate-900/50 border-slate-700"
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        activateCode()
+                      }
+                    }}
+                  />
+                  <Button
+                    onClick={activateCode}
+                    disabled={isLoadingActivation || !activationCode.trim()}
+                    size="sm"
+                  >
+                    {isLoadingActivation ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Shield className="h-4 w-4 mr-2" />
+                        激活
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <CheckCircle className="h-4 w-4 text-green-400" />
+                  <p className="text-xs sm:text-sm text-green-300">已激活服务器端抢课功能</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={startServerSelection}
+                    disabled={!selectedMode || isRunning}
+                    className="flex-1"
+                    size="sm"
+                  >
+                    <Server className="h-4 w-4 mr-2" />
+                    提交到服务器抢课
+                  </Button>
+                  <Button
+                    onClick={loadUserTasks}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    刷新任务
+                  </Button>
+                </div>
+                {serverTasks.length > 0 && (
+                  <div className="space-y-2 mt-4">
+                    <p className="text-xs sm:text-sm text-gray-400">我的任务:</p>
+                    {serverTasks.map((task) => (
+                      <div
+                        key={task.id}
+                        className="p-3 bg-slate-800/50 rounded-lg border border-slate-700/50"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-mono text-gray-400">{task.id}</span>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  task.status === 'running' ? 'text-yellow-400 border-yellow-400' :
+                                  task.status === 'completed' ? 'text-green-400 border-green-400' :
+                                  task.status === 'failed' ? 'text-red-400 border-red-400' :
+                                  'text-gray-400 border-gray-400'
+                                }
+                              >
+                                {task.status === 'pending' ? '等待中' :
+                                 task.status === 'running' ? '运行中' :
+                                 task.status === 'completed' ? '已完成' :
+                                 task.status === 'failed' ? '失败' :
+                                 '已取消'}
+                              </Badge>
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              <p>课程数: {task.courses?.length || 0} | 尝试次数: {task.attemptCount}</p>
+                              {task.result && (
+                                <div className="mt-1">
+                                  <p className={task.result.success ? 'text-green-400' : 'text-red-400'}>
+                                    {task.result.message}
+                                  </p>
+                                  {task.result.data && (
+                                    <p className="text-gray-500 text-xs mt-1">
+                                      {task.result.data.flag === '1' ? '✅ 选课成功 (flag=1)' : 
+                                       task.result.data.flag ? `状态: flag=${task.result.data.flag}` : ''}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {(task.status === 'pending' || task.status === 'running') && (
+                            <Button
+                              onClick={() => cancelServerTask(task.id)}
+                              variant="destructive"
+                              size="sm"
+                            >
+                              <Square className="h-3 w-3 sm:h-4 sm:w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
