@@ -50,7 +50,7 @@ export default function CourseSelectionPage() {
   const [currentThread, setCurrentThread] = useState<string | null>(null)
   const [selectionStatus, setSelectionStatus] = useState<any>(null)
   const [maxAttempts, setMaxAttempts] = useState(100)
-  const [interval, setInterval] = useState(1)
+  const [requestInterval, setRequestInterval] = useState(1)
   const [elapsedTime, setElapsedTime] = useState(0)
   const [availableCourses, setAvailableCourses] = useState<any[]>([])
   const [selectedCourses, setSelectedCourses] = useState<Set<string>>(new Set())
@@ -153,7 +153,7 @@ export default function CourseSelectionPage() {
       const response = await courseAPI.startSmartCourseSelection({
         courses: coursesToSelect,
         max_attempts: maxAttempts,
-        interval: interval
+        interval: requestInterval
       }) as any
 
       if (response.success) {
@@ -330,6 +330,7 @@ export default function CourseSelectionPage() {
       return () => clearInterval(interval)
     }
   }, [isActivated, serverTasks, loadUserTasks])
+
   const startServerSelection = async () => {
     if (!selectedMode) {
       toast.error('请选择选课模式')
@@ -446,17 +447,6 @@ export default function CourseSelectionPage() {
     }
   }
 
-  // 轮询任务状态
-  useEffect(() => {
-    if (isActivated && serverTasks.some(task => task.status === 'pending' || task.status === 'running')) {
-      const interval = setInterval(() => {
-        loadUserTasks()
-      }, 5000) // 每5秒刷新一次
-
-      return () => clearInterval(interval)
-    }
-  }, [isActivated, serverTasks])
-
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
@@ -555,8 +545,8 @@ export default function CourseSelectionPage() {
                 <label className="text-xs sm:text-sm font-medium text-white">请求间隔(秒)</label>
                 <Input
                   type="number"
-                  value={interval}
-                  onChange={(e) => setInterval(parseFloat(e.target.value) || 1)}
+                  value={requestInterval}
+                  onChange={(e) => setRequestInterval(parseFloat(e.target.value) || 1)}
                   min="0.1"
                   max="10"
                   step="0.1"
