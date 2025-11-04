@@ -183,6 +183,16 @@ export function getAllSchoolsSync(): SchoolConfig[] {
         }
       })
       return merged
+    } else {
+      // 如果 localStorage 中没有学校数据，触发后台同步（不阻塞）
+      console.log('📡 localStorage 中没有学校数据，触发后台同步...')
+      syncFromServer().then(result => {
+        if (result && result.schools.length > 0) {
+          console.log(`✅ 后台同步成功，获取到 ${result.schools.length} 所学校`)
+        }
+      }).catch(error => {
+        console.warn('后台同步学校列表失败:', error)
+      })
     }
   } catch (error) {
     console.error('读取自定义学校失败:', error)

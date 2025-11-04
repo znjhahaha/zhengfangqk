@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, memo, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useDeviceDetection, getAnimationConfig } from '@/lib/device-detector'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { 
@@ -205,6 +206,10 @@ function CustomSelect({ value, onChange, options, icon, label, delay = 0 }: Cust
 }
 
 export default function GradePage() {
+  // 设备检测和动画配置
+  const { isMobile, isLowPerformance } = useDeviceDetection()
+  const animationConfig = getAnimationConfig(isMobile, isLowPerformance)
+  
   const [grades, setGrades] = useState<GradeItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedYear, setSelectedYear] = useState<string>('2024')
@@ -785,26 +790,134 @@ export default function GradePage() {
     return 'from-red-500/20 to-pink-500/20'
   }
 
+  // 成绩卡片组件（使用memo优化，减少重复渲染）
+  const GradeCard = memo(({ grade, index, animationConfig, getGradeColor, getGradeGradient }: {
+    grade: GradeItem
+    index: number
+    animationConfig: ReturnType<typeof getAnimationConfig>
+    getGradeColor: (cj: string) => string
+    getGradeGradient: (cj: string) => string
+  }) => {
+    return (
+      <motion.div
+        initial={animationConfig.enabled ? { 
+          opacity: 0, 
+          y: animationConfig.reduceMotion ? 0 : 20, 
+          scale: animationConfig.reduceMotion ? 1 : 0.95 
+        } : false}
+        animate={animationConfig.enabled ? { opacity: 1, y: 0, scale: 1 } : {}}
+        transition={{ 
+          delay: animationConfig.reduceMotion ? 0 : index * 0.05, 
+          duration: animationConfig.duration,
+          type: "tween",
+          ease: "easeOut"
+        }}
+        whileHover={animationConfig.disableHoverEffects ? {} : { y: -5, scale: 1.02 }}
+        style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
+      >
+        <Card className={`border-purple-400/30 bg-gradient-to-br ${getGradeGradient(grade.cj)} bg-slate-800/60 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} hover:border-purple-400/60 transition-all duration-300 shadow-lg`}>
+          <CardContent className="p-3 sm:p-6">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-6">
+              {/* 课程信息 */}
+              <div className="md:col-span-7">
+                <motion.h3 
+                  className="font-bold text-lg sm:text-xl text-white mb-2 sm:mb-3"
+                  whileHover={animationConfig.disableHoverEffects ? {} : { x: 5 }}
+                >
+                  {grade.kcmc}
+                </motion.h3>
+                <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
+                  <span className="flex items-center gap-1">
+                    <span className="text-gray-500">课程号:</span>
+                    <span className="text-white">{grade.kch}</span>
+                  </span>
+                  <span className="text-gray-500">•</span>
+                  <span className="flex items-center gap-1">
+                    <span className="text-gray-500">学分:</span>
+                    <span className="text-white font-semibold">{grade.xf}</span>
+                  </span>
+                  {grade.kcxzmc && (
+                    <>
+                      <span className="text-gray-500">•</span>
+                      <span className="px-2 py-1 bg-purple-500/20 rounded text-purple-300 border border-purple-400/30">
+                        {grade.kcxzmc}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {grade.kssj && (
+                  <div className="mt-3 text-xs text-gray-400 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    考试时间: {grade.kssj}
+                  </div>
+                )}
+              </div>
+
+              {/* 成绩信息 */}
+              <div className="md:col-span-5 flex items-center justify-between mt-4 md:mt-0">
+                <div className="flex items-center gap-4 sm:gap-6">
+                  <motion.div
+                    whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.1 }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                  >
+                    <div className="text-xs text-gray-400 mb-1 sm:mb-2">成绩</div>
+                    <div className={`text-3xl sm:text-4xl font-bold ${getGradeColor(grade.cj)}`}>
+                      {grade.cj || '未评分'}
+                    </div>
+                  </motion.div>
+                  <motion.div
+                    whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.1 }}
+                    transition={{ type: "spring", stiffness: 300 }}
+                  >
+                    <div className="text-xs text-gray-400 mb-2">绩点</div>
+                    <div className="text-3xl font-semibold text-purple-400">
+                      {grade.jd || '0.0'}
+                    </div>
+                  </motion.div>
+                </div>
+
+                {/* 其他信息 */}
+                {grade.ksxzmc && (
+                  <div className="text-right">
+                    <span className="px-3 py-1 bg-slate-700/50 rounded-lg text-xs text-gray-300 border border-gray-600/50">
+                      {grade.ksxzmc}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  })
+  
+  GradeCard.displayName = 'GradeCard'
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 p-1.5 sm:p-4">
       <div className="w-full max-w-full lg:max-w-[78vw] mx-auto space-y-3 sm:space-y-6 rounded-2xl overflow-hidden">
         {/* 标题和操作栏 */}
         <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
+          initial={animationConfig.enabled ? { opacity: 0, y: -20 } : false}
+          animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: animationConfig.duration }}
         >
-          <Card className="border-purple-500/30 bg-slate-800/80 backdrop-blur-xl shadow-2xl">
+          <Card className={`border-purple-500/30 bg-slate-800/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} shadow-2xl`}>
             <CardHeader>
               <div className="flex items-center justify-between flex-wrap gap-4">
                 <div>
                   <CardTitle className="flex items-center gap-1.5 sm:gap-3 text-lg sm:text-3xl text-white mb-1 sm:mb-2">
-                    <motion.div
-                      animate={{ rotate: [0, 10, -10, 0] }}
-                      transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-                    >
+                    {animationConfig.reduceMotion ? (
                       <Award className="h-5 w-5 sm:h-8 sm:w-8 text-purple-400" />
-                    </motion.div>
+                    ) : (
+                      <motion.div
+                        animate={{ rotate: [0, 10, -10, 0] }}
+                        transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
+                      >
+                        <Award className="h-5 w-5 sm:h-8 sm:w-8 text-purple-400" />
+                      </motion.div>
+                    )}
                     成绩查询
                   </CardTitle>
                   <CardDescription className="text-gray-300 mt-1 sm:mt-2 text-xs sm:text-base">
@@ -812,7 +925,11 @@ export default function GradePage() {
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-none">
+                  <motion.div 
+                    whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }} 
+                    whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }} 
+                    className="flex-1 sm:flex-none"
+                  >
                     <Button
                       onClick={exportGrades}
                       disabled={grades.length === 0 || isLoading}
@@ -824,7 +941,11 @@ export default function GradePage() {
                       <span className="sm:hidden">导出</span>
                     </Button>
                   </motion.div>
-                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="flex-1 sm:flex-none">
+                  <motion.div 
+                    whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }} 
+                    whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.95 }} 
+                    className="flex-1 sm:flex-none"
+                  >
                     <Button
                       onClick={fetchGrades}
                       disabled={isLoading}
@@ -889,14 +1010,14 @@ export default function GradePage() {
                 {grades.length > 0 && (
                   <motion.div 
                     className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 relative"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    style={{ zIndex: 1 }}
+                    initial={animationConfig.enabled ? { opacity: 0, y: 20 } : false}
+                    animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+                    transition={{ delay: animationConfig.reduceMotion ? 0 : 0.3, duration: animationConfig.duration }}
+                    style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : { zIndex: 1 }}
                   >
                     <motion.div 
-                      className="p-3 sm:p-4 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl border border-purple-400/30 backdrop-blur-sm"
-                      whileHover={{ scale: 1.05, y: -5 }}
+                      className={`p-3 sm:p-4 bg-gradient-to-br from-purple-500/20 to-blue-500/20 rounded-xl border border-purple-400/30 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-sm'}`}
+                      whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05, y: -5 }}
                       transition={{ type: "spring", stiffness: 300 }}
                     >
                       <div className="flex items-center gap-2 mb-1 sm:mb-2">
@@ -989,87 +1110,14 @@ export default function GradePage() {
               className="space-y-4"
             >
               {grades.map((grade, index) => (
-                <motion.div
+                <GradeCard
                   key={`${grade.kch_id || index}-${grade.kcmc}`}
-                  initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{ delay: index * 0.05, type: "spring", stiffness: 200 }}
-                  whileHover={{ y: -5, scale: 1.02 }}
-                >
-                  <Card className={`border-purple-400/30 bg-gradient-to-br ${getGradeGradient(grade.cj)} bg-slate-800/60 backdrop-blur-xl hover:border-purple-400/60 transition-all duration-300 shadow-lg`}>
-                    <CardContent className="p-3 sm:p-6">
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-6">
-                        {/* 课程信息 */}
-                        <div className="md:col-span-7">
-                          <motion.h3 
-                            className="font-bold text-lg sm:text-xl text-white mb-2 sm:mb-3"
-                            whileHover={{ x: 5 }}
-                          >
-                            {grade.kcmc}
-                          </motion.h3>
-                          <div className="flex flex-wrap gap-2 sm:gap-4 text-xs sm:text-sm text-gray-300">
-                            <span className="flex items-center gap-1">
-                              <span className="text-gray-500">课程号:</span>
-                              <span className="text-white">{grade.kch}</span>
-                            </span>
-                            <span className="text-gray-500">•</span>
-                            <span className="flex items-center gap-1">
-                              <span className="text-gray-500">学分:</span>
-                              <span className="text-white font-semibold">{grade.xf}</span>
-                            </span>
-                            {grade.kcxzmc && (
-                              <>
-                                <span className="text-gray-500">•</span>
-                                <span className="px-2 py-1 bg-purple-500/20 rounded text-purple-300 border border-purple-400/30">
-                                  {grade.kcxzmc}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          {grade.kssj && (
-                            <div className="mt-3 text-xs text-gray-400 flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              考试时间: {grade.kssj}
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 成绩信息 */}
-                        <div className="md:col-span-5 flex items-center justify-between mt-4 md:mt-0">
-                          <div className="flex items-center gap-4 sm:gap-6">
-                            <motion.div
-                              whileHover={{ scale: 1.1 }}
-                              transition={{ type: "spring", stiffness: 300 }}
-                            >
-                              <div className="text-xs text-gray-400 mb-1 sm:mb-2">成绩</div>
-                              <div className={`text-3xl sm:text-4xl font-bold ${getGradeColor(grade.cj)}`}>
-                                {grade.cj || '未评分'}
-                              </div>
-                            </motion.div>
-                            <motion.div
-                              whileHover={{ scale: 1.1 }}
-                              transition={{ type: "spring", stiffness: 300 }}
-                            >
-                              <div className="text-xs text-gray-400 mb-2">绩点</div>
-                              <div className="text-3xl font-semibold text-purple-400">
-                                {grade.jd || '0.0'}
-                              </div>
-                            </motion.div>
-                          </div>
-
-                          {/* 其他信息 */}
-                          {grade.ksxzmc && (
-                            <div className="text-right">
-                              <span className="px-3 py-1 bg-slate-700/50 rounded-lg text-xs text-gray-300 border border-gray-600/50">
-                                {grade.ksxzmc}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
+                  grade={grade}
+                  index={index}
+                  animationConfig={animationConfig}
+                  getGradeColor={getGradeColor}
+                  getGradeGradient={getGradeGradient}
+                />
               ))}
              </motion.div>
            )}
@@ -1077,9 +1125,9 @@ export default function GradePage() {
 
          {/* 总体成绩查询区域 */}
          <motion.div
-           initial={{ opacity: 0, y: 20 }}
-           animate={{ opacity: 1, y: 0 }}
-           transition={{ duration: 0.5, delay: 0.2 }}
+           initial={animationConfig.enabled ? { opacity: 0, y: 20 } : false}
+           animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+           transition={{ duration: animationConfig.duration, delay: animationConfig.reduceMotion ? 0 : 0.2 }}
          >
            <Card className="border-purple-500/30 bg-slate-800/80 backdrop-blur-xl shadow-2xl">
              <CardHeader>
@@ -1175,9 +1223,10 @@ export default function GradePage() {
                      {/* 总体成绩统计 */}
                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                        <motion.div 
-                         className="p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl border border-green-400/30 backdrop-blur-sm"
-                         whileHover={{ scale: 1.05, y: -5 }}
-                         transition={{ type: "spring", stiffness: 300 }}
+                         className={`p-4 bg-gradient-to-br from-green-500/20 to-emerald-500/20 rounded-xl border border-green-400/30 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-sm'}`}
+                         whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05, y: -5 }}
+                         transition={{ type: "tween", duration: animationConfig.duration }}
+                         style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
                        >
                          <div className="flex items-center gap-2 mb-2">
                            <GraduationCap className="h-5 w-5 text-green-400" />
@@ -1186,9 +1235,10 @@ export default function GradePage() {
                          <div className="text-3xl font-bold text-white">{overallGrades.length}</div>
                        </motion.div>
                        <motion.div 
-                         className="p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-xl border border-blue-400/30 backdrop-blur-sm"
-                         whileHover={{ scale: 1.05, y: -5 }}
-                         transition={{ type: "spring", stiffness: 300 }}
+                         className={`p-4 bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-xl border border-blue-400/30 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-sm'}`}
+                         whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05, y: -5 }}
+                         transition={{ type: "tween", duration: animationConfig.duration }}
+                         style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
                        >
                          <div className="flex items-center gap-2 mb-2">
                            <BookOpen className="h-5 w-5 text-blue-400" />
@@ -1199,9 +1249,10 @@ export default function GradePage() {
                          </div>
                        </motion.div>
                        <motion.div 
-                         className="p-4 bg-gradient-to-br from-purple-500/20 to-violet-500/20 rounded-xl border border-purple-400/30 backdrop-blur-sm"
-                         whileHover={{ scale: 1.05, y: -5 }}
-                         transition={{ type: "spring", stiffness: 300 }}
+                         className={`p-4 bg-gradient-to-br from-purple-500/20 to-violet-500/20 rounded-xl border border-purple-400/30 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-sm'}`}
+                         whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05, y: -5 }}
+                         transition={{ type: "tween", duration: animationConfig.duration }}
+                         style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
                        >
                          <div className="flex items-center gap-2 mb-2">
                            <TrendingUp className="h-5 w-5 text-purple-400" />
@@ -1228,11 +1279,12 @@ export default function GradePage() {
                        </motion.div>
                        {overallGPA && (
                          <motion.div 
-                           className="p-4 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-xl border border-red-400/30 backdrop-blur-sm"
-                           initial={{ opacity: 0, scale: 0.9 }}
-                           animate={{ opacity: 1, scale: 1 }}
-                           whileHover={{ scale: 1.05, y: -5 }}
-                           transition={{ type: "spring", stiffness: 300 }}
+                           className={`p-4 bg-gradient-to-br from-red-500/20 to-orange-500/20 rounded-xl border border-red-400/30 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-sm'}`}
+                           initial={animationConfig.enabled ? { opacity: 0, scale: 0.9 } : false}
+                           animate={animationConfig.enabled ? { opacity: 1, scale: 1 } : {}}
+                           whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05, y: -5 }}
+                           transition={{ type: "tween", duration: animationConfig.duration }}
+                           style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
                          >
                            <div className="flex items-center gap-2 mb-2">
                              <Award className="h-5 w-5 text-red-400" />
@@ -1254,10 +1306,11 @@ export default function GradePage() {
                          return (
                            <motion.div
                              key={group.id}
-                             initial={{ opacity: 0, y: 20 }}
-                             animate={{ opacity: 1, y: 0 }}
-                             transition={{ delay: groupIndex * 0.05 }}
+                             initial={animationConfig.enabled ? { opacity: 0, y: animationConfig.reduceMotion ? 0 : 20 } : false}
+                             animate={animationConfig.enabled ? { opacity: 1, y: 0 } : {}}
+                             transition={{ delay: animationConfig.reduceMotion ? 0 : groupIndex * 0.05, duration: animationConfig.duration, type: "tween" }}
                              className="relative"
+                             style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
                            >
                              {/* 连接线 */}
                              {groupIndex < groupedGrades.length - 1 && (
@@ -1268,17 +1321,18 @@ export default function GradePage() {
                              <div className="absolute left-5 top-6 w-2 h-2 rounded-full bg-blue-400 border-2 border-slate-800" />
                              
                              {/* 分类卡片 */}
-                             <Card className="border-blue-400/30 bg-slate-700/50 backdrop-blur-xl hover:border-blue-400/60 transition-all duration-300">
+                             <Card className={`border-blue-400/30 bg-slate-700/50 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} hover:border-blue-400/60 transition-all duration-300`}>
                                <CardContent className="p-0">
                                  <motion.button
                                    onClick={() => toggleCategory(group.id)}
                                    className="w-full p-4 text-left flex items-center justify-between hover:bg-slate-600/50 transition-colors rounded-t-lg"
-                                   whileHover={{ x: 2 }}
+                                   whileHover={animationConfig.disableHoverEffects ? {} : { x: 2 }}
+                                   transition={{ type: "tween", duration: animationConfig.duration }}
                                  >
                                    <div className="flex items-center gap-3 flex-1">
                                      <motion.div
-                                       animate={{ rotate: isExpanded ? 90 : 0 }}
-                                       transition={{ duration: 0.2 }}
+                                       animate={animationConfig.enabled ? { rotate: isExpanded ? 90 : 0 } : {}}
+                                       transition={{ duration: animationConfig.duration, type: "tween" }}
                                      >
                                        <ChevronRight className="h-5 w-5 text-blue-400" />
                                      </motion.div>
@@ -1305,8 +1359,8 @@ export default function GradePage() {
                                        </div>
                                      </div>
                                      <motion.div
-                                       animate={{ rotate: isExpanded ? 180 : 0 }}
-                                       transition={{ duration: 0.2 }}
+                                       animate={animationConfig.enabled ? { rotate: isExpanded ? 180 : 0 } : {}}
+                                       transition={{ duration: animationConfig.duration, type: "tween" }}
                                      >
                                        <ChevronDown className="h-5 w-5 text-gray-400" />
                                      </motion.div>
@@ -1317,10 +1371,10 @@ export default function GradePage() {
                                  <AnimatePresence>
                                    {isExpanded && (
                                      <motion.div
-                                       initial={{ height: 0, opacity: 0 }}
-                                       animate={{ height: 'auto', opacity: 1 }}
-                                       exit={{ height: 0, opacity: 0 }}
-                                       transition={{ duration: 0.3 }}
+                                       initial={animationConfig.enabled ? { height: 0, opacity: 0 } : false}
+                                       animate={animationConfig.enabled ? { height: 'auto', opacity: 1 } : {}}
+                                       exit={animationConfig.enabled ? { height: 0, opacity: 0 } : false}
+                                       transition={{ duration: animationConfig.duration, type: "tween" }}
                                        className="overflow-hidden"
                                      >
                                        <div className="border-t border-slate-600/50 p-4 space-y-2">
@@ -1339,10 +1393,11 @@ export default function GradePage() {
                                          {group.courses.map((grade, courseIndex) => (
                                            <motion.div
                                              key={`${grade.kch || courseIndex}-${grade.kcmc}`}
-                                             initial={{ opacity: 0, x: -20 }}
-                                             animate={{ opacity: 1, x: 0 }}
-                                             transition={{ delay: courseIndex * 0.02 }}
+                                             initial={animationConfig.enabled ? { opacity: 0, x: animationConfig.reduceMotion ? 0 : -20 } : false}
+                                             animate={animationConfig.enabled ? { opacity: 1, x: 0 } : {}}
+                                             transition={{ delay: animationConfig.reduceMotion ? 0 : courseIndex * 0.02, duration: animationConfig.duration, type: "tween" }}
                                              className="grid grid-cols-12 gap-2 items-center py-2 px-3 rounded hover:bg-slate-600/30 transition-colors"
+                                             style={animationConfig.useGPU ? { transform: 'translateZ(0)', willChange: 'transform' } : {}}
                                            >
                                              <div className="col-span-1 flex justify-center">
                                                {getCourseStatusIcon(grade.cj)}

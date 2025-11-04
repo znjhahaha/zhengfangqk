@@ -36,6 +36,64 @@ export function getGlobalCookie(): string {
 }
 
 // 创建robust HTTP请求配置（支持传入schoolId参数）
+// 在服务器端自动使用异步方式获取URL配置以确保能获取到新添加的学校配置
+async function createRequestConfigAsync(method: string = 'GET', body?: string, sessionId?: string, tempCookie?: string, schoolId?: string) {
+  // 在服务器端，使用异步方式获取URL配置（确保能获取到新添加的学校配置）
+  let urls
+  if (typeof window === 'undefined') {
+    // 服务器端：使用异步版本获取URL配置
+    const { getApiUrlsAsync } = await import('./global-school-state')
+    urls = await getApiUrlsAsync(schoolId)
+  } else {
+    // 客户端：使用同步版本
+    urls = getApiUrls(schoolId)
+  }
+  const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
+  
+  const headers: Record<string, string> = {
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    'Accept-Language': 'zh-CN,zh;q=0.9',
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+    'Origin': `${currentSchool.protocol}://${currentSchool.domain}`,
+    'Priority': 'u=0, i',
+    'Referer': urls.getRefererHeader('course'),
+    'Sec-Ch-Ua': '"Not;A=Brand";v="99", "Google Chrome";v="139", "Chromium";v="139"',
+    'Sec-Ch-Ua-Mobile': '?0',
+    'Sec-Ch-Ua-Platform': '"Windows"',
+    'Sec-Fetch-Dest': 'empty',
+    'Sec-Fetch-Mode': 'cors',
+    'Sec-Fetch-Site': 'same-origin',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+    'X-Requested-With': 'XMLHttpRequest',
+  }
+
+  // 优先使用临时Cookie，然后根据会话ID获取对应的Cookie
+  let cookie = tempCookie
+  if (!cookie && sessionId) {
+    cookie = getSessionCookie(sessionId) || undefined
+  }
+  if (!cookie) {
+    cookie = getGlobalCookie() || undefined
+  }
+
+  if (cookie) {
+    headers['Cookie'] = cookie
+  }
+
+  const config: RequestInit = {
+    method,
+    headers,
+  }
+
+  if (body && method !== 'GET') {
+    config.body = body
+  }
+
+  return config
+}
+
+// 同步版本的请求配置（保持向后兼容，但服务器端可能无法获取到新学校的配置）
 function createRequestConfig(method: string = 'GET', body?: string, sessionId?: string, tempCookie?: string, schoolId?: string) {
   const urls = getApiUrls(schoolId)
   const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
@@ -110,11 +168,30 @@ export async function getStudentInfo(sessionId?: string, tempCookie?: string, sc
   const cacheKey = sessionId ? `${cacheKeys.studentInfo}_${sessionId}_${schoolId || 'default'}` : `${cacheKeys.studentInfo}_${schoolId || 'default'}`
   return withCache(cacheKey, async () => {
     try {
-      const config = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
+      // 使用异步版本的配置（支持服务器端从文件/COS加载学校）
+      const config = await createRequestConfigAsync('GET', undefined, sessionId, tempCookie, schoolId)
       
-      // 使用新的URL生成机制（支持schoolId参数）
-      const urls = getApiUrls(schoolId)
-      const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
+      // 使用异步URL生成机制（支持schoolId参数，服务器端能从文件/COS加载）
+      let urls
+      let currentSchool
+      if (typeof window === 'undefined') {
+        // 服务器端：使用异步版本
+        const { getApiUrlsAsync } = await import('./global-school-state')
+        urls = await getApiUrlsAsync(schoolId)
+        const schools = await import('./global-school-state').then(m => m.getSchoolsFromServer?.() || [])
+        currentSchool = schoolId ? schools.find(s => s.id === schoolId) : null
+        if (!currentSchool && schoolId) {
+          const { DEFAULT_SCHOOL } = await import('./global-school-state')
+          currentSchool = DEFAULT_SCHOOL
+        } else if (!currentSchool) {
+          const { getCurrentSchool } = await import('./global-school-state')
+          currentSchool = getCurrentSchool()
+        }
+      } else {
+        // 客户端：使用同步版本
+        urls = getApiUrls(schoolId)
+        currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
+      }
       
       console.log(`🔍 获取学生信息 - 当前学校: ${currentSchool.name} (${currentSchool.id})`)
       console.log(`🌐 获取学生信息URL: ${urls.studentInfo}`)

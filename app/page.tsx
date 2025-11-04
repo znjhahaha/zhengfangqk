@@ -78,6 +78,15 @@ export default function Home() {
         // 记录访问（只记录一次）
         recordVisit()
         
+        // 强制同步学校列表（确保后台添加的学校能被使用）
+        try {
+          const { getSupportedSchoolsAsync } = await import('@/lib/global-school-state')
+          await getSupportedSchoolsAsync(true)
+          console.log('✅ 学校列表已同步')
+        } catch (error) {
+          console.warn('⚠️ 同步学校列表失败，使用本地缓存:', error)
+        }
+        
         // 初始化学校配置
         const currentSchool = getCurrentSchool()
         console.log(`🏫 应用启动 - 当前学校配置: ${currentSchool.name} (${currentSchool.domain})`)

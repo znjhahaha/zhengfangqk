@@ -18,6 +18,16 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
+    // 预加载URL配置到缓存（确保服务器端能获取到新添加的学校配置）
+    if (schoolId) {
+      try {
+        const { getApiUrlsAsync } = await import('@/lib/global-school-state')
+        await getApiUrlsAsync(schoolId)
+      } catch (error) {
+        console.warn('预加载URL配置失败，继续使用默认配置:', error)
+      }
+    }
+
     // 直接传递schoolId参数，不再修改服务器端状态
     const courses = await getAvailableCourses(undefined, cookieHeader, schoolId || undefined)
     

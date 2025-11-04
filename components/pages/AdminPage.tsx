@@ -659,8 +659,17 @@ export default function AdminPage() {
       resetForm()
       await loadData()
       
+      // 强制触发全局学校列表同步，确保新添加的学校立即可用
+      try {
+        const { getSupportedSchoolsAsync } = await import('@/lib/global-school-state')
+        await getSupportedSchoolsAsync(true)
+        console.log('✅ 学校列表已强制同步，新添加的学校现在可用')
+      } catch (error) {
+        console.warn('⚠️ 强制同步学校列表失败:', error)
+      }
+      
       // 提示已同步
-      toast('配置已保存并同步到服务器，所有用户将在30秒内收到更新', { 
+      toast('配置已保存并同步到服务器，新添加的学校现在可用', { 
         icon: '✅',
         duration: 4000
       })
