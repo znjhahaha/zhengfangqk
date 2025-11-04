@@ -286,12 +286,7 @@ async function getSchoolUrlConfigFromServer(schoolId: string): Promise<{
       return serverUrlConfigsCache[schoolId] || null
     }
 
-    // 从服务器API获取配置
-    const { loadUrlConfigs } = await import('@/app/api/admin/schools/route')
-    // 注意：这里需要直接调用内部函数，但route.ts不能导出内部函数
-    // 所以我们需要创建一个辅助模块
-    
-    // 改用动态导入服务器端数据存储模块
+    // 直接使用服务器端数据存储模块加载URL配置
     const { getDataDir, loadDataFromFile } = await import('./data-storage')
     const { existsSync } = await import('fs')
     const { readFile } = await import('fs/promises')
