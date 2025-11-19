@@ -49,9 +49,73 @@ export interface ServerSelectionTask {
 // 任务队列
 const taskQueue: Map<string, ServerSelectionTask> = new Map()
 const runningTasks: Set<string> = new Set()
+const scheduledTaskTimers: Map<string, NodeJS.Timeout> = new Map() // 定时任务定时器
 
 // 并发限制
 let maxConcurrentTasks = 5
+
+// 自动清理间隔（30分钟）
+const CLEANUP_INTERVAL = 30 * 60 * 1000
+// 任务保留数量（每个用户最多保留最近50个已完成任务）
+const MAX_COMPLETED_TASKS_PER_USER = 50
+// 任务最大保留时间（7天）
+const MAX_TASK_AGE = 7 * 24 * 60 * 60 * 1000
+
+// 启动自动清理任务
+let cleanupInterval: NodeJS.Timeout | null = null
+
+function startAutoCleanup() {
+  if (cleanupInterval) return
+  
+  cleanupInterval = setInterval(() => {
+    try {
+      const removed = cleanupOldTasks()
+      if (removed > 0) {
+        console.log(`🧹 自动清理: 删除了 ${removed} 个旧任务`)
+      }
+    } catch (error) {
+      console.error('自动清理任务失败:', error)
+    }
+  }, CLEANUP_INTERVAL)
+  
+  // 立即执行一次清理
+  setTimeout(() => {
+    try {
+      const removed = cleanupOldTasks()
+      if (removed > 0) {
+        console.log(`🧹 启动时清理: 删除了 ${removed} 个旧任务`)
+      }
+    } catch (error) {
+      console.error('启动清理失败:', error)
+    }
+  }, 5000) // 启动5秒后执行第一次清理
+}
+
+// 启动自动清理
+if (typeof process !== 'undefined') {
+  startAutoCleanup()
+  
+  // 进程退出时清理定时器
+  process.on('SIGTERM', () => {
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval)
+      cleanupInterval = null
+    }
+    // 清理所有定时任务
+    scheduledTaskTimers.forEach(timer => clearTimeout(timer))
+    scheduledTaskTimers.clear()
+  })
+  
+  process.on('SIGINT', () => {
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval)
+      cleanupInterval = null
+    }
+    // 清理所有定时任务
+    scheduledTaskTimers.forEach(timer => clearTimeout(timer))
+    scheduledTaskTimers.clear()
+  })
+}
 
 /**
  * 设置最大并发任务数
@@ -151,6 +215,9 @@ export function cancelTask(taskId: string): boolean {
   const task = taskQueue.get(taskId)
   if (!task) return false
 
+  // 取消定时任务定时器
+  cancelScheduledTaskTimer(taskId)
+
   if (task.status === 'running') {
     runningTasks.delete(taskId)
   }
@@ -164,6 +231,8 @@ export function cancelTask(taskId: string): boolean {
  * 删除任务
  */
 export function removeTask(taskId: string): boolean {
+  // 取消定时任务定时器
+  cancelScheduledTaskTimer(taskId)
   runningTasks.delete(taskId)
   return taskQueue.delete(taskId)
 }
@@ -211,7 +280,82 @@ export function cleanupCompletedTasks(keepCount: number = 100): number {
 }
 
 /**
- * 获取任务统计信息
+ * 清理旧任务（按用户分组，每个用户保留最近N个，并删除超过最大保留时间的任务）
+ */
+function cleanupOldTasks(): number {
+  const now = Date.now()
+  let removed = 0
+  
+  // 按用户分组任务
+  const tasksByUser = new Map<string, ServerSelectionTask[]>()
+  for (const task of taskQueue.values()) {
+    if (!tasksByUser.has(task.userId)) {
+      tasksByUser.set(task.userId, [])
+    }
+    tasksByUser.get(task.userId)!.push(task)
+  }
+  
+  // 清理每个用户的任务
+  for (const [userId, tasks] of tasksByUser.entries()) {
+    // 分离已完成和未完成的任务
+    const completed = tasks.filter(t => 
+      t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled'
+    )
+    const active = tasks.filter(t => 
+      t.status === 'pending' || t.status === 'running'
+    )
+    
+    // 删除超过最大保留时间的已完成任务
+    for (const task of completed) {
+      const age = now - (task.completedAt || task.createdAt)
+      if (age > MAX_TASK_AGE) {
+        if (removeTask(task.id)) {
+          removed++
+        }
+      }
+    }
+    
+    // 每个用户最多保留最近N个已完成任务
+    const remainingCompleted = completed
+      .filter(t => {
+        const age = now - (t.completedAt || t.createdAt)
+        return age <= MAX_TASK_AGE
+      })
+      .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0))
+    
+    if (remainingCompleted.length > MAX_COMPLETED_TASKS_PER_USER) {
+      const toRemove = remainingCompleted.slice(MAX_COMPLETED_TASKS_PER_USER)
+      for (const task of toRemove) {
+        if (removeTask(task.id)) {
+          removed++
+        }
+      }
+    }
+  }
+  
+  return removed
+}
+
+/**
+ * 注册定时任务定时器（用于清理）
+ */
+export function registerScheduledTaskTimer(taskId: string, timer: NodeJS.Timeout): void {
+  scheduledTaskTimers.set(taskId, timer)
+}
+
+/**
+ * 取消定时任务定时器
+ */
+export function cancelScheduledTaskTimer(taskId: string): void {
+  const timer = scheduledTaskTimers.get(taskId)
+  if (timer) {
+    clearTimeout(timer)
+    scheduledTaskTimers.delete(taskId)
+  }
+}
+
+/**
+ * 获取任务统计信息（优化：使用单次遍历）
  */
 export function getTaskStats(): {
   total: number
@@ -222,13 +366,36 @@ export function getTaskStats(): {
   cancelled: number
 } {
   const tasks = Array.from(taskQueue.values())
-  return {
+  const stats = {
     total: tasks.length,
-    pending: tasks.filter(t => t.status === 'pending').length,
-    running: tasks.filter(t => t.status === 'running').length,
-    completed: tasks.filter(t => t.status === 'completed').length,
-    failed: tasks.filter(t => t.status === 'failed').length,
-    cancelled: tasks.filter(t => t.status === 'cancelled').length
+    pending: 0,
+    running: 0,
+    completed: 0,
+    failed: 0,
+    cancelled: 0
   }
+  
+  // 单次遍历统计所有状态
+  for (const task of tasks) {
+    switch (task.status) {
+      case 'pending':
+        stats.pending++
+        break
+      case 'running':
+        stats.running++
+        break
+      case 'completed':
+        stats.completed++
+        break
+      case 'failed':
+        stats.failed++
+        break
+      case 'cancelled':
+        stats.cancelled++
+        break
+    }
+  }
+  
+  return stats
 }
 

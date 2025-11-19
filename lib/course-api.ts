@@ -344,40 +344,69 @@ async function getSelectedCoursesDynamicParams(sessionId?: string, tempCookie?: 
     const html = await response.text()
     const $ = cheerio.load(html)
     
-    // 提取动态参数
-    const params = {
-      jg_id: $('input[name="jg_id"]').attr('value') || '05',
-      zyh_id: $('input[name="zyh_id"]').attr('value') || '527',
-      njdm_id: $('input[name="njdm_id"]').attr('value') || '2024',
-      zyfx_id: $('input[name="zyfx_id"]').attr('value') || 'wfx',
-      bh_id: $('input[name="bh_id"]').attr('value') || '',
-      xz: $('input[name="xz"]').attr('value') || '4',
-      ccdm: $('input[name="ccdm"]').attr('value') || '3',
-      xqh_id: $('input[name="xqh_id"]').attr('value') || '01',
-      xkxnm: $('input[name="xkxnm"]').attr('value') || '2025',
-      xkxqm: $('input[name="xkxqm"]').attr('value') || '3',
-      xkly: $('input[name="xkly"]').attr('value') || '0'
+    // 提取动态参数 - 完全从HTML中提取，不使用硬编码默认值
+    const params: Record<string, string> = {}
+    
+    // 方法1: 查找所有 type="hidden" 的 input 元素
+    $('input[type="hidden"]').each((_, element) => {
+      const name = $(element).attr('name')
+      const value = $(element).attr('value') || ''
+      if (name) {
+        params[name] = value
+        console.log(`已选课程参数: ${name} = ${value}`)
+      }
+    })
+    
+    // 方法2: 也查找所有 input 元素（有些可能没有明确指定 type="hidden"）
+    $('input').each((_, element) => {
+      const type = $(element).attr('type')
+      const name = $(element).attr('name')
+      const value = $(element).attr('value') || ''
+      // 如果是隐藏字段或者没有指定type，也提取
+      if (name && (type === 'hidden' || !type) && !params[name]) {
+        params[name] = value
+        if (type !== 'hidden') {
+          console.log(`已选课程参数（无type）: ${name} = ${value}`)
+        }
+      }
+    })
+    
+    // 检查必需参数是否存在
+    const requiredParams = ['jg_id', 'zyh_id', 'njdm_id', 'xkxnm', 'xkxqm']
+    const missingParams: string[] = []
+    
+    for (const paramName of requiredParams) {
+      if (!params[paramName] || params[paramName].trim() === '') {
+        missingParams.push(paramName)
+      }
     }
     
-    console.log('✅ 已选课程动态参数获取成功:', params)
-    return params
+    if (missingParams.length > 0) {
+      throw new Error(`缺少必需的已选课程参数: ${missingParams.join(', ')}。请检查Cookie是否有效。`)
+    }
     
-  } catch (error) {
+    // 确保所有参数都有值（空字符串也是有效值）
+    const finalParams = {
+      jg_id: params.jg_id || '',
+      zyh_id: params.zyh_id || '',
+      njdm_id: params.njdm_id || '',
+      zyfx_id: params.zyfx_id || '',
+      bh_id: params.bh_id || '',
+      xz: params.xz || '',
+      ccdm: params.ccdm || '',
+      xqh_id: params.xqh_id || '',
+      xkxnm: params.xkxnm || '',
+      xkxqm: params.xkxqm || '',
+      xkly: params.xkly || ''
+    }
+    
+    console.log('✅ 已选课程动态参数获取成功:', finalParams)
+    return finalParams
+    
+  } catch (error: any) {
     console.error('❌ 获取已选课程动态参数失败:', error)
-    // 返回默认参数
-    return {
-      jg_id: '05',
-      zyh_id: '527',
-      njdm_id: '2024',
-      zyfx_id: 'wfx',
-      bh_id: '',
-      xz: '4',
-      ccdm: '3',
-      xqh_id: '01',
-      xkxnm: '2025',
-      xkxqm: '3',
-      xkly: '0'
-    }
+    // 不再返回硬编码的默认参数，直接抛出错误
+    throw new Error(`获取已选课程动态参数失败: ${error.message || '未知错误'}。请检查Cookie是否有效。`)
   }
 }
 

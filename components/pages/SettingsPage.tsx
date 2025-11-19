@@ -568,9 +568,9 @@ export default function SettingsPage() {
             </div>
             
             <div className="space-y-1.5 sm:space-y-2">
-              <h4 className="text-xs sm:text-sm font-medium text-white">4. 智能选课</h4>
+              <h4 className="text-xs sm:text-sm font-medium text-white">4. 抢课Pro+</h4>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                在"智能选课"页面选择模式，启动自动抢课
+                在"抢课Pro+"页面选择课程，进行抢课
               </p>
             </div>
           </CardContent>

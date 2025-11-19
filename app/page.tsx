@@ -200,7 +200,7 @@ export default function Home() {
   const menuItems = [
     { value: 'courses', label: '课程信息', icon: BookOpen, color: 'green' },
     { value: 'schedule', label: '我的课表', icon: Calendar, color: 'orange' },
-    { value: 'selection', label: '智能选课', icon: Target, color: 'pink' },
+    { value: 'selection', label: '抢课Pro+', icon: Target, color: 'pink' },
     { value: 'grade', label: '成绩查询', icon: Award, color: 'amber' },
     { value: 'school', label: '学校选择', icon: School, color: 'blue' },
     { value: 'settings', label: '系统设置', icon: Settings, color: 'gray' },
@@ -733,8 +733,8 @@ export default function Home() {
                     />
                   )}
                   <Target className="h-4 w-4 sm:h-6 sm:w-6 relative z-10" />
-                  <span className="relative z-10 hidden sm:inline">智能选课</span>
-                  <span className="relative z-10 sm:hidden">选课</span>
+                  <span className="relative z-10 hidden sm:inline">抢课Pro+</span>
+                  <span className="relative z-10 sm:hidden">Pro+</span>
                 </TabsTrigger>
               </motion.div>
               

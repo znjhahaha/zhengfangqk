@@ -329,9 +329,9 @@ export default function CourseInfoPage() {
           if (result.success) {
             if (scheduledTime) {
               const timeStr = new Date(scheduledTime).toLocaleString('zh-CN')
-              toast.success(`课程 "${course.kcmc}" 已设定定时抢课任务（${timeStr}）！可在"智能选课"页面查看进度。`)
-            } else {
-              toast.success(`课程 "${course.kcmc}" 已提交到服务器端抢课任务！服务器将持续尝试抢课，可在"智能选课"页面查看进度。`)
+            toast.success(`课程 "${course.kcmc}" 已设定定时抢课任务（${timeStr}）！可在"抢课Pro+"页面查看进度。`)
+          } else {
+            toast.success(`课程 "${course.kcmc}" 已提交到服务器端抢课任务！服务器将持续尝试抢课，可在"抢课Pro+"页面查看进度。`)
             }
             setScheduledTime('') // 清空时间选择
             setShowScheduleDialog(false) // 关闭对话框
