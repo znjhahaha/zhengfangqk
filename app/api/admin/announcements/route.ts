@@ -64,6 +64,9 @@ async function initAnnouncements() {
   return announcements
 }
 
+// 强制动态渲染（避免静态导出问题）
+export const dynamic = 'force-dynamic'
+
 // GET: 获取所有公告（公开接口）
 export async function GET(request: NextRequest) {
   try {

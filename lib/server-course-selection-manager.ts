@@ -11,6 +11,19 @@ export interface ServerSelectionTask {
     kch: string // 课程号
     kxh: string // 课程序号
     name?: string // 课程名称
+    // 完整的课程数据（用于选课时传递参数）
+    jxb_id?: string
+    do_jxb_id?: string
+    kch_id?: string
+    jxbzls?: string
+    kklxdm?: string
+    kcmc?: string
+    jxbmc?: string
+    _rwlx?: string
+    _xklc?: string
+    _xkly?: string
+    _xkkz_id?: string
+    [key: string]: any // 允许其他属性
   }>
   cookie: string // 用户Cookie
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
@@ -19,7 +32,8 @@ export interface ServerSelectionTask {
   completedAt?: number // 完成时间
   lastAttemptAt?: number // 最后尝试时间
   attemptCount: number // 尝试次数
-  maxAttempts?: number // 最大尝试次数
+  maxAttempts?: number // 最大尝试次数（设为undefined表示无限重试直到成功）
+  scheduledTime?: number // 定时执行时间（时间戳）
   result?: {
     success: boolean
     message: string

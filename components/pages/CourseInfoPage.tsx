@@ -1,7 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +23,9 @@ import {
   Settings,
   Calendar,
   AlertCircle,
-  ChevronUp
+  ChevronUp,
+  Server,
+  Timer
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
@@ -54,6 +55,10 @@ interface Course {
   kkztms: string
   do_jxb_id?: string
   jxbzls?: string
+  _rwlx?: string  // 获取课程列表时使用的 rwlx 参数
+  _xklc?: string  // 获取课程列表时使用的 xklc 参数
+  _xkly?: string  // 获取课程列表时使用的 xkly 参数
+  _xkkz_id?: string  // 获取课程列表时使用的 xkkz_id 参数
   [key: string]: any // 允许其他属性
 }
 
@@ -87,6 +92,18 @@ export default function CourseInfoPage() {
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [isBatchGrabbing, setIsBatchGrabbing] = useState(false)
   
+  // 服务器端抢课相关状态
+  const [isServerSelectionActivated, setIsServerSelectionActivated] = useState(false)
+  const [useServerSelection, setUseServerSelection] = useState(false)
+  const [scheduledTime, setScheduledTime] = useState<string>('') // 定时抢课时间
+  const [showScheduleDialog, setShowScheduleDialog] = useState(false) // 显示时间选择对话框
+  
+  // 虚拟滚动相关状态
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
+  const containerRef = useRef<HTMLDivElement>(null)
+  const scrollRafRef = useRef<number | null>(null)
+  const ITEMS_PER_PAGE = 50  // 每次渲染的课程数量
+  const ITEM_HEIGHT = 200  // 每个课程卡片的预估高度（px）
 
 
   // 清理缓存功能
@@ -126,7 +143,7 @@ export default function CourseInfoPage() {
       console.log('🚀 开始获取可选课程（前端）...')
       const { getCurrentSchool } = require('@/lib/global-school-state')
       const currentSchool = getCurrentSchool()
-      const response = await courseAPI.getAvailableCourses(currentSchool.id) as any
+      const response = await courseAPI.getAvailableCourses(currentSchool.id, { forceRefresh }) as any
       if (response.success) {
         const duration = Date.now() - startTime
         setAvailableCourses(response.data || [])
@@ -215,14 +232,149 @@ export default function CourseInfoPage() {
     }
   }, [dataLoaded.selected, selectedCourses.length, setSelectedCourses])
 
-  // 抢课
-  const grabCourse = async (course: Course) => {
+  // 抢课 - 使用 useCallback 优化
+  const grabCourse = useCallback(async (course: Course, scheduledTime?: string) => {
     const courseKey = `${course.kch_id}_${course.jxb_id}`
     setGrabbingCourses(prev => new Set(prev).add(courseKey))
     
     try {
       const { getCurrentSchool } = require('@/lib/global-school-state')
+      const { getApiUrl } = require('@/lib/api')
       const currentSchool = getCurrentSchool()
+      
+      // 检查是否应该使用服务器端抢课
+      console.log('🔍 抢课模式检查:', {
+        useServerSelection,
+        isServerSelectionActivated,
+        shouldUseServer: useServerSelection && isServerSelectionActivated
+      })
+      
+      // 如果开启了服务器端抢课且已激活，提交到服务器端任务
+      if (useServerSelection && isServerSelectionActivated) {
+        console.log('✅ 使用服务器端抢课模式')
+        
+        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+        if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+          localStorage.setItem('userId', userId)
+        }
+        
+        const cookie = typeof window !== 'undefined' ? localStorage.getItem('course-cookie') || '' : ''
+        if (!cookie) {
+          toast.error('请先配置Cookie')
+          setGrabbingCourses(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(courseKey)
+            return newSet
+          })
+          return
+        }
+        
+        // 计算定时时间（如果有）
+        let scheduledTimestamp: number | undefined
+        if (scheduledTime) {
+          scheduledTimestamp = new Date(scheduledTime).getTime()
+          if (scheduledTimestamp <= Date.now()) {
+            toast.error('定时时间必须晚于当前时间')
+            setGrabbingCourses(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(courseKey)
+              return newSet
+            })
+            return
+          }
+        }
+        
+        // 提交到服务器端任务
+        console.log('📤 提交到服务器端任务:', {
+          userId,
+          schoolId: currentSchool.id,
+          course: course.kcmc,
+          scheduledTime: scheduledTimestamp
+        })
+        
+        try {
+          const response = await fetch(getApiUrl('/server-selection/tasks'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              userId,
+              schoolId: currentSchool.id,
+              courses: [{
+                kch: course.kch_id,
+                kxh: course.jxb_id,
+                name: course.kcmc,
+                // 保存完整的课程数据，包括参数
+                jxb_id: course.jxb_id,
+                do_jxb_id: course.do_jxb_id || course.jxb_id,
+                kch_id: course.kch_id,
+                jxbzls: course.jxbzls || '1',
+                kklxdm: course.kklxdm || '01',
+                kcmc: course.kcmc,
+                jxbmc: course.jxbmc || course.jsxm,
+                _rwlx: course._rwlx,
+                _xklc: course._xklc,
+                _xkly: course._xkly,
+                _xkkz_id: course._xkkz_id
+              }],
+              cookie,
+              scheduledTime: scheduledTimestamp // 传递定时时间
+            })
+          })
+          
+          const result = await response.json()
+          console.log('📥 服务器端任务响应:', result)
+          
+          if (result.success) {
+            if (scheduledTime) {
+              const timeStr = new Date(scheduledTime).toLocaleString('zh-CN')
+              toast.success(`课程 "${course.kcmc}" 已设定定时抢课任务（${timeStr}）！可在"智能选课"页面查看进度。`)
+            } else {
+              toast.success(`课程 "${course.kcmc}" 已提交到服务器端抢课任务！服务器将持续尝试抢课，可在"智能选课"页面查看进度。`)
+            }
+            setScheduledTime('') // 清空时间选择
+            setShowScheduleDialog(false) // 关闭对话框
+            // 服务器端抢课不需要移除抢课状态，因为是在服务器端执行的
+            setGrabbingCourses(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(courseKey)
+              return newSet
+            })
+          } else {
+            toast.error(result.message || '提交服务器端任务失败')
+            setGrabbingCourses(prev => {
+              const newSet = new Set(prev)
+              newSet.delete(courseKey)
+              return newSet
+            })
+          }
+        } catch (error: any) {
+          console.error('❌ 提交服务器端任务失败:', error)
+          toast.error('提交服务器端任务失败: ' + (error.message || '网络错误'))
+          setGrabbingCourses(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(courseKey)
+            return newSet
+          })
+        }
+        return // 重要：提交到服务器端后，直接返回，不执行本地抢课逻辑
+      }
+      
+      // 如果没有开启服务器端抢课，使用本地抢课
+      console.log('⚠️ 使用本地抢课模式（浏览器端）')
+      
+      // 调试：检查课程数据中的参数
+      console.log(`🔍 前端：准备选课，课程数据中的参数:`, {
+        _rwlx: course._rwlx,
+        _xklc: course._xklc,
+        _xkly: course._xkly,
+        _xkkz_id: course._xkkz_id,
+        kch_id: course.kch_id,
+        kcmc: course.kcmc
+      })
+      
+      // 本地抢课
       const response = await courseAPI.executeSingleCourseSelection({
         jxb_id: course.jxb_id,
         do_jxb_id: course.do_jxb_id || course.jxb_id,
@@ -230,7 +382,12 @@ export default function CourseInfoPage() {
         jxbzls: course.jxbzls || '1',
         kklxdm: course.kklxdm || '01', // 课程类型代码 (01=必修, 10=选修)
         kcmc: course.kcmc,
-        jxbmc: course.jxbmc || course.jsxm
+        jxbmc: course.jxbmc || course.jsxm,
+        // 传递获取课程列表时使用的参数，确保选课时使用相同的参数
+        _rwlx: course._rwlx,
+        _xklc: course._xklc,
+        _xkly: course._xkly,
+        _xkkz_id: course._xkkz_id
       }, currentSchool.id) as any
       
       if (response.success) {
@@ -256,33 +413,39 @@ export default function CourseInfoPage() {
         return newSet
       })
     }
-  }
+  }, [selectedTab, fetchAvailableCourses, fetchSelectedCourses, useServerSelection, isServerSelectionActivated])
 
-  // 过滤课程
-  const filteredCourses = (selectedTab === 'available' ? availableCourses : selectedCourses).filter(course => {
-    if (!course) return false
+  // 过滤课程 - 使用 useMemo 优化性能
+  const filteredCourses = useMemo(() => {
+    const courses = selectedTab === 'available' ? availableCourses : selectedCourses
+    if (!searchTerm) return courses
     
-    // 可选课程和已选课程的字段名不同，需要分别处理
-    if (selectedTab === 'available') {
-      // 可选课程字段
-      const courseName = course.kcmc || ''
-      const teacherName = course.jsxm || ''
-      const category = course.kclb || ''
+    const lowerSearchTerm = searchTerm.toLowerCase()
+    return courses.filter(course => {
+      if (!course) return false
       
-      return courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             teacherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             category.toLowerCase().includes(searchTerm.toLowerCase())
-    } else {
-      // 已选课程字段
-      const courseName = course.course_name || course.kcmc || ''
-      const teacherName = course.teacher || course.jsxm || ''
-      const className = course.class_name || course.jxbmc || ''
-      
-      return courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             teacherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-             className.toLowerCase().includes(searchTerm.toLowerCase())
-    }
-  })
+      // 可选课程和已选课程的字段名不同，需要分别处理
+      if (selectedTab === 'available') {
+        // 可选课程字段
+        const courseName = course.kcmc || ''
+        const teacherName = course.jsxm || ''
+        const category = course.kclb || ''
+        
+        return courseName.toLowerCase().includes(lowerSearchTerm) ||
+               teacherName.toLowerCase().includes(lowerSearchTerm) ||
+               category.toLowerCase().includes(lowerSearchTerm)
+      } else {
+        // 已选课程字段
+        const courseName = course.course_name || course.kcmc || ''
+        const teacherName = course.teacher || course.jsxm || ''
+        const className = course.class_name || course.jxbmc || ''
+        
+        return courseName.toLowerCase().includes(lowerSearchTerm) ||
+               teacherName.toLowerCase().includes(lowerSearchTerm) ||
+               className.toLowerCase().includes(lowerSearchTerm)
+      }
+    })
+  }, [selectedTab, availableCourses, selectedCourses, searchTerm])
 
   // 切换分类展开状态
   const toggleCategory = useCallback((category: string) => {
@@ -459,6 +622,99 @@ export default function CourseInfoPage() {
     return sortedGrouped
   }, [filteredCourses, groupByCategory, selectedTab])
 
+  // 预计算分类索引范围（避免在渲染时重复计算）
+  const categoryIndexMap = useMemo(() => {
+    const map = new Map<string, { start: number, end: number }>()
+    let currentIndex = 0
+    
+    Object.entries(groupedCourses).forEach(([category, courses]) => {
+      map.set(category, {
+        start: currentIndex,
+        end: currentIndex + courses.length
+      })
+      currentIndex += courses.length
+    })
+    
+    return map
+  }, [groupedCourses])
+
+  // 处理滚动事件，实现虚拟滚动（使用 requestAnimationFrame 优化）
+  const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    // 取消之前的 RAF
+    if (scrollRafRef.current !== null) {
+      cancelAnimationFrame(scrollRafRef.current)
+    }
+    
+    // 使用 requestAnimationFrame 优化滚动性能
+    scrollRafRef.current = requestAnimationFrame(() => {
+      // 使用 ref 获取容器元素，避免事件对象失效
+      const container = containerRef.current
+      if (!container) {
+        scrollRafRef.current = null
+        return
+      }
+      
+      const scrollTop = container.scrollTop
+      const containerHeight = container.clientHeight
+      
+      // 计算可见范围（提前和延后加载更多，确保滚动流畅）
+      const buffer = 20 // 缓冲区大小
+      const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - buffer)
+      const end = Math.min(
+        filteredCourses.length,
+        Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + buffer
+      )
+      
+      // 只有当范围变化较大时才更新（减少状态更新）
+      setVisibleRange(prev => {
+        if (Math.abs(start - prev.start) > 5 || Math.abs(end - prev.end) > 5) {
+          return { start, end }
+        }
+        return prev
+      })
+      
+      scrollRafRef.current = null
+    })
+  }, [filteredCourses.length])
+  
+  // 清理 RAF 当组件卸载时
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current)
+      }
+    }
+  }, [])
+
+  // 重置可见范围当课程列表变化时
+  useEffect(() => {
+    setVisibleRange({ start: 0, end: ITEMS_PER_PAGE })
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0
+    }
+  }, [filteredCourses.length, selectedTab])
+
+        // 创建课程回调函数映射（避免每次渲染时创建新函数）
+        // 注意：这里需要包含 useServerSelection 和 isServerSelectionActivated，确保状态变化时重新创建回调
+        const courseCallbacks = useMemo(() => {
+          const callbacks = new Map<string, { onGrab: () => void, onToggle: () => void }>()
+          filteredCourses.forEach(course => {
+            const key = `${course.kch_id}_${course.jxb_id}`
+            callbacks.set(key, {
+              onGrab: () => {
+                console.log('🎯 点击抢课按钮，当前状态:', {
+                  useServerSelection,
+                  isServerSelectionActivated,
+                  course: course.kcmc
+                })
+                grabCourse(course, scheduledTime || undefined)
+              },
+              onToggle: () => toggleCourseSelection(key)
+            })
+          })
+          return callbacks
+        }, [filteredCourses, grabCourse, toggleCourseSelection, scheduledTime, useServerSelection, isServerSelectionActivated])
+
   // 获取所有分类
   const allCategories = useMemo(() => {
     return Array.from(new Set(filteredCourses.map(course => {
@@ -471,6 +727,38 @@ export default function CourseInfoPage() {
     })
   }, [filteredCourses, selectedTab])
 
+  // 检查服务器端抢课激活状态
+  useEffect(() => {
+    const checkActivationStatus = async () => {
+      try {
+        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+        if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+          localStorage.setItem('userId', userId)
+        }
+        
+        const { getApiUrl } = require('@/lib/api')
+        const response = await fetch(getApiUrl(`/activation/verify?userId=${userId}`))
+        const result = await response.json()
+        
+        console.log('🔍 检查激活状态结果:', result)
+        
+        if (result.success && result.activated) {
+          setIsServerSelectionActivated(true)
+          console.log('✅ 服务器端抢课已激活')
+        } else {
+          setIsServerSelectionActivated(false)
+          setUseServerSelection(false) // 如果未激活，关闭服务器抢课选项
+          console.log('❌ 服务器端抢课未激活')
+        }
+      } catch (error) {
+        console.error('检查激活状态失败:', error)
+        setIsServerSelectionActivated(false)
+      }
+    }
+    
+    checkActivationStatus()
+  }, [])
+  
   // 移除自动查询，改为手动查询
   // useEffect(() => {
   //   fetchAvailableCourses()
@@ -480,11 +768,7 @@ export default function CourseInfoPage() {
   if (!studentInfo) {
     return (
       <div className="space-y-6">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-center min-h-[400px]"
-        >
+        <div className="flex items-center justify-center min-h-[400px]">
           <Card className="glass max-w-md w-full">
             <CardContent className="p-4 sm:p-8 text-center">
               <div className="mb-4">
@@ -506,7 +790,7 @@ export default function CourseInfoPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       </div>
     )
   }
@@ -514,11 +798,7 @@ export default function CourseInfoPage() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* 页面标题 */}
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0"
-      >
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
           <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">📚 课程信息</h2>
           <p className="text-xs sm:text-base text-muted-foreground">查看可选课程和已选课程，支持快速抢课</p>
@@ -564,15 +844,59 @@ export default function CourseInfoPage() {
             刷新课程
           </Button>
         </div>
-      </motion.div>
+      </div>
+
+      {/* 时间选择对话框 */}
+      {showScheduleDialog && (
+        <Card className="glass mb-4">
+          <CardHeader>
+            <CardTitle className="text-sm sm:text-base">设定定时抢课时间</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">选择抢课开始时间，系统将在指定时间自动开始抢课</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs sm:text-sm text-muted-foreground">抢课时间</label>
+              <Input
+                type="datetime-local"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="text-xs sm:text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => {
+                  setScheduledTime('')
+                  setShowScheduleDialog(false)
+                }}
+                variant="outline"
+                className="btn-hover text-xs sm:text-sm flex-1"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  if (scheduledTime && new Date(scheduledTime).getTime() > Date.now()) {
+                    setShowScheduleDialog(false)
+                    toast.success(`已设定定时抢课时间：${new Date(scheduledTime).toLocaleString('zh-CN')}`)
+                  } else if (scheduledTime) {
+                    toast.error('定时时间必须晚于当前时间')
+                  } else {
+                    setShowScheduleDialog(false)
+                  }
+                }}
+                className="btn-hover text-xs sm:text-sm flex-1"
+              >
+                确定
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 搜索和筛选 */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
-        className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4"
-      >
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
           <Input
@@ -583,6 +907,38 @@ export default function CourseInfoPage() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* 服务器端抢课开关（仅在已激活时显示） */}
+          {isServerSelectionActivated && (
+            <>
+              <Button
+                onClick={() => setUseServerSelection(!useServerSelection)}
+                variant={useServerSelection ? "default" : "outline"}
+                className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
+              >
+                <Server className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">服务器抢课</span>
+                <span className="sm:hidden">服务器</span>
+              </Button>
+              {useServerSelection && (
+                <Button
+                  onClick={() => setShowScheduleDialog(!showScheduleDialog)}
+                  variant="outline"
+                  className="btn-hover text-xs sm:text-sm px-2 sm:px-4"
+                >
+                  <Timer className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                  <span className="hidden sm:inline">{scheduledTime ? '修改时间' : '设定时间'}</span>
+                  <span className="sm:hidden">时间</span>
+                </Button>
+              )}
+              {useServerSelection && scheduledTime && (
+                <div className="flex items-center px-2 py-1 text-xs text-blue-400 bg-blue-500/10 border border-blue-500/30 rounded">
+                  <Clock className="h-3 w-3 mr-1" />
+                  {new Date(scheduledTime).toLocaleString('zh-CN')}
+                </div>
+              )}
+            </>
+          )}
+          
           <Button
             onClick={() => {
               const newTab = selectedTab === 'available' ? 'selected' : 'available'
@@ -714,15 +1070,10 @@ export default function CourseInfoPage() {
             </>
           )}
         </div>
-      </motion.div>
+      </div>
 
       {/* 课程统计 */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className={`grid grid-cols-2 sm:grid-cols-3 ${isMultiSelectMode ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-2 sm:gap-4`}
-      >
+      <div className={`grid grid-cols-2 sm:grid-cols-3 ${isMultiSelectMode ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-2 sm:gap-4`}>
         <Card className="glass">
           <CardContent className="p-2 sm:p-4">
             <div className="flex items-center space-x-1.5 sm:space-x-2">
@@ -773,15 +1124,11 @@ export default function CourseInfoPage() {
             </CardContent>
           </Card>
         )}
-      </motion.div>
+      </div>
 
       {/* 多选模式提示 */}
       {isMultiSelectMode && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
+        <div>
           <Card className="glass border-blue-500/20 bg-blue-500/5">
             <CardContent className="p-3 sm:p-4">
               <div className="flex items-start space-x-2 sm:space-x-3">
@@ -804,74 +1151,31 @@ export default function CourseInfoPage() {
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
       )}
 
-      {/* 课程列表 */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3 }}
-        className="space-y-4"
+      {/* 课程列表 - 使用虚拟滚动优化性能 */}
+      <div 
+        ref={containerRef}
+        className="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto"
+        onScroll={handleScroll}
+        style={{ 
+          scrollBehavior: 'auto', // 改为 auto 提升性能
+          WebkitOverflowScrolling: 'touch', // iOS 平滑滚动
+          willChange: 'scroll-position', // 提示浏览器优化滚动
+          contain: 'layout style paint' // CSS containment 优化
+        }}
       >
         {isLoading ? (
-          <motion.div 
-            className="flex flex-col items-center justify-center py-12"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.5 }}
-          >
-            <motion.div
-              className="relative mb-4"
-              animate={{ 
-                rotate: 360,
-                scale: [1, 1.1, 1]
-              }}
-              transition={{ 
-                rotate: { duration: 2, repeat: Infinity, ease: "linear" },
-                scale: { duration: 1.5, repeat: Infinity, ease: "easeInOut" }
-              }}
-            >
-              <Loader2 className="h-12 w-12 text-primary" />
-              <motion.div
-                className="absolute inset-0 rounded-full border-2 border-primary/20"
-                animate={{ 
-                  scale: [1, 1.5, 1],
-                  opacity: [0.5, 0, 0.5]
-                }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              />
-            </motion.div>
-            <motion.div
-              className="text-center"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="relative mb-4">
+              <Loader2 className="h-12 w-12 text-primary animate-spin" />
+            </div>
+            <div className="text-center">
               <h3 className="text-lg font-semibold text-white mb-2">正在加载课程</h3>
               <p className="text-muted-foreground">请稍候，正在获取最新课程信息...</p>
-            </motion.div>
-            <motion.div
-              className="mt-4 w-64 h-1 bg-white/10 rounded-full overflow-hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              <motion.div
-                className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
-                animate={{ x: ["-100%", "100%"] }}
-                transition={{ 
-                  duration: 2,
-                  repeat: Infinity,
-                  ease: "easeInOut"
-                }}
-              />
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         ) : filteredCourses.length === 0 ? (
           <Card className="glass">
             <CardContent className="p-8 text-center">
@@ -884,123 +1188,208 @@ export default function CourseInfoPage() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {Object.entries(groupedCourses).map(([category, courses], categoryIndex) => (
-              <motion.div
-                key={category}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: categoryIndex * 0.1 }}
-              >
-                {groupByCategory && category !== 'all' ? (
-                  // 分类模式
-                  <div className="space-y-3">
-                    <motion.div
-                      className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
-                      onClick={() => toggleCategory(category)}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                    >
-                      <div className="flex items-center space-x-3">
-                        <motion.div
-                          animate={{ rotate: expandedCategories.has(category) ? 90 : 0 }}
-                          transition={{ duration: 0.2 }}
-                        >
-                          <ChevronRight className="h-5 w-5 text-primary" />
-                        </motion.div>
-                        <Folder className="h-5 w-5 text-blue-400" />
-                        <h3 className="text-lg font-semibold text-white">
-                          {category}
-                        </h3>
-                        <span className="px-2 py-1 bg-primary/20 text-primary text-sm rounded-full">
-                          {courses.length} 门课程
-                        </span>
-                      </div>
-                    </motion.div>
-                    
-                    <motion.div
-                      initial={false}
-                      animate={{
-                        height: expandedCategories.has(category) ? 'auto' : 0,
-                        opacity: expandedCategories.has(category) ? 1 : 0
-                      }}
-                      transition={{ duration: 0.3, ease: 'easeInOut' }}
-                      className="overflow-hidden"
-                    >
-                      <div className="grid grid-cols-1 gap-4 pl-8">
-                        {courses.map((course, index) => (
-                          <motion.div
-                            key={`${course.kch_id}_${course.jxb_id}`}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ 
-                              delay: index * 0.05,
-                              duration: 0.4
-                            }}
-                            whileHover={{
-                              y: -3,
-                              transition: { duration: 0.2 }
-                            }}
-                            layout
+            {/* 虚拟滚动：只渲染可见的课程 */}
+            {filteredCourses.length > ITEMS_PER_PAGE ? (
+              <>
+                {/* 顶部占位符 */}
+                {visibleRange.start > 0 && (
+                  <div 
+                    style={{ 
+                      height: visibleRange.start * ITEM_HEIGHT, 
+                      minHeight: '1px',
+                      contentVisibility: 'auto', // 优化占位符渲染
+                      containIntrinsicSize: `${ITEM_HEIGHT}px`
+                    }} 
+                    aria-hidden="true" 
+                  />
+                )}
+                
+                {/* 可见的课程 */}
+                {Object.entries(groupedCourses).map(([category, courses]) => {
+                  // 使用预计算的索引范围（避免重复计算）
+                  const indexRange = categoryIndexMap.get(category)
+                  if (!indexRange) return null
+                  
+                  // 检查该分类是否在可见范围内
+                  const isVisible = indexRange.end >= visibleRange.start && indexRange.start < visibleRange.end
+                  
+                  if (!isVisible) return null
+                  
+                  return (
+                    <div key={category}>
+                      {groupByCategory && category !== 'all' ? (
+                        // 分类模式
+                        <div className="space-y-3">
+                          <div
+                            className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+                            onClick={() => toggleCategory(category)}
                           >
+                            <div className="flex items-center space-x-3">
+                              <div
+                                className={`transition-transform duration-200 ${expandedCategories.has(category) ? 'rotate-90' : ''}`}
+                              >
+                                <ChevronRight className="h-5 w-5 text-primary" />
+                              </div>
+                              <Folder className="h-5 w-5 text-blue-400" />
+                              <h3 className="text-lg font-semibold text-white">
+                                {category}
+                              </h3>
+                              <span className="px-2 py-1 bg-primary/20 text-primary text-sm rounded-full">
+                                {courses.length} 门课程
+                              </span>
+                            </div>
+                          </div>
+                          
+                          {expandedCategories.has(category) && (
+                            <div className="grid grid-cols-1 gap-4 pl-8">
+                              {courses.map((course) => {
+                                const courseKey = `${course.kch_id}_${course.jxb_id}`
+                                const callbacks = courseCallbacks.get(courseKey)
+                                return (
+                                  <CourseCard
+                                    key={courseKey}
+                                    course={course}
+                                    onGrab={callbacks?.onGrab || (() => {})}
+                                    isGrabbing={grabbingCourses.has(courseKey)}
+                                    showGrabButton={selectedTab === 'available'}
+                                    isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
+                                    isSelected={selectedTab === 'available' ? multiSelectedCourses.has(courseKey) : false}
+                                    onToggleSelection={selectedTab === 'available' ? (callbacks?.onToggle || (() => {})) : undefined}
+                                  />
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        // 普通模式或"全部"分类
+                        <div className="grid grid-cols-1 gap-4">
+                          {courses.map((course) => (
                             <CourseCard
+                              key={`${course.kch_id}_${course.jxb_id}`}
                               course={course}
-                              onGrab={() => grabCourse(course)}
+                              onGrab={() => {
+                                console.log('🎯 点击抢课按钮（直接调用），当前状态:', {
+                                  useServerSelection,
+                                  isServerSelectionActivated,
+                                  course: course.kcmc
+                                })
+                                grabCourse(course, scheduledTime || undefined)
+                              }}
                               isGrabbing={grabbingCourses.has(`${course.kch_id}_${course.jxb_id}`)}
                               showGrabButton={selectedTab === 'available'}
                               isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
                               isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
                               onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
                             />
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  </div>
-                ) : (
-                  // 普通模式或"全部"分类
-                  <div className="grid grid-cols-1 gap-4">
-                    {courses.map((course, index) => (
-                      <motion.div
-                        key={`${course.kch_id}_${course.jxb_id}`}
-                        initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        transition={{ 
-                          delay: index * 0.08,
-                          duration: 0.6,
-                          ease: [0.25, 0.46, 0.45, 0.94]
-                        }}
-                        whileHover={{ 
-                          y: -5,
-                          scale: 1.02,
-                          transition: { duration: 0.2 }
-                        }}
-                        layout
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                
+                {/* 底部占位符 */}
+                {visibleRange.end < filteredCourses.length && (
+                  <div 
+                    style={{ 
+                      height: (filteredCourses.length - visibleRange.end) * ITEM_HEIGHT, 
+                      minHeight: '1px',
+                      contentVisibility: 'auto', // 优化占位符渲染
+                      containIntrinsicSize: `${ITEM_HEIGHT}px`
+                    }} 
+                    aria-hidden="true" 
+                  />
+                )}
+              </>
+            ) : (
+              // 课程数量较少时，直接渲染全部
+              Object.entries(groupedCourses).map(([category, courses]) => (
+                <div key={category}>
+                  {groupByCategory && category !== 'all' ? (
+                    // 分类模式
+                    <div className="space-y-3">
+                      <div
+                        className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-colors"
+                        onClick={() => toggleCategory(category)}
                       >
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`transition-transform duration-200 ${expandedCategories.has(category) ? 'rotate-90' : ''}`}
+                          >
+                            <ChevronRight className="h-5 w-5 text-primary" />
+                          </div>
+                          <Folder className="h-5 w-5 text-blue-400" />
+                          <h3 className="text-lg font-semibold text-white">
+                            {category}
+                          </h3>
+                          <span className="px-2 py-1 bg-primary/20 text-primary text-sm rounded-full">
+                            {courses.length} 门课程
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {expandedCategories.has(category) && (
+                        <div className="grid grid-cols-1 gap-4 pl-8">
+                          {courses.map((course) => (
+                            <CourseCard
+                              key={`${course.kch_id}_${course.jxb_id}`}
+                              course={course}
+                              onGrab={() => {
+                                console.log('🎯 点击抢课按钮（直接调用），当前状态:', {
+                                  useServerSelection,
+                                  isServerSelectionActivated,
+                                  course: course.kcmc
+                                })
+                                grabCourse(course, scheduledTime || undefined)
+                              }}
+                              isGrabbing={grabbingCourses.has(`${course.kch_id}_${course.jxb_id}`)}
+                              showGrabButton={selectedTab === 'available'}
+                              isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
+                              isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
+                              onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    // 普通模式或"全部"分类
+                    <div className="grid grid-cols-1 gap-4">
+                      {courses.map((course) => (
                         <CourseCard
+                          key={`${course.kch_id}_${course.jxb_id}`}
                           course={course}
-                          onGrab={() => grabCourse(course)}
+                          onGrab={() => {
+                            console.log('🎯 点击抢课按钮（直接调用），当前状态:', {
+                              useServerSelection,
+                              isServerSelectionActivated,
+                              course: course.kcmc
+                            })
+                            grabCourse(course, scheduledTime || undefined)
+                          }}
                           isGrabbing={grabbingCourses.has(`${course.kch_id}_${course.jxb_id}`)}
                           showGrabButton={selectedTab === 'available'}
                           isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
                           isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
                           onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
                         />
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
-              </motion.div>
-            ))}
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         )}
-      </motion.div>
+      </div>
 
     </div>
   )
 }
 
-// 课程卡片组件
-function CourseCard({ 
+// 课程卡片组件 - 使用 memo 优化性能，添加自定义比较函数
+const CourseCardComponent = function CourseCard({ 
   course, 
   onGrab, 
   isGrabbing, 
@@ -1015,7 +1404,7 @@ function CourseCard({
   showGrabButton: boolean
   isMultiSelectMode: boolean
   isSelected: boolean
-  onToggleSelection: () => void
+  onToggleSelection?: () => void
 }) {
   // 统一字段映射，兼容已选课程和可选课程的不同字段名
   const courseName = course.course_name || course.kcmc || '未知课程'
@@ -1025,8 +1414,20 @@ function CourseCard({
   const credit = course.credit || course.xf || '0'
   const location = course.location || course.skdd || course.jxdd || '未知地点'
   const time = course.time || course.sksj || '未知时间'
-  const selectedCount = course.selected_count || course.yxzrs || '0'
-  const maxCapacity = course.max_capacity || course.bjrs || '0'
+  const selectedCount = (
+    course.selected_count ??
+    course.yxzrs ??
+    course.selected ??
+    course.selectedCount ??
+    '0'
+  ).toString()
+  const maxCapacity = (
+    course.max_capacity ??
+    course.bjrs ??
+    course.capacity ??
+    course.maxCapacity ??
+    '0'
+  ).toString()
   const classId = course.class_name || course.jxbmc || ''
   const courseId = course.course_id || course.kch || course.kch_id || ''
   const jxbId = course.jxb_id || ''
@@ -1082,113 +1483,65 @@ function CourseCard({
   }
   
   return (
-    <motion.div
-      whileHover={{ 
-        scale: 1.02,
-        transition: { duration: 0.2 }
-      }}
-      whileTap={{ scale: 0.98 }}
-    >
+    <div style={{ willChange: 'transform', contain: 'layout style' }}>
       <Card 
-        className={`glass card-hover relative overflow-hidden ${
+        className={`glass card-hover relative overflow-hidden transition-colors ${
           isMultiSelectMode ? 'cursor-pointer' : ''
         } ${isSelected ? 'ring-2 ring-green-500/50 bg-green-500/5' : ''}`}
         onClick={isMultiSelectMode ? onToggleSelection : undefined}
+        style={{ 
+          contentVisibility: 'auto', // 优化不可见元素的渲染
+          containIntrinsicSize: '200px auto'
+        }}
       >
-        <motion.div
-          className="absolute inset-0 bg-gradient-to-r from-purple-500/5 to-blue-500/5"
-          initial={{ opacity: 0 }}
-          whileHover={{ opacity: 1 }}
-          transition={{ duration: 0.3 }}
-        />
         <CardContent className="p-4 sm:p-6 relative z-10">
           <div className="flex items-start justify-between">
             <div className="flex-1 space-y-3">
-              <motion.div 
-                className="flex items-center space-x-3"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-              >
+              <div className="flex items-center space-x-3">
                 {/* 多选状态指示器 */}
                 {isMultiSelectMode && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.1, type: "spring", stiffness: 300 }}
-                    className="flex items-center"
-                  >
+                  <div className="flex items-center">
                     <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                       isSelected 
                         ? 'bg-green-500 border-green-500' 
                         : 'border-gray-400 hover:border-green-400'
                     }`}>
                       {isSelected && (
-                        <motion.svg
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: "spring", stiffness: 300 }}
+                        <svg
                           className="w-4 h-4 text-white"
                           fill="currentColor"
                           viewBox="0 0 20 20"
                         >
                           <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </motion.svg>
+                        </svg>
                       )}
                     </div>
-                  </motion.div>
+                  </div>
                 )}
                 
-                <motion.h3 
-                  className={`text-base sm:text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}
-                  whileHover={{ scale: 1.05 }}
-                  transition={{ type: "spring", stiffness: 300 }}
-                >
+                <h3 className={`text-base sm:text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}>
                   {courseName}
-                </motion.h3>
-                <motion.span 
-                  className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.2, type: "spring", stiffness: 300 }}
-                  whileHover={{ scale: 1.1 }}
-                >
+                </h3>
+                <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full">
                   {category}
-                </motion.span>
-                <motion.span 
-                  className={`px-2 py-1 text-xs rounded-full ${
-                    courseType === '必修' 
-                      ? 'bg-red-500/20 text-red-400' 
-                      : courseType === '选修' 
-                        ? 'bg-green-500/20 text-green-400' 
-                        : 'bg-gray-500/20 text-gray-400'
-                  }`}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  transition={{ delay: 0.25, type: "spring", stiffness: 300 }}
-                  whileHover={{ scale: 1.1 }}
-                >
+                </span>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  courseType === '必修' 
+                    ? 'bg-red-500/20 text-red-400' 
+                    : courseType === '选修' 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : 'bg-gray-500/20 text-gray-400'
+                }`}>
                   {courseType}
-                </motion.span>
+                </span>
                 {classId && (
-                  <motion.span 
-                    className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.3, type: "spring", stiffness: 300 }}
-                    whileHover={{ scale: 1.1 }}
-                  >
+                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
                     {classId}
-                  </motion.span>
+                  </span>
                 )}
-              </motion.div>
+              </div>
             
-            <motion.div 
-              className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-            >
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
               {[
                 { icon: Users, label: "教师", value: detailedTeacher },
                 { icon: Clock, label: "学分", value: credit },
@@ -1199,25 +1552,16 @@ function CourseCard({
                 { icon: Settings, label: "模式", value: detailedMode },
                 { icon: Calendar, label: "时间", value: detailedTime }
               ].map((item, index) => (
-                <motion.div 
+                <div 
                   key={index}
                   className="flex items-center space-x-2"
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.3 + index * 0.1 }}
-                  whileHover={{ scale: 1.05 }}
                 >
-                  <motion.div
-                    whileHover={{ rotate: 360 }}
-                    transition={{ duration: 0.5 }}
-                  >
-                    <item.icon className="h-4 w-4 text-muted-foreground" />
-                  </motion.div>
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
                   <span className="text-muted-foreground">{item.label}:</span>
                   <span className="text-white font-medium">{item.value}</span>
-                </motion.div>
+                </div>
               ))}
-            </motion.div>
+            </div>
             
             <div className="text-sm text-muted-foreground">
               <div>时间: {time}</div>
@@ -1226,75 +1570,46 @@ function CourseCard({
           </div>
           
           {showGrabButton && !isMultiSelectMode && (
-            <motion.div 
-              className="ml-4"
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.4 }}
-            >
-              <motion.div
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 300 }}
+            <div className="ml-4">
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation() // 防止事件冒泡到卡片
+                  onGrab()
+                }}
+                disabled={isGrabbing}
+                className="btn-hover"
+                size="sm"
               >
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation() // 防止事件冒泡到卡片
-                    onGrab()
-                  }}
-                  disabled={isGrabbing}
-                  className="btn-hover relative overflow-hidden"
-                  size="sm"
-                >
-                  <motion.div
-                    className="absolute inset-0 bg-gradient-to-r from-green-500/20 to-emerald-500/20"
-                    initial={{ x: "-100%" }}
-                    whileHover={{ x: "100%" }}
-                    transition={{ duration: 0.6 }}
-                  />
-                  {isGrabbing ? (
-                    <motion.div 
-                      className="flex items-center relative z-10"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                      >
-                        <Loader2 className="h-4 w-4 mr-2" />
-                      </motion.div>
-                      抢课中...
-                    </motion.div>
-                  ) : (
-                    <motion.div 
-                      className="flex items-center relative z-10"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <motion.div
-                        animate={{ 
-                          scale: [1, 1.2, 1],
-                          rotate: [0, 5, -5, 0]
-                        }}
-                        transition={{ 
-                          duration: 2,
-                          repeat: Infinity,
-                          repeatDelay: 1
-                        }}
-                      >
-                        <Play className="h-4 w-4 mr-2" />
-                      </motion.div>
-                      抢课
-                    </motion.div>
-                  )}
-                </Button>
-              </motion.div>
-            </motion.div>
+                {isGrabbing ? (
+                  <div className="flex items-center">
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    抢课中...
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <Play className="h-4 w-4 mr-2" />
+                    抢课
+                  </div>
+                )}
+              </Button>
+            </div>
           )}
         </div>
       </CardContent>
     </Card>
-    </motion.div>
+    </div>
   )
 }
+
+// 使用 memo 包装组件，添加自定义比较函数
+const CourseCard = memo(CourseCardComponent, (prevProps, nextProps) => {
+  // 自定义比较函数，只在关键属性变化时重新渲染
+  return (
+    prevProps.course.kch_id === nextProps.course.kch_id &&
+    prevProps.course.jxb_id === nextProps.course.jxb_id &&
+    prevProps.isGrabbing === nextProps.isGrabbing &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isMultiSelectMode === nextProps.isMultiSelectMode &&
+    prevProps.showGrabButton === nextProps.showGrabButton
+  )
+})

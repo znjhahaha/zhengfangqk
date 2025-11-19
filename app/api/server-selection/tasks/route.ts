@@ -19,7 +19,7 @@ import { ActivationCode } from '@/lib/activation-code-manager'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userId, sessionId, schoolId, courses, cookie, activationCode } = body
+    const { userId, sessionId, schoolId, courses, cookie, activationCode, scheduledTime } = body
 
     // 验证激活码
     if (activationCode) {
@@ -95,24 +95,49 @@ export async function POST(request: NextRequest) {
       sessionId,
       schoolId: schoolId || getCurrentSchool().id, // 如果没提供schoolId，使用默认学校（但应该从客户端传入）
       courses: courses.map((c: any) => ({
-        kch: c.kch,
-        kxh: c.kxh,
-        name: c.name
+        kch: c.kch || c.kch_id,
+        kxh: c.kxh || c.jxb_id,
+        name: c.name || c.kcmc,
+        // 保存完整的课程数据，包括选课所需的参数
+        jxb_id: c.jxb_id || c.kxh,
+        do_jxb_id: c.do_jxb_id || c.jxb_id || c.kxh,
+        kch_id: c.kch_id || c.kch,
+        jxbzls: c.jxbzls || '1',
+        kklxdm: c.kklxdm || '01',
+        kcmc: c.kcmc || c.name,
+        jxbmc: c.jxbmc || c.jsxm,
+        _rwlx: c._rwlx,
+        _xklc: c._xklc,
+        _xkly: c._xkly,
+        _xkkz_id: c._xkkz_id,
+        ...c // 保留其他所有属性
       })),
       cookie, // 使用用户自己的Cookie，确保用户隔离
       status: 'pending',
       createdAt: Date.now(),
       attemptCount: 0,
-      maxAttempts: 1000 // 默认最大尝试次数
+      maxAttempts: undefined, // 设为undefined表示无限重试直到成功
+      scheduledTime: scheduledTime ? Number(scheduledTime) : undefined // 定时执行时间
     }
 
     addTask(task)
-    console.log(`✅ 任务已创建: ${taskId}, 用户: ${userId}, 学校: ${task.schoolId}, Cookie长度: ${cookie.length}`)
+    console.log(`✅ 任务已创建: ${taskId}, 用户: ${userId}, 学校: ${task.schoolId}, Cookie长度: ${cookie.length}${task.scheduledTime ? `, 定时时间: ${new Date(task.scheduledTime).toLocaleString('zh-CN')}` : ''}`)
 
-    // 启动任务处理（异步，不阻塞响应）
-    processTask(task).catch(error => {
-      console.error('处理任务失败:', error)
-    })
+    // 如果有定时时间，等待到指定时间再启动；否则立即启动
+    if (task.scheduledTime && task.scheduledTime > Date.now()) {
+      const delay = task.scheduledTime - Date.now()
+      console.log(`⏰ 任务 ${taskId} 将在 ${Math.round(delay / 1000)} 秒后启动`)
+      setTimeout(() => {
+        processTask(task).catch(error => {
+          console.error('处理任务失败:', error)
+        })
+      }, delay)
+    } else {
+      // 启动任务处理（异步，不阻塞响应）
+      processTask(task).catch(error => {
+        console.error('处理任务失败:', error)
+      })
+    }
 
     return NextResponse.json({
       success: true,
@@ -266,21 +291,49 @@ async function processTask(task: ServerSelectionTask) {
 
   console.log(`🚀 开始处理任务 ${task.id}`)
 
-  // 循环尝试抢课
-  while (task.status === 'running') {
+  // 循环尝试抢课（失败后间隔1秒重试，直到成功）
+  while (true) {
+    // 检查任务状态
+    const currentTask = getTask(task.id)
+    if (!currentTask || currentTask.status !== 'running') {
+      console.log(`⏹️ 任务 ${task.id} 已停止，状态: ${currentTask?.status || '不存在'}`)
+      break
+    }
+
+    // 检查是否达到最大尝试次数（如果设置了的话）
+    if (currentTask.maxAttempts && currentTask.attemptCount >= currentTask.maxAttempts) {
+      console.log(`⛔ 任务 ${task.id} 达到最大尝试次数 ${currentTask.maxAttempts}，停止尝试`)
+      completeTask(task.id, false, '达到最大尝试次数', undefined)
+      break
+    }
+
     try {
+      // 遍历所有课程，每个课程都尝试抢课
       for (const course of task.courses) {
-        const currentTask = getTask(task.id)
-        if (!currentTask || currentTask.status !== 'running') break
+        // 再次检查任务状态（可能在循环过程中被取消）
+        const checkTask = getTask(task.id)
+        if (!checkTask || checkTask.status !== 'running') {
+          console.log(`⏹️ 任务 ${task.id} 在循环中被停止`)
+          break
+        }
 
         // 调用抢课API - 使用任务中的用户Cookie和学校ID，确保用户隔离
         // 注意：每个任务使用自己的cookie和schoolId，不会使用服务器默认值，确保用户隔离
         try {
           const result = await selectCourseWithVerification(
             {
-              kch_id: course.kch,
-              jxb_id: course.kxh,
-              do_jxb_id: course.kxh,
+              kch_id: course.kch_id || course.kch,
+              jxb_id: course.jxb_id || course.kxh,
+              do_jxb_id: course.do_jxb_id || course.jxb_id || course.kxh,
+              jxbzls: course.jxbzls || '1',
+              kklxdm: course.kklxdm || '01',
+              kcmc: course.kcmc || course.name,
+              jxbmc: course.jxbmc || course.jsxm,
+              // 传递获取课程列表时使用的参数，确保选课时使用相同的参数
+              _rwlx: course._rwlx,
+              _xklc: course._xklc,
+              _xkly: course._xkly,
+              _xkkz_id: course._xkkz_id
             },
             task.sessionId,      // 使用任务的sessionId（如果有）
             task.cookie,         // 使用任务的Cookie（用户自己的Cookie，确保用户隔离）
@@ -322,32 +375,28 @@ async function processTask(task: ServerSelectionTask) {
               console.error('更新激活码课程数失败:', error)
             }
             
-            return
+            return // 成功，退出整个函数
+          } else {
+            // 失败，记录尝试次数，继续重试
+            updateTaskAttempt(task.id)
+            const taskAfterAttempt = getTask(task.id)
+            console.log(`⚠️ 任务 ${task.id} 尝试失败（第${taskAfterAttempt?.attemptCount || 0}次）：${course.kch}-${course.kxh}，${result.message || '未知错误'}，1秒后重试...`)
           }
         } catch (error: any) {
-          console.error(`❌ 任务 ${task.id} 抢课错误:`, error)
+          // 请求失败，记录尝试次数，继续重试
+          updateTaskAttempt(task.id)
+          const taskAfterAttempt = getTask(task.id)
+          console.error(`❌ 任务 ${task.id} 请求异常（第${taskAfterAttempt?.attemptCount || 0}次）：${course.kch}-${course.kxh}`, error.message, '，1秒后重试...')
         }
 
-        // 等待一段时间再尝试
+        // 等待1秒后重试（失败后间隔1秒再次尝试）
         await new Promise(resolve => setTimeout(resolve, 1000))
       }
     } catch (error: any) {
       console.error(`❌ 任务 ${task.id} 执行错误:`, error)
-      // 继续尝试，不立即失败
+      // 继续尝试，等待2秒后继续
       await new Promise(resolve => setTimeout(resolve, 2000))
     }
-
-    // 检查是否超过最大尝试次数
-    const currentTask = getTask(task.id)
-    if (!currentTask || currentTask.status !== 'running') {
-      break
-    }
-  }
-
-  // 如果任务仍在运行但未成功，标记为失败
-  const finalTask = getTask(task.id)
-  if (finalTask && finalTask.status === 'running') {
-    completeTask(task.id, false, '达到最大尝试次数或任务超时', undefined)
   }
 }
 

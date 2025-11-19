@@ -17,11 +17,13 @@ export const metadata: Metadata = {
   keywords: ['选课', '正方教务', '教务系统', '课程选择'],
   authors: [{ name: '正方教务工具' }],
   robots: 'noindex, nofollow', // 私有应用，不索引
+  manifest: '/manifest.json', // PWA支持
 }
 
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
+  themeColor: '#7c3aed',
 }
 
 export default function RootLayout({

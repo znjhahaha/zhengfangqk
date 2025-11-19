@@ -1,0 +1,17 @@
+{
+  "activationCodes": [
+    {
+      "code": "S2AWWHIG-SFKH-DMJ6-7SVI-VVJ8CTE833EK",
+      "name": "",
+      "description": "",
+      "expiresAt": 1765084080000,
+      "maxUses": 1,
+      "isActive": true,
+      "usedCount": 1,
+      "createdAt": 1762261980466,
+      "maxCourses": 10,
+      "usedCourses": 0
+    }
+  ],
+  "lastUpdated": 1762263095309
+}

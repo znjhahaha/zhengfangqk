@@ -29,7 +29,7 @@ import {
   EyeOff
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { courseAPI } from '@/lib/api'
+import { courseAPI, getApiUrl } from '@/lib/api'
 import { useDeviceDetection, getAnimationConfig } from '@/lib/device-detector'
 
 interface ScheduleCourse {
@@ -188,7 +188,7 @@ export default function ModernSchedulePage() {
       }
       
       // 直接调用API而不是通过courseAPI，传递schoolId参数
-      const response = await fetch(`/api/schedule?schoolId=${currentSchool.id}`, {
+      const response = await fetch(getApiUrl(`/schedule?schoolId=${currentSchool.id}`), {
         method: 'GET',
         headers: {
           'x-course-cookie': cookie

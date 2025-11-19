@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const { jxb_id, do_jxb_id, kch_id, jxbzls, kklxdm, kcmc, jxbmc } = courseData
+    const { jxb_id, do_jxb_id, kch_id, jxbzls, kklxdm, kcmc, jxbmc, _rwlx, _xklc, _xkly, _xkkz_id } = courseData
     
     if (!jxb_id || !do_jxb_id || !kch_id) {
       return NextResponse.json({
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 使用带验证的选课功能（传入schoolId）
+    // 传递获取课程列表时使用的参数，确保选课时使用相同的参数
     const result = await selectCourseWithVerification({
       jxb_id,
       do_jxb_id,
@@ -43,7 +44,11 @@ export async function POST(request: NextRequest) {
       jxbzls: jxbzls || '1',
       kklxdm: kklxdm || '01', // 课程类型代码 (01=必修, 10=选修)
       kcmc: kcmc || '未知课程',
-      jxbmc: jxbmc || '未知教学班'
+      jxbmc: jxbmc || '未知教学班',
+      _rwlx,
+      _xklc,
+      _xkly,
+      _xkkz_id
     }, undefined, cookieHeader, schoolId || undefined)
     
     return NextResponse.json({

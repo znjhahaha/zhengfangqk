@@ -3,12 +3,19 @@ const nextConfig = {
   // 基本配置
   swcMinify: true,
   
+  // 静态导出配置（用于打包APK）
+  // 只在构建APK时启用静态导出，开发模式下禁用以支持API路由
+  // 构建APK时设置环境变量: BUILD_APK=true npm run build
+  ...(process.env.BUILD_APK === 'true' ? { output: 'export' } : {}),
+  
   // 图片优化
   images: {
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60,
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    // 静态导出时需要禁用图片优化
+    unoptimized: process.env.BUILD_APK === 'true',
   },
   
   // 编译器优化

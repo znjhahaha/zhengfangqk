@@ -132,6 +132,9 @@ async function initSchools() {
   return { schools: serverSchools, configs: serverUrlConfigs }
 }
 
+// 强制动态渲染（避免静态导出问题）
+export const dynamic = 'force-dynamic'
+
 // GET: 获取所有学校列表
 export async function GET(request: NextRequest) {
   try {

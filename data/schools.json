@@ -1,0 +1,33 @@
+{
+  "schools": [
+    {
+      "id": "tyust",
+      "name": "太原科技大学",
+      "domain": "newjwc.tyust.edu.cn",
+      "protocol": "https",
+      "description": "太原科技大学教务系统"
+    },
+    {
+      "id": "zjut",
+      "name": "浙江工业大学",
+      "domain": "www.gdjw.zjut.edu.cn",
+      "protocol": "http",
+      "description": "浙江工业大学教务系统"
+    },
+    {
+      "id": "313",
+      "name": "1313",
+      "domain": "adad.dadawda.ada",
+      "protocol": "https",
+      "description": ""
+    },
+    {
+      "id": "CUMT",
+      "name": "中国矿业大学",
+      "domain": "jwxt.cumt.edu.cn",
+      "protocol": "http",
+      "description": "教务"
+    }
+  ],
+  "lastUpdated": 1762138763249
+}

@@ -276,9 +276,17 @@ export async function getStudentInfo(sessionId?: string, tempCookie?: string, sc
 }
 
 // 获取可选课程 - 基于Python版本fetch_course_json.py的完整实现（支持传入schoolId参数）
-export async function getAvailableCourses(sessionId?: string, tempCookie?: string, schoolId?: string) {
-  const cacheKey = sessionId ? `${cacheKeys.availableCourses('all')}_${sessionId}_${schoolId || 'default'}` : `${cacheKeys.availableCourses('all')}_${schoolId || 'default'}`
-  return withCache(cacheKey, async () => {
+export async function getAvailableCourses(
+  sessionId?: string,
+  tempCookie?: string,
+  schoolId?: string,
+  options?: { skipCache?: boolean }
+) {
+  const cacheKey = sessionId
+    ? `${cacheKeys.availableCourses('all')}_${sessionId}_${schoolId || 'default'}`
+    : `${cacheKeys.availableCourses('all')}_${schoolId || 'default'}`
+
+  const fetchCourses = async () => {
     try {
       console.log('🚀 开始获取可选课程（基于Python版本fetch_course_json.py）...')
       const startTime = Date.now()
@@ -307,7 +315,14 @@ export async function getAvailableCourses(sessionId?: string, tempCookie?: strin
       console.error('获取可选课程失败:', error)
       throw error
     }
-  }, 10 * 60 * 1000) // 可选课程缓存10分钟
+  }
+
+  if (options?.skipCache) {
+    console.log('⚠️ 跳过可选课程缓存，强制从源站获取最新数据')
+    return fetchCourses()
+  }
+
+  return withCache(cacheKey, fetchCourses, 10 * 60 * 1000) // 可选课程缓存10分钟
 }
 
 // 获取已选课程动态参数（支持传入schoolId参数）
@@ -437,58 +452,16 @@ export async function getSelectedCourses(sessionId?: string, tempCookie?: string
       throw new Error('Cookie已过期，请重新登录')
     }
     
-    // 解析已选课程
-    const courses: any[] = []
+    // 解析已选课程 - 使用统一的解析函数
+    let courses: any[] = []
     
     try {
       // 尝试解析JSON响应
       const jsonData = JSON.parse(responseText)
       console.log('📊 解析到JSON数据:', jsonData)
       
-      // 检查是否是单个课程对象
-      if (jsonData.kcmc && jsonData.kch) {
-        console.log('📚 检测到单个课程对象，转换为课程列表')
-        const course = {
-          course_name: jsonData.kcmc || '未知课程',
-          teacher: jsonData.jsxx ? jsonData.jsxx.split('/')[1] || '未知教师' : '未知教师',
-          classroom: jsonData.jxdd ? jsonData.jxdd.replace(/<br\/>/g, ', ') : '未知教室',
-          time: jsonData.sksj ? jsonData.sksj.replace(/<br\/>/g, ', ') : '未知时间',
-          credits: jsonData.xf || jsonData.jxbxf || '0',
-          category: jsonData.kklxmc || '未知类别',
-          status: jsonData.sfxkbj === '1' ? '已选' : '未选',
-          course_code: jsonData.kch || '',
-          course_id: jsonData.kch_id || '',
-          class_name: jsonData.jxbmc || '',
-          class_id: jsonData.jxb_id || ''
-        }
-        courses.push(course)
-      } else if (Array.isArray(jsonData)) {
-        // 如果是数组
-        console.log('📚 检测到课程数组')
-        jsonData.forEach((item: any) => {
-          if (item.kcmc && item.kch) {
-            const course = {
-              course_name: item.kcmc || '未知课程',
-              teacher: item.jsxx ? item.jsxx.split('/')[1] || '未知教师' : '未知教师',
-              classroom: item.jxdd ? item.jxdd.replace(/<br\/>/g, ', ') : '未知教室',
-              time: item.sksj ? item.sksj.replace(/<br\/>/g, ', ') : '未知时间',
-              credits: item.xf || item.jxbxf || '0',
-              category: item.kklxmc || '未知类别',
-              status: item.sfxkbj === '1' ? '已选' : '未选',
-              course_code: item.kch || '',
-              course_id: item.kch_id || '',
-              class_name: item.jxbmc || '',
-              class_id: item.jxb_id || ''
-            }
-            courses.push(course)
-          }
-        })
-      } else if (jsonData.totalResult === '0' || jsonData.pageTotal === 0) {
-        console.log('📚 当前没有已选课程')
-        // 返回空数组，表示没有已选课程
-      } else {
-        console.log('⚠️ 未知的JSON数据结构:', jsonData)
-      }
+      // 使用统一的解析函数
+      courses = parseSelectedCourseData(jsonData)
       
     } catch (jsonError) {
       console.log('📄 不是JSON格式，尝试解析HTML')
@@ -580,19 +553,112 @@ function parseSelectedCourseData(jsonData: any) {
     console.log('📚 检测到课程数组')
     jsonData.forEach((course: any) => {
       if (course.kcmc && course.kch) {
+        const teacher =
+          course.jsxm ||
+          (course.jsxx ? course.jsxx.split('/')[1] || '' : '') ||
+          ''
+        const classroom =
+          course.jxdd && course.jxdd.trim()
+            ? course.jxdd.replace(/<br\/?>/g, ', ')
+            : '--'
+        const time = course.sksj ? course.sksj.replace(/<br\/?>/g, ', ') : '--'
+        const rawCapacity =
+          course.jxbrs ??
+          course.JXBRS ??
+          course.krrl ??
+          course.KRRL ??
+          course.jxbrl ??
+          course.JXBRL
+        const rawSelected =
+          course.yxzrs ??
+          course.YXZRS ??
+          course.selected ??
+          course.SELECTED ??
+          course.selected_count ??
+          course.selectedCount
+
+        const capacity = Number.parseInt(rawCapacity ?? '0', 10) || 0
+        const selected = Number.parseInt(rawSelected ?? '0', 10) || 0
+        const available = Math.max(capacity - selected, 0)
+        const status =
+          course.sfxkbj === '1'
+            ? '已选'
+            : capacity > 0 && selected >= capacity
+            ? '已满'
+            : '可选'
+
         courses.push({
+          ...course,
           kch_id: course.kch_id || '',
           kcmc: course.kcmc || '',
           jxb_id: course.jxb_id || '',
-          jsxm: course.jsxm || (course.jsxx ? course.jsxx.split('/')[1] : '') || '',
-          jxdd: course.jxdd || '',
-          sksj: course.sksj || '',
+          jsxm: teacher,
+          jxdd: classroom,
+          sksj: time,
           xf: course.xf || course.jxbxf || '',
           jxbrl: course.jxbrl || '',
-          yxzrs: course.yxzrs || '',
           kklxdm: course.kklxdm || '',
           do_jxb_id: course.do_jxb_id || course.jxb_id || '',
-          ...course
+          course_name: course.kcmc || '',
+          course_code: course.kch || course.kch_id || '',
+          course_id: course.kch_id || course.kch || '',
+          class_name: course.jxbmc || '',
+          class_id: course.jxb_id || '',
+          teacher,
+          classroom,
+          time,
+          credits: course.xf || course.jxbxf || '',
+          category: course.kklxmc || course.kklxdm || '',
+          status,
+          capacity,
+          selected,
+          available,
+          max_capacity: capacity.toString(),
+          selected_count: selected.toString(),
+          bjrs: capacity.toString(),
+          yxzrs: selected.toString(),
+          // 保留获取课程列表时使用的参数（如果存在）
+          _rwlx: course._rwlx,
+          _xklc: course._xklc,
+          _xkly: course._xkly,
+          _xkkz_id: course._xkkz_id
+        })
+      } else if (course.course_name && (course.course_code || course.course_id)) {
+        const capacity = Number.parseInt(
+          course.capacity ?? course.max_capacity ?? course.quota ?? '0',
+          10
+        ) || 0
+        const selected = Number.parseInt(
+          course.selected ?? course.selected_count ?? course.yxzrs ?? '0',
+          10
+        ) || 0
+        const available = Math.max(capacity - selected, 0)
+
+        // 已格式化的数据（前端缓存或已处理结果）
+        courses.push({
+          ...course,
+          kch_id: course.course_id || course.course_code || '',
+          kcmc: course.course_name || '',
+          jxb_id: course.class_id || '',
+          jsxm: course.teacher || '',
+          jxdd: course.classroom || '',
+          sksj: course.time || '',
+          xf: course.credits || '',
+          jxbrl: course.capacity || '',
+          kklxdm: course.category || '',
+          do_jxb_id: course.class_id || '',
+          capacity,
+          selected,
+          available,
+          max_capacity: capacity.toString(),
+          selected_count: selected.toString(),
+          yxzrs: selected.toString(),
+          bjrs: capacity.toString(),
+          // 保留获取课程列表时使用的参数（如果存在）
+          _rwlx: course._rwlx,
+          _xklc: course._xklc,
+          _xkly: course._xkly,
+          _xkkz_id: course._xkkz_id
         })
       }
     })
@@ -600,39 +666,153 @@ function parseSelectedCourseData(jsonData: any) {
   // 情况2: 如果是单个课程对象
   else if (jsonData && jsonData.kcmc && jsonData.kch) {
     console.log('📚 检测到单个课程对象')
+    const teacher =
+      jsonData.jsxm ||
+      (jsonData.jsxx ? jsonData.jsxx.split('/')[1] || '' : '') ||
+      ''
+    const classroom =
+      jsonData.jxdd && jsonData.jxdd.trim()
+        ? jsonData.jxdd.replace(/<br\/?>/g, ', ')
+        : '--'
+    const time = jsonData.sksj ? jsonData.sksj.replace(/<br\/?>/g, ', ') : '--'
+    const rawCapacity =
+      jsonData.jxbrs ??
+      jsonData.JXBRS ??
+      jsonData.krrl ??
+      jsonData.KRRL ??
+      jsonData.jxbrl ??
+      jsonData.JXBRL
+    const rawSelected =
+      jsonData.yxzrs ??
+      jsonData.YXZRS ??
+      jsonData.selected ??
+      jsonData.SELECTED ??
+      jsonData.selected_count ??
+      jsonData.selectedCount
+
+    const capacity = Number.parseInt(rawCapacity ?? '0', 10) || 0
+    const selected = Number.parseInt(rawSelected ?? '0', 10) || 0
+    const available = Math.max(capacity - selected, 0)
+    const status =
+      jsonData.sfxkbj === '1'
+        ? '已选'
+        : capacity > 0 && selected >= capacity
+        ? '已满'
+        : '可选'
+
     courses.push({
-      kch_id: jsonData.kch_id || '',
+      ...jsonData,
+      kch_id: jsonData.kch_id || jsonData.kch || '',
       kcmc: jsonData.kcmc || '',
       jxb_id: jsonData.jxb_id || '',
-      jsxm: jsonData.jsxm || (jsonData.jsxx ? jsonData.jsxx.split('/')[1] : '') || '',
-      jxdd: jsonData.jxdd || '',
-      sksj: jsonData.sksj || '',
+      jsxm: teacher,
+      jxdd: classroom,
+      sksj: time,
       xf: jsonData.xf || jsonData.jxbxf || '',
       jxbrl: jsonData.jxbrl || '',
-      yxzrs: jsonData.yxzrs || '',
       kklxdm: jsonData.kklxdm || '',
       do_jxb_id: jsonData.do_jxb_id || jsonData.jxb_id || '',
-      ...jsonData
+      course_name: jsonData.kcmc || '',
+      course_code: jsonData.kch || jsonData.kch_id || '',
+      course_id: jsonData.kch_id || jsonData.kch || '',
+      class_name: jsonData.jxbmc || '',
+      class_id: jsonData.jxb_id || '',
+      teacher,
+      classroom,
+      time,
+      credits: jsonData.xf || jsonData.jxbxf || '',
+      category: jsonData.kklxmc || jsonData.kklxdm || '',
+      status,
+      capacity,
+      selected,
+      available,
+      max_capacity: capacity.toString(),
+      selected_count: selected.toString(),
+      bjrs: capacity.toString(),
+      yxzrs: selected.toString(),
+      // 保留获取课程列表时使用的参数（如果存在）
+      _rwlx: jsonData._rwlx,
+      _xklc: jsonData._xklc,
+      _xkly: jsonData._xkly,
+      _xkkz_id: jsonData._xkkz_id
     })
   }
   // 情况3: 如果有tmpList字段
   else if (jsonData && jsonData.tmpList && Array.isArray(jsonData.tmpList)) {
     console.log('📚 检测到tmpList数组')
     jsonData.tmpList.forEach((course: any) => {
-      courses.push({
-        kch_id: course.kch_id || '',
-        kcmc: course.kcmc || '',
-        jxb_id: course.jxb_id || '',
-        jsxm: course.jsxm || course.jsxx || '',
-        jxdd: course.jxdd || '',
-        sksj: course.sksj || '',
-        xf: course.xf || '',
-        jxbrl: course.jxbrl || '',
-        yxzrs: course.yxzrs || '',
-        kklxdm: course.kklxdm || '',
-        do_jxb_id: course.do_jxb_id || course.jxb_id || '',
-        ...course
-      })
+      if (course.kcmc && course.kch) {
+        const teacher =
+          course.jsxm ||
+          (course.jsxx ? course.jsxx.split('/')[1] || '' : '') ||
+          ''
+        const classroom =
+          course.jxdd && course.jxdd.trim()
+            ? course.jxdd.replace(/<br\/?>/g, ', ')
+            : '--'
+        const time = course.sksj ? course.sksj.replace(/<br\/?>/g, ', ') : '--'
+        const rawCapacity =
+          course.jxbrs ??
+          course.JXBRS ??
+          course.krrl ??
+          course.KRRL ??
+          course.jxbrl ??
+          course.JXBRL
+        const rawSelected =
+          course.yxzrs ??
+          course.YXZRS ??
+          course.selected ??
+          course.SELECTED ??
+          course.selected_count ??
+          course.selectedCount
+
+        const capacity = Number.parseInt(rawCapacity ?? '0', 10) || 0
+        const selected = Number.parseInt(rawSelected ?? '0', 10) || 0
+        const available = Math.max(capacity - selected, 0)
+        const status =
+          course.sfxkbj === '1'
+            ? '已选'
+            : capacity > 0 && selected >= capacity
+            ? '已满'
+            : '可选'
+
+        courses.push({
+          ...course,
+          kch_id: course.kch_id || course.kch || '',
+          kcmc: course.kcmc || '',
+          jxb_id: course.jxb_id || '',
+          jsxm: teacher,
+          jxdd: classroom,
+          sksj: time,
+          xf: course.xf || course.jxbxf || '',
+          jxbrl: course.jxbrl || '',
+          kklxdm: course.kklxdm || '',
+          do_jxb_id: course.do_jxb_id || course.jxb_id || '',
+          course_name: course.kcmc || '',
+          course_code: course.kch || course.kch_id || '',
+          course_id: course.kch_id || course.kch || '',
+          class_name: course.jxbmc || '',
+          class_id: course.jxb_id || '',
+          teacher,
+          classroom,
+          time,
+          credits: course.xf || course.jxbxf || '',
+          category: course.kklxmc || course.kklxdm || '',
+          status,
+          capacity,
+          selected,
+          available,
+          max_capacity: capacity.toString(),
+          selected_count: selected.toString(),
+          bjrs: capacity.toString(),
+          yxzrs: selected.toString(),
+          // 保留获取课程列表时使用的参数（如果存在）
+          _rwlx: course._rwlx,
+          _xklc: course._xklc,
+          _xkly: course._xkly,
+          _xkkz_id: course._xkkz_id
+        })
+      }
     })
   }
   // 情况4: 如果是空结果
@@ -659,6 +839,10 @@ export async function selectCourseWithVerification(
     kcmc?: string
     jxbmc?: string
     xkkz_id?: string
+    _rwlx?: string  // 获取课程列表时使用的 rwlx 参数
+    _xklc?: string  // 获取课程列表时使用的 xklc 参数
+    _xkly?: string  // 获取课程列表时使用的 xkly 参数
+    _xkkz_id?: string  // 获取课程列表时使用的 xkkz_id 参数
   },
   sessionId?: string,
   tempCookie?: string,
@@ -666,6 +850,7 @@ export async function selectCourseWithVerification(
 ) {
   try {
     console.log(`🎯 开始选课: ${courseData.kcmc || courseData.kch_id}`)
+    console.log(`📋 选课时传递的参数: _rwlx=${courseData._rwlx}, _xklc=${courseData._xklc}, _xkly=${courseData._xkly}, _xkkz_id=${courseData._xkkz_id}`)
     
     // 1. 先获取课程抢课详细信息（传入schoolId）
     console.log('🔍 获取课程抢课详细信息...')
@@ -679,8 +864,18 @@ export async function selectCourseWithVerification(
       }
     }
     
-    // 2. 使用详细信息执行选课（传入schoolId）
-    const result = await executeCourseSelection(courseData, sessionId, tempCookie, schoolId)
+    // 2. 使用详细信息执行选课（传入schoolId和selectionDetails）
+    const result = await executeCourseSelection(courseData, selectionDetails, sessionId, tempCookie, schoolId)
+    
+    // 如果返回了 needRelogin 标志，直接返回错误
+    if ((result as any).needRelogin) {
+      return {
+        success: false,
+        message: result.message || '会话已过期，请重新登录后再试',
+        data: result.data,
+        needRelogin: true
+      }
+    }
     
     if (result.success) {
       // 验证选课结果（传入schoolId）
@@ -720,7 +915,12 @@ async function executeCourseSelection(
     kklxdm?: string
     kcmc?: string
     jxbmc?: string
+    _rwlx?: string
+    _xklc?: string
+    _xkly?: string
+    _xkkz_id?: string
   },
+  selectionDetails: any,
   sessionId?: string,
   tempCookie?: string,
   schoolId?: string
@@ -728,24 +928,129 @@ async function executeCourseSelection(
   try {
     const config = createRequestConfig('POST', undefined, sessionId, tempCookie, schoolId)
     const urls = getApiUrls(schoolId)
+    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
-    // 构建选课请求数据
+    // 获取页面隐藏参数（用于动态获取参数）
+    const cookie = tempCookie || getGlobalCookie()
+    const hiddenParams = await getPageHiddenParams(cookie, schoolId)
+    
+    // 从 selectionDetails 中提取参数
+    // selectionDetails 可能是一个数组，包含课程信息，或者是一个对象
+    let do_jxb_id = courseData.do_jxb_id || courseData.jxb_id
+    let xkkz_id = courseData._xkkz_id
+    let njdm_id = '2024'
+    let zyh_id = '2001'
+    let rlkz = '0'
+    let rlzlkz = '1'
+    let sxbj = '1'
+    let xxkbj = '0'
+    let cxbj = '0'
+    let xkxnm = '2025'
+    let xkxqm = '12'
+    let jcxx_id = ''
+    
+    if (selectionDetails) {
+      // 如果 selectionDetails 是数组，取第一个元素
+      const details = Array.isArray(selectionDetails) ? selectionDetails[0] : selectionDetails
+      if (details) {
+        do_jxb_id = details.do_jxb_id || details.jxb_id || do_jxb_id
+        xkkz_id = xkkz_id || details.xkkz_id
+        njdm_id = details.njdm_id || njdm_id
+        zyh_id = details.zyh_id || zyh_id
+        rlkz = details.rlkz || rlkz
+        rlzlkz = details.rlzlkz || rlzlkz
+        sxbj = details.sxbj || sxbj
+        xxkbj = details.xxkbj || xxkbj
+        cxbj = details.cxbj || cxbj
+        xkxnm = details.xkxnm || xkxnm
+        xkxqm = details.xkxqm || xkxqm
+        jcxx_id = details.jcxx_id || jcxx_id
+      }
+    }
+    
+    // 从 hiddenParams 中获取参数（如果 selectionDetails 中没有）
+    rlkz = rlkz === '0' ? (hiddenParams.rlkz || rlkz) : rlkz
+    rlzlkz = rlzlkz === '1' ? (hiddenParams.rlzlkz || rlzlkz) : rlzlkz
+    sxbj = sxbj === '1' ? (hiddenParams.sxbj || sxbj) : sxbj
+    xxkbj = xxkbj === '0' ? (hiddenParams.xxkbj || xxkbj) : xxkbj
+    cxbj = cxbj === '0' ? (hiddenParams.cxbj || cxbj) : cxbj
+    xkxnm = xkxnm === '2025' ? (hiddenParams.xkxnm || xkxnm) : xkxnm
+    xkxqm = xkxqm === '12' ? (hiddenParams.xkxqm || xkxqm) : xkxqm
+    
+    // 优先使用课程数据中保存的参数
+    const rwlx = courseData._rwlx || '1'
+    const xklc = courseData._xklc || '2'
+    const kklxdm = courseData.kklxdm || '01'
+    
+    // 构建课程名称（格式: (kch_id)课程名）
+    const kcmc = courseData.kcmc 
+      ? `(${courseData.kch_id})${courseData.kcmc}`
+      : courseData.kch_id
+    
+    // 使用新的选课URL: zzxkyzbjk_xkBcZyZzxkYzb.html
+    const courseSelectionUrl = `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/xsxk/zzxkyzbjk_xkBcZyZzxkYzb.html?gnmkdm=N253512`
+    
+    // 构建选课请求数据（根据实际 curl 命令，除 qz 外所有参数都动态获取）
     const formData = new URLSearchParams({
-      'jxb_ids': courseData.do_jxb_id || courseData.jxb_id,
+      'jxb_ids': do_jxb_id,
       'kch_id': courseData.kch_id,
-      'jxbzls': courseData.jxbzls || '1',
-      'kklxdm': courseData.kklxdm || '01',
-      'xkxnm': '2025',
-      'xkxqm': '3'
+      'kcmc': kcmc,
+      'rwlx': rwlx,
+      'rlkz': rlkz,
+      'rlzlkz': rlzlkz,
+      'sxbj': sxbj,
+      'xxkbj': xxkbj,
+      'qz': '0',  // qz 参数保持硬编码，不动态获取
+      'cxbj': cxbj,
+      'xkkz_id': xkkz_id || '',
+      'njdm_id': njdm_id,
+      'zyh_id': zyh_id,
+      'kklxdm': kklxdm,
+      'xklc': xklc,
+      'xkxnm': xkxnm,
+      'xkxqm': xkxqm,
+      'jcxx_id': jcxx_id
     })
     
-    const response = await robustFetch(urls.courseSelection, {
+    console.log(`📤 执行选课 - POST请求到: ${courseSelectionUrl}`)
+    console.log(`📋 选课表单数据:`, Object.fromEntries(formData))
+    
+    const response = await robustFetch(courseSelectionUrl, {
       ...config,
       body: formData.toString()
     })
     
+    // 处理特殊状态码
+    if (response.status === 901 || response.status === 910) {
+      console.error(`状态码${response.status}：会话已过期，需要重新登录`)
+      return {
+        success: false,
+        message: '会话已过期，请重新登录后再试',
+        data: null,
+        needRelogin: true
+      }
+    }
+    
     if (!response.ok) {
-      throw new Error(`选课请求失败，状态码: ${response.status}`)
+      // 尝试获取错误信息
+      let errorMessage = `选课请求失败，状态码: ${response.status}`
+      try {
+        const errorText = await response.text()
+        if (errorText) {
+          try {
+            const errorJson = JSON.parse(errorText)
+            errorMessage = errorJson.msg || errorJson.message || errorMessage
+          } catch {
+            // 如果不是JSON，使用原始文本
+            if (errorText.length < 200) {
+              errorMessage = errorText
+            }
+          }
+        }
+      } catch {
+        // 忽略解析错误
+      }
+      throw new Error(errorMessage)
     }
     
     const result = await response.json()
@@ -1117,6 +1422,10 @@ export async function getCourseSelectionDetails(
     kch_id: string
     kklxdm?: string
     xkkz_id?: string
+    _rwlx?: string  // 获取课程列表时使用的 rwlx 参数（优先使用）
+    _xklc?: string  // 获取课程列表时使用的 xklc 参数（优先使用）
+    _xkly?: string  // 获取课程列表时使用的 xkly 参数（优先使用）
+    _xkkz_id?: string  // 获取课程列表时使用的 xkkz_id 参数（优先使用）
     [key: string]: any
   },
   sessionId?: string,
@@ -1144,35 +1453,113 @@ export async function getCourseSelectionDetails(
     const hiddenParams = await getPageHiddenParams(cookie, schoolId)
     console.log('页面隐藏参数:', hiddenParams)
     
-    // 3. 根据kklxdm设置不同的rwlx和xklc值
-    const kklxdm = courseData.kklxdm || '01'
-    let rwlx = '1'
-    let xklc = '2'
+    // 3. 优先使用隐藏参数中的first*参数，然后使用courseData中的参数，最后使用默认值
+    const kklxdm = hiddenParams.firstKklxdm || courseData.kklxdm || hiddenParams.kklxdm || '01'
+    const xkkz_id = hiddenParams.firstXkkzId || courseData.xkkz_id || hiddenParams.xkkz_id || courseParams.xkkz_id || '3EC380169F7E8633E0636F1310AC7E15'
+    const njdm_id = hiddenParams.firstNjdmId || hiddenParams.njdm_id || courseParams.njdm_id || '2024'
+    const zyh_id = hiddenParams.firstZyhId || hiddenParams.zyh_id || courseParams.zyh_id || '088'
     
-    if (kklxdm === '01') {
-      rwlx = '1'
-      xklc = '2'
-    } else if (kklxdm === '10') {
-      rwlx = '2'
-      xklc = '4'
-    } else if (kklxdm === '05') {
-      rwlx = '2'
-      xklc = '3'
+    console.log(`✅ 使用的关键参数: kklxdm=${kklxdm}, xkkz_id=${xkkz_id}, njdm_id=${njdm_id}, zyh_id=${zyh_id}`)
+    
+    // 优先使用课程数据中保存的参数（获取课程列表时使用的参数），确保选课时使用的参数与获取课程列表时使用的参数完全一致
+    // 这些参数来自 buildFormDataPart1 构建的表单数据，是实际发送请求时使用的值
+    // 注意：必须优先使用课程数据中的参数，因为这是获取该课程列表时实际使用的值
+    let rwlx: string | null = null
+    let xklc: string | null = null
+    let xkly: string | null = null
+    
+    console.log(`🔍 参数来源检查（优先级：课程数据 > 页面隐藏参数 > 选课参数）:`)
+    console.log(`  - 课程数据中的参数: _rwlx=${courseData._rwlx}, _xklc=${courseData._xklc}, _xkly=${courseData._xkly}`)
+    console.log(`  - 页面隐藏参数: hiddenParams.rwlx=${hiddenParams.rwlx}, hiddenParams.xklc=${hiddenParams.xklc}, hiddenParams.xkly=${hiddenParams.xkly}`)
+    console.log(`  - 选课参数: courseParams.rwlx=${courseParams.rwlx}, courseParams.xklc=${courseParams.xklc}, courseParams.xkly=${courseParams.xkly}`)
+    
+    // 首先检查课程数据中是否有保存的参数（这是最优先的，因为这是实际请求时使用的值）
+    // 注意：即使值为空字符串，只要不是 undefined 或 null，也应该使用
+    if (courseData._rwlx !== undefined && courseData._rwlx !== null) {
+      rwlx = courseData._rwlx
+      console.log(`✅ 使用课程数据中保存的rwlx=${rwlx}（来自获取课程列表时的请求参数）`)
+    } else if (hiddenParams.rwlx !== undefined && hiddenParams.rwlx !== null && hiddenParams.rwlx !== '') {
+      rwlx = hiddenParams.rwlx
+      console.log(`✅ 使用页面隐藏参数的rwlx=${rwlx}`)
+    } else if (courseParams.rwlx !== undefined && courseParams.rwlx !== null && courseParams.rwlx !== '') {
+      rwlx = courseParams.rwlx
+      console.log(`✅ 使用选课参数的rwlx=${rwlx}`)
     }
+    
+    if (courseData._xklc !== undefined && courseData._xklc !== null) {
+      xklc = courseData._xklc
+      console.log(`✅ 使用课程数据中保存的xklc=${xklc}（来自获取课程列表时的请求参数）`)
+    } else if (hiddenParams.xklc !== undefined && hiddenParams.xklc !== null && hiddenParams.xklc !== '') {
+      xklc = hiddenParams.xklc
+      console.log(`✅ 使用页面隐藏参数的xklc=${xklc}`)
+    } else if (courseParams.xklc !== undefined && courseParams.xklc !== null && courseParams.xklc !== '') {
+      xklc = courseParams.xklc
+      console.log(`✅ 使用选课参数的xklc=${xklc}`)
+    }
+    
+    if (courseData._xkly !== undefined && courseData._xkly !== null) {
+      xkly = courseData._xkly
+      console.log(`✅ 使用课程数据中保存的xkly=${xkly}（来自获取课程列表时的请求参数）`)
+    } else if (hiddenParams.xkly !== undefined && hiddenParams.xkly !== null && hiddenParams.xkly !== '') {
+      xkly = hiddenParams.xkly
+      console.log(`✅ 使用页面隐藏参数的xkly=${xkly}`)
+    } else if (courseParams.xkly !== undefined && courseParams.xkly !== null && courseParams.xkly !== '') {
+      xkly = courseParams.xkly
+      console.log(`✅ 使用选课参数的xkly=${xkly}`)
+    }
+    
+    // 如果所有来源都没有（undefined或null或空字符串），则根据kklxdm计算默认值
+    if (rwlx === null || rwlx === undefined || rwlx === '') {
+      console.log(`⚠️ 所有来源都没有rwlx，根据kklxdm=${kklxdm}计算默认值`)
+      if (kklxdm === '01') {
+        rwlx = '1'
+      } else if (kklxdm === '10') {
+        rwlx = '2'
+      } else if (kklxdm === '05') {
+        rwlx = '2'
+      } else {
+        rwlx = '1'
+      }
+    }
+    
+    if (xklc === null || xklc === undefined || xklc === '') {
+      console.log(`⚠️ 所有来源都没有xklc，根据kklxdm=${kklxdm}计算默认值`)
+      if (kklxdm === '01') {
+        xklc = '2'
+      } else if (kklxdm === '10') {
+        xklc = '4'
+      } else if (kklxdm === '05') {
+        xklc = '3'
+      } else {
+        xklc = '2'
+      }
+    }
+    
+    if (xkly === null || xkly === undefined || xkly === '') {
+      xkly = '0'
+    }
+    
+    console.log(`✅ 最终使用的参数: rwlx=${rwlx}, xklc=${xklc}, xkly=${xkly}`)
     
     // 4. 构建动态表单数据
     const formData = new URLSearchParams({
       'rwlx': rwlx,
-      'xkly': '0',
-      'bklx_id': '0',
-      'sfkkjyxdxnxq': '0',
-      'kzkcgs': '0',
+      'xkly': xkly,
+      'bklx_id': (hiddenParams.bklx_id !== undefined && hiddenParams.bklx_id !== null) 
+        ? hiddenParams.bklx_id 
+        : ((courseParams.bklx_id !== undefined && courseParams.bklx_id !== null) ? courseParams.bklx_id : '0'),
+      'sfkkjyxdxnxq': (hiddenParams.sfkkjyxdxnxq !== undefined && hiddenParams.sfkkjyxdxnxq !== null) 
+        ? hiddenParams.sfkkjyxdxnxq 
+        : ((courseParams.sfkkjyxdxnxq !== undefined && courseParams.sfkkjyxdxnxq !== null) ? courseParams.sfkkjyxdxnxq : '0'),
+      'kzkcgs': (hiddenParams.kzkcgs !== undefined && hiddenParams.kzkcgs !== null) 
+        ? hiddenParams.kzkcgs 
+        : ((courseParams.kzkcgs !== undefined && courseParams.kzkcgs !== null) ? courseParams.kzkcgs : '0'),
       'xqh_id': hiddenParams.xqh_id || courseParams.xqh_id || '01',
       'jg_id': hiddenParams.jg_id || courseParams.jg_id || '05',
-      'zyh_id': hiddenParams.zyh_id || courseParams.zyh_id || '088',
+      'zyh_id': zyh_id,
       'zyfx_id': hiddenParams.zyfx_id || courseParams.zyfx_id || 'wfx',
       'txbsfrl': hiddenParams.txbsfrl || '0',
-      'njdm_id': hiddenParams.njdm_id || courseParams.njdm_id || '2024',
+      'njdm_id': njdm_id,
       'bh_id': hiddenParams.bh_id || courseParams.bh_id || '',
       'xbm': hiddenParams.xbm || courseParams.xbm || '1',
       'xslbdm': hiddenParams.xslbdm || courseParams.xslbdm || 'wlb',
@@ -1202,14 +1589,19 @@ export async function getCourseSelectionDetails(
       'kch_id': courseData.kch_id,
       'jxbzcxskg': hiddenParams.jxbzcxskg || '0',
       'xklc': xklc,
-      'xkkz_id': courseData.xkkz_id || hiddenParams.xkkz_id || courseParams.xkkz_id || '3EC380169F7E8633E0636F1310AC7E15',
+      'xkkz_id': xkkz_id,
       'cxbj': hiddenParams.cxbj || '0',
       'fxbj': hiddenParams.fxbj || '0'
     })
     
     console.log(`📋 动态构建的抢课详细信息请求参数:`, Object.fromEntries(formData))
     
-    const response = await fetch(`${currentSchool.protocol}://${currentSchool.domain}/jwglxt/xsxk/zzxkyzbjk_cxJxbWithKchZzxkYzb.html?gnmkdm=N253512`, {
+    // 选课时获取必要参数的URL: zzxkyzbjk_cxJxbWithKchZzxkYzb.html
+    // 这个接口用于获取某门课程的选课必要参数（如jxb_id等），需要传入kch_id和xkkz_id
+    const selectionDetailsUrl = `${currentSchool.protocol}://${currentSchool.domain}/jwglxt/xsxk/zzxkyzbjk_cxJxbWithKchZzxkYzb.html?gnmkdm=N253512`
+    console.log(`📤 获取选课必要参数 - POST请求到: ${selectionDetailsUrl}`)
+    
+    const response = await fetch(selectionDetailsUrl, {
       method: 'POST',
       headers: {
         'Accept': 'application/json, text/javascript, */*; q=0.01',

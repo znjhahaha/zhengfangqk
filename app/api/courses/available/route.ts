@@ -5,6 +5,8 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const schoolId = searchParams.get('schoolId')
+    const forceRefreshParam = searchParams.get('forceRefresh')
+    const forceRefresh = forceRefreshParam === '1' || forceRefreshParam === 'true'
     
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
@@ -29,7 +31,12 @@ export async function GET(request: NextRequest) {
     }
 
     // 直接传递schoolId参数，不再修改服务器端状态
-    const courses = await getAvailableCourses(undefined, cookieHeader, schoolId || undefined)
+    const courses = await getAvailableCourses(
+      undefined,
+      cookieHeader,
+      schoolId || undefined,
+      { skipCache: forceRefresh }
+    )
     
     return NextResponse.json({
       success: true,

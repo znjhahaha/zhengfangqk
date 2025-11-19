@@ -24,7 +24,7 @@ import {
   RefreshCw
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { courseAPI } from '@/lib/api'
+import { courseAPI, getApiUrl } from '@/lib/api'
 import { formatTime } from '@/lib/utils'
 
 interface SelectionMode {
@@ -238,7 +238,7 @@ export default function CourseSelectionPage() {
   const loadUserTasks = useCallback(async () => {
     try {
       const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
-      const response = await fetch(`/api/server-selection/tasks?userId=${userId}`)
+      const response = await fetch(getApiUrl(`/server-selection/tasks?userId=${userId}`))
       const result = await response.json()
       if (result.success) {
         setServerTasks(result.data || [])
@@ -284,7 +284,7 @@ export default function CourseSelectionPage() {
         localStorage.setItem('userId', userId)
       }
 
-      const response = await fetch('/api/activation/verify', {
+      const response = await fetch(getApiUrl('/activation/verify'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -385,7 +385,7 @@ export default function CourseSelectionPage() {
       }
 
       // 提交任务到服务器
-      const response = await fetch('/api/server-selection/tasks', {
+      const response = await fetch(getApiUrl('/server-selection/tasks'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -423,7 +423,7 @@ export default function CourseSelectionPage() {
   const cancelServerTask = async (taskId: string) => {
     try {
       const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 'unknown' : 'unknown'
-      const response = await fetch('/api/server-selection/tasks', {
+      const response = await fetch(getApiUrl('/server-selection/tasks'), {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'

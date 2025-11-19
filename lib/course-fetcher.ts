@@ -67,6 +67,8 @@ export async function getInitialParameters(cookie: string, schoolId?: string): P
     
     // 提取隐藏参数
     const initialParams: Record<string, string> = {}
+    
+    // 方法1: 查找所有 type="hidden" 的 input 元素
     $('input[type="hidden"]').each((_, element) => {
       const name = $(element).attr('name')
       const value = $(element).attr('value') || ''
@@ -76,7 +78,42 @@ export async function getInitialParameters(cookie: string, schoolId?: string): P
       }
     })
     
+    // 方法2: 也查找所有 input 元素（有些可能没有明确指定 type="hidden"）
+    $('input').each((_, element) => {
+      const type = $(element).attr('type')
+      const name = $(element).attr('name')
+      const value = $(element).attr('value') || ''
+      // 如果是隐藏字段或者没有指定type，也提取
+      if (name && (type === 'hidden' || !type) && !initialParams[name]) {
+        initialParams[name] = value
+        if (type !== 'hidden') {
+          console.log(`隐藏参数（无type）: ${name} = ${value}`)
+        }
+      }
+    })
+    
+    // 特别检查关键参数是否存在
+    if (initialParams.rwlx) {
+      console.log(`✅ 初始页面找到 rwlx = ${initialParams.rwlx}`)
+    } else {
+      console.log(`⚠️ 初始页面未找到 rwlx 参数`)
+    }
+    
+    if (initialParams.xklc) {
+      console.log(`✅ 初始页面找到 xklc = ${initialParams.xklc}`)
+    } else {
+      console.log(`⚠️ 初始页面未找到 xklc 参数`)
+    }
+    
     console.log(`成功提取 ${Object.keys(initialParams).length} 个隐藏参数`)
+    
+    // 优先使用隐藏参数中的first*参数
+    const firstKklxdm = initialParams.firstKklxdm
+    const firstXkkzId = initialParams.firstXkkzId
+    const firstNjdmId = initialParams.firstNjdmId
+    const firstZyhId = initialParams.firstZyhId
+    
+    console.log(`🔍 检查隐藏参数中的first*参数: firstKklxdm=${firstKklxdm}, firstXkkzId=${firstXkkzId}, firstNjdmId=${firstNjdmId}, firstZyhId=${firstZyhId}`)
     
     // 查找包含queryCourse的onclick元素
     const tabParams: TabParam[] = []
@@ -97,10 +134,11 @@ export async function getInitialParameters(cookie: string, schoolId?: string): P
           console.log(`解析的参数: ${args}`)
           
           if (args.length >= 5) {
-            const kklxdm = args[1].trim().replace(/['"]/g, '')
-            const xkkz_id = args[2].trim().replace(/['"]/g, '')
-            const njdm_id = args[3].trim().replace(/['"]/g, '')
-            const zyh_id = args[4].trim().replace(/['"]/g, '')
+            // 优先使用隐藏参数中的first*参数，如果没有则使用onclick中的参数
+            const kklxdm = firstKklxdm || args[1].trim().replace(/['"]/g, '')
+            const xkkz_id = firstXkkzId || args[2].trim().replace(/['"]/g, '')
+            const njdm_id = firstNjdmId || args[3].trim().replace(/['"]/g, '')
+            const zyh_id = firstZyhId || args[4].trim().replace(/['"]/g, '')
             
             tabParams.push({
               kklxdm,
@@ -109,21 +147,32 @@ export async function getInitialParameters(cookie: string, schoolId?: string): P
               zyh_id
             })
             
-            console.log(`成功解析参数: kklxdm=${kklxdm}, xkkz_id=${xkkz_id}, njdm_id=${njdm_id}, zyh_id=${zyh_id}`)
+            console.log(`✅ 成功解析参数（优先使用first*参数）: kklxdm=${kklxdm}, xkkz_id=${xkkz_id}, njdm_id=${njdm_id}, zyh_id=${zyh_id}`)
           }
         }
       }
     })
     
-    // 如果没有找到queryCourse，使用默认值
+    // 如果没有找到queryCourse，优先使用隐藏参数中的first*参数，否则使用默认值
     if (tabParams.length === 0) {
-      console.log('未找到queryCourse函数，使用默认的硬编码参数...')
-      tabParams.push({
-        kklxdm: '01',
-        xkkz_id: '3EC380169F7E8633E0636F1310AC7E15',
-        njdm_id: '2024',
-        zyh_id: '088'
-      })
+      if (firstKklxdm && firstXkkzId && firstNjdmId && firstZyhId) {
+        console.log('未找到queryCourse函数，使用隐藏参数中的first*参数...')
+        tabParams.push({
+          kklxdm: firstKklxdm,
+          xkkz_id: firstXkkzId,
+          njdm_id: firstNjdmId,
+          zyh_id: firstZyhId
+        })
+        console.log(`✅ 使用隐藏参数: kklxdm=${firstKklxdm}, xkkz_id=${firstXkkzId}, njdm_id=${firstNjdmId}, zyh_id=${firstZyhId}`)
+      } else {
+        console.log('未找到queryCourse函数且没有first*参数，使用默认的硬编码参数...')
+        tabParams.push({
+          kklxdm: '01',
+          xkkz_id: '3EC380169F7E8633E0636F1310AC7E15',
+          njdm_id: '2024',
+          zyh_id: '088'
+        })
+      }
     }
     
     console.log(`成功提取 ${tabParams.length} 个onclick参数`)
@@ -159,7 +208,13 @@ export async function getCompleteParameters(
       'jspage': '0'
     })
     
-    const response = await fetch(urls.courseSelectionParams, {
+    // 使用 courseSelectionDisplay URL 获取完整参数
+    // URL: zzxkyzb_cxZzxkYzbDisplay.html
+    const displayUrl = urls.courseSelectionDisplay || urls.courseSelectionParams.replace('Index.html', 'Display.html')
+    console.log(`📤 获取完整参数 - POST请求到: ${displayUrl}`)
+    console.log(`📋 请求参数: ${formData.toString()}`)
+    
+    const response = await fetch(displayUrl, {
       method: 'POST',
       headers: {
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -185,6 +240,8 @@ export async function getCompleteParameters(
     
     // 提取完整参数
     const completeParams: Record<string, string> = {}
+    
+    // 方法1: 查找所有 type="hidden" 的 input 元素
     $('input[type="hidden"]').each((_, element) => {
       const name = $(element).attr('name')
       const value = $(element).attr('value') || ''
@@ -193,6 +250,33 @@ export async function getCompleteParameters(
         console.log(`提取参数: ${name} = ${value}`)
       }
     })
+    
+    // 方法2: 也查找所有 input 元素（有些可能没有明确指定 type="hidden"）
+    $('input').each((_, element) => {
+      const type = $(element).attr('type')
+      const name = $(element).attr('name')
+      const value = $(element).attr('value') || ''
+      // 如果是隐藏字段或者没有指定type，也提取
+      if (name && (type === 'hidden' || !type) && !completeParams[name]) {
+        completeParams[name] = value
+        if (type !== 'hidden') {
+          console.log(`提取参数（无type）: ${name} = ${value}`)
+        }
+      }
+    })
+    
+    // 特别检查关键参数是否存在
+    if (completeParams.rwlx) {
+      console.log(`✅ 找到 rwlx = ${completeParams.rwlx}`)
+    } else {
+      console.log(`⚠️ 未找到 rwlx 参数`)
+    }
+    
+    if (completeParams.xklc) {
+      console.log(`✅ 找到 xklc = ${completeParams.xklc}`)
+    } else {
+      console.log(`⚠️ 未找到 xklc 参数`)
+    }
     
     // 特别查找jspage参数
     const jspageInput = $('input[name="jspage"]')
@@ -206,6 +290,7 @@ export async function getCompleteParameters(
     }
     
     console.log(`成功获取 ${Object.keys(completeParams).length} 个完整参数`)
+    console.log(`📋 所有参数键: ${Object.keys(completeParams).join(', ')}`)
     return completeParams
     
   } catch (error) {
@@ -217,34 +302,90 @@ export async function getCompleteParameters(
 // 构建第一部分表单数据（用于获取课程列表）
 export function buildFormDataPart1(
   params: Record<string, string>,
-  tabParam: TabParam
+  tabParam: TabParam,
+  initialParams?: Record<string, string>
 ): Record<string, string> {
   const kklxdm = tabParam.kklxdm
   
-  // 根据kklxdm设置不同的rwlx和xklc值
-  let rwlx = '1'
-  let xklc = '2'
-  
-  if (kklxdm === '01') {
-    rwlx = '1'
-    xklc = '2'
-  } else if (kklxdm === '10') {
-    rwlx = '2'
-    xklc = '4'
-  } else if (kklxdm === '05') {
-    rwlx = '2'
-    xklc = '3'
+  // 合并参数：优先使用 params（completeParams），如果 params 中没有或为空字符串，则使用 initialParams
+  const mergedParams: Record<string, string> = {}
+  if (initialParams) {
+    // 先复制 initialParams
+    Object.assign(mergedParams, initialParams)
+  }
+  // 然后用 params 覆盖（params 优先级更高），但如果 params 中的值是空字符串，则保留 initialParams 的值
+  for (const key in params) {
+    if (params[key] !== undefined && params[key] !== null && params[key] !== '') {
+      mergedParams[key] = params[key]
+    } else if (mergedParams[key] === undefined) {
+      // 如果 params 中是空字符串，但 mergedParams 中也没有，则使用空字符串
+      mergedParams[key] = params[key] || ''
+    }
+    // 如果 params 中是空字符串，但 mergedParams 中已经有值（来自 initialParams），则保留 initialParams 的值
   }
   
-  // 基础参数
+  console.log(`🔍 合并后的参数数量: ${Object.keys(mergedParams).length}`)
+  console.log(`🔍 合并参数示例: xqh_id=${mergedParams.xqh_id}, jg_id=${mergedParams.jg_id}, zyh_id=${mergedParams.zyh_id}, njdm_id=${mergedParams.njdm_id}`)
+  
+  // 优先使用从页面获取的参数（先检查completeParams，再检查initialParams），如果没有则根据kklxdm计算默认值
+  // 注意：即使值是空字符串，也要使用页面值（除非是undefined或null）
+  let rwlx = (mergedParams.rwlx !== undefined && mergedParams.rwlx !== null && mergedParams.rwlx !== '') 
+    ? mergedParams.rwlx 
+    : null
+  let xklc = (mergedParams.xklc !== undefined && mergedParams.xklc !== null && mergedParams.xklc !== '') 
+    ? mergedParams.xklc 
+    : null
+  
+  console.log(`🔍 从合并参数获取: rwlx=${mergedParams.rwlx}, xklc=${mergedParams.xklc}`)
+  
+  // 如果页面参数中没有（undefined或null或空字符串），则根据kklxdm计算
+  if (rwlx === null || rwlx === undefined || rwlx === '') {
+    console.log(`⚠️ 页面参数中没有rwlx，根据kklxdm=${kklxdm}计算默认值`)
+    if (kklxdm === '01') {
+      rwlx = '1'
+    } else if (kklxdm === '10') {
+      rwlx = '2'
+    } else if (kklxdm === '05') {
+      rwlx = '2'
+    } else {
+      rwlx = '1'
+    }
+  } else {
+    console.log(`✅ 使用页面获取的rwlx=${rwlx}`)
+  }
+  
+  if (xklc === null || xklc === undefined || xklc === '') {
+    console.log(`⚠️ 页面参数中没有xklc，根据kklxdm=${kklxdm}计算默认值`)
+    if (kklxdm === '01') {
+      xklc = '2'
+    } else if (kklxdm === '10') {
+      xklc = '4'
+    } else if (kklxdm === '05') {
+      xklc = '3'
+    } else {
+      xklc = '2'
+    }
+  } else {
+    console.log(`✅ 使用页面获取的xklc=${xklc}`)
+  }
+  
+  // 基础参数 - 优先使用合并后的参数
   const formData: Record<string, string> = {
     'rwlx': rwlx,
     'xklc': xklc,
-    'xkly': '0',
-    'bklx_id': '0',
-    'sfkkjyxdxnxq': '0',
-    'kzkcgs': '0'
+    'xkly': mergedParams.xkly || '0',
+    'bklx_id': mergedParams.bklx_id || '0',
+    'sfkkjyxdxnxq': mergedParams.sfkkjyxdxnxq || '0',
+    'kzkcgs': mergedParams.kzkcgs || '0'
   }
+  
+  console.log(`✅ 基础参数: rwlx=${rwlx}, xklc=${xklc}, xkly=${formData.xkly}, bklx_id=${formData.bklx_id}`)
+  
+  // 必需参数列表（如果缺失应该报错）
+  const requiredFields = [
+    'xqh_id', 'jg_id', 'zyh_id', 'zyfx_id', 'njdm_id', 'bh_id', 
+    'xbm', 'xslbdm', 'mzm', 'xz', 'ccdm', 'xsbj', 'xkxnm', 'xkxqm'
+  ]
   
   // 从动态参数中获取值
   const dynamicFields = [
@@ -275,15 +416,40 @@ export function buildFormDataPart1(
     'tykczgxdcs': kklxdm === '05' ? '8' : '0'
   }
   
+  // 从合并参数中获取值，优先使用页面参数
+  const missingRequiredFields: string[] = []
+  
   for (const field of dynamicFields) {
-    if (params[field]) {
-      formData[field] = params[field]
-    } else if (defaultValues[field]) {
+    // 优先使用合并后的参数（即使值是空字符串也要使用，除非是undefined或null）
+    if (mergedParams[field] !== undefined && mergedParams[field] !== null) {
+      formData[field] = mergedParams[field]
+      // 如果是必需字段且为空字符串，记录错误
+      if (requiredFields.includes(field) && mergedParams[field] === '') {
+        missingRequiredFields.push(field)
+        console.error(`❌ 必需字段 ${field} 的值为空字符串`)
+      }
+    } else if (defaultValues[field] !== undefined) {
       formData[field] = defaultValues[field]
+      console.log(`⚠️ 字段 ${field} 使用默认值: ${defaultValues[field]}`)
     } else {
       formData[field] = ''
+      // 如果是必需字段且为空，记录错误
+      if (requiredFields.includes(field)) {
+        missingRequiredFields.push(field)
+        console.error(`❌ 必需字段 ${field} 未找到且无默认值`)
+      }
     }
   }
+  
+  // 检查必需字段是否缺失
+  if (missingRequiredFields.length > 0) {
+    const errorMsg = `❌ 缺少必需参数或参数为空: ${missingRequiredFields.join(', ')}。请检查页面参数提取是否完整。`
+    console.error(errorMsg)
+    console.error(`📋 当前合并参数:`, JSON.stringify(mergedParams, null, 2))
+    throw new Error(errorMsg)
+  }
+  
+  console.log(`✅ 所有必需参数已填充`)
   
   // 使用选项卡参数
   formData['kklxdm'] = tabParam.kklxdm
@@ -329,12 +495,14 @@ export async function sendCourseRequest(
     const urls = getApiUrls(schoolId)
     const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
     
+    // 查询可选课程的URL: zzxkyzb_cxZzxkYzbPartDisplay.html
+    // 这个接口用于获取可选课程列表，参数是动态从页面获取的
     const url = `${urls.availableCourses}`
     
     const formDataStr = new URLSearchParams(formData).toString()
     
-    console.log(`发送POST请求到: ${url}`)
-    console.log(`请求参数:`, formData)
+    console.log(`📤 查询可选课程 - POST请求到: ${url}`)
+    console.log(`📋 请求参数:`, formData)
     
     const response = await fetch(url, {
       method: 'POST',
@@ -387,25 +555,59 @@ export async function sendCourseRequest(
 }
 
 // 提取必要的数据字段
-export function extractEssentialData(courseData: any[], urlParams?: Record<string, string>): CourseData[] {
+export function extractEssentialData(
+  courseData: any[], 
+  urlParams?: Record<string, string>,
+  formParams?: Record<string, string>
+): CourseData[] {
   const essentialData: CourseData[] = []
   
   if (Array.isArray(courseData)) {
     for (const course of courseData) {
+      // 正确解析人数字段
+      const rawCapacity =
+        course.jxbrs ??
+        course.JXBRS ??
+        course.krrl ??
+        course.KRRL ??
+        course.jxbrl ??
+        course.JXBRL ??
+        '0'
+      const rawSelected =
+        course.yxzrs ??
+        course.YXZRS ??
+        course.selected ??
+        course.SELECTED ??
+        course.selected_count ??
+        course.selectedCount ??
+        '0'
+      
       const essentialCourse: CourseData = {
         jxb_id: course.jxb_id || '',
-        do_jxb_id: course.do_jxb_id || '',
-        kch_id: course.jxb_id || '', // 使用jxb_id作为kch_id
+        do_jxb_id: course.do_jxb_id || course.jxb_id || '',
+        kch_id: course.kch_id || course.kch || course.jxb_id || '',
         kcmc: course.kcmc || '',
         jsxx: course.jsxx || '',
         jxdd: course.jxdd || '',
         sksj: course.sksj || '',
-        xf: course.xf || '',
-        jxbrl: course.jxbrl || '',
-        yxzrs: course.yxzrs || '',
+        xf: course.xf || course.jxbxf || '',
+        jxbrl: rawCapacity.toString(),
+        yxzrs: rawSelected.toString(),
         kklxdm: course.kklxdm || '',
-        // 保留原始数据
-        ...course
+        // 保留原始数据，但确保人数字段正确
+        ...course,
+        jxbrs: rawCapacity.toString(),
+        capacity: Number.parseInt(rawCapacity.toString(), 10) || 0,
+        selected: Number.parseInt(rawSelected.toString(), 10) || 0,
+        max_capacity: rawCapacity.toString(),
+        selected_count: rawSelected.toString(),
+        bjrs: rawCapacity.toString(),
+        // 保存获取课程列表时使用的参数，用于后续选课（这些是实际发送请求时使用的值）
+        // 优先使用 formParams 中的值（这是实际发送请求时使用的值），如果没有则保留 course 中的值
+        _rwlx: (formParams?.rwlx !== undefined && formParams?.rwlx !== null) ? formParams.rwlx : (course._rwlx !== undefined ? course._rwlx : ''),
+        _xklc: (formParams?.xklc !== undefined && formParams?.xklc !== null) ? formParams.xklc : (course._xklc !== undefined ? course._xklc : ''),
+        _xkly: (formParams?.xkly !== undefined && formParams?.xkly !== null) ? formParams.xkly : (course._xkly !== undefined ? course._xkly : ''),
+        _xkkz_id: (formParams?.xkkz_id !== undefined && formParams?.xkkz_id !== null) ? formParams.xkkz_id : (course._xkkz_id !== undefined ? course._xkkz_id : '')
       }
       essentialData.push(essentialCourse)
     }
@@ -447,59 +649,98 @@ export async function fetchAllCourses(cookie: string, schoolId?: string): Promis
       
       // 4. 构建请求表单数据
       console.log('构建请求表单数据...')
-      const formDataPart1 = buildFormDataPart1(completeParams, tabParam)
+      const formDataPart1 = buildFormDataPart1(completeParams, tabParam, initialParams)
+      console.log(`📋 构建的表单数据（将保存到课程中）: rwlx=${formDataPart1.rwlx}, xklc=${formDataPart1.xklc}, xkly=${formDataPart1.xkly}, xkkz_id=${formDataPart1.xkkz_id}`)
+      console.log(`📋 完整表单数据:`, JSON.stringify(formDataPart1, null, 2))
       
-      // 5. 获取所有页面的课程数据（动态检测，直到没有数据）
-      console.log('开始获取所有页面的课程数据（动态检测）...')
+      // 5. 获取所有页面的课程数据（并发获取，动态检测，直到没有数据）
+      console.log('开始获取所有页面的课程数据（并发获取，动态检测）...')
       const allCourses: CourseData[] = []
       
       const kklxdm = tabParam.kklxdm
       let currentJspage = 10  // 从jspage=10开始
       let currentKspage = 0   // kspage从0开始
       let hasMoreData = true
+      const CONCURRENT_BATCH_SIZE = 5  // 并发批次大小
+      const MAX_CONCURRENT = 10  // 最大并发数
       
-      console.log(`根据kklxdm=${kklxdm}，开始动态获取数据`)
+      console.log(`根据kklxdm=${kklxdm}，开始并发获取数据（并发数: ${CONCURRENT_BATCH_SIZE}）`)
       
+      // 使用并发获取，但保留动态停止功能
       while (hasMoreData) {
-        console.log(`\n=== 获取 kspage=${currentKspage}, jspage=${currentJspage} ===`)
+        // 准备一批并发请求
+        const batchRequests: Array<{ kspage: number, jspage: number, promise: Promise<any> }> = []
         
-        // 设置这一批的kspage和jspage参数
-        const formData = { ...formDataPart1 }
-        formData['kspage'] = currentKspage.toString()
-        formData['jspage'] = currentJspage.toString()
-        console.log(`设置kspage=${currentKspage}, jspage=${currentJspage}`)
-        
-        // 发送请求
-        console.log('发送请求...')
-        const response = await sendCourseRequest(formData, cookie, schoolId)
-        
-        if (response) {
-          console.log('请求完成')
+        // 创建一批并发请求
+        for (let i = 0; i < CONCURRENT_BATCH_SIZE && hasMoreData; i++) {
+          const formData = { ...formDataPart1 }
+          formData['kspage'] = currentKspage.toString()
+          formData['jspage'] = currentJspage.toString()
           
-          // 收集课程数据
-          let courses: any[] = []
-          if (typeof response === 'object' && response.tmpList) {
-            courses = response.tmpList
-          } else if (Array.isArray(response)) {
-            courses = response
-          }
+          console.log(`准备请求: kspage=${currentKspage}, jspage=${currentJspage}`)
           
-          // 检查是否有数据
-          if (courses.length === 0) {
-            console.log(`kspage=${currentKspage}, jspage=${currentJspage} 没有数据，停止获取`)
-            hasMoreData = false
-          } else {
-            const essentialCourses = extractEssentialData(courses)
-            allCourses.push(...essentialCourses)
-            console.log(`kspage=${currentKspage}, jspage=${currentJspage} 获取到 ${essentialCourses.length} 个课程`)
+          const requestPromise = sendCourseRequest(formData, cookie, schoolId)
+          batchRequests.push({
+            kspage: currentKspage,
+            jspage: currentJspage,
+            promise: requestPromise
+          })
+          
+          // 准备下一批参数
+          currentKspage = currentJspage + 1
+          currentJspage += 10
+        }
+        
+        // 并发执行这一批请求
+        console.log(`\n=== 并发执行 ${batchRequests.length} 个请求 ===`)
+        const batchResults = await Promise.allSettled(
+          batchRequests.map(req => req.promise)
+        )
+        
+        // 处理结果，按顺序检查
+        let foundEmpty = false
+        for (let i = 0; i < batchResults.length; i++) {
+          const result = batchResults[i]
+          const { kspage, jspage } = batchRequests[i]
+          
+          if (result.status === 'fulfilled' && result.value) {
+            // 收集课程数据
+            let courses: any[] = []
+            if (typeof result.value === 'object' && result.value.tmpList) {
+              courses = result.value.tmpList
+            } else if (Array.isArray(result.value)) {
+              courses = result.value
+            }
             
-            // 准备下一批：kspage = jspage + 1，jspage增加10
-            currentKspage = currentJspage + 1  // kspage应该是当前jspage+1
-            currentJspage += 10  // jspage增加10
+            // 检查是否有数据
+            if (courses.length === 0) {
+              console.log(`✅ kspage=${kspage}, jspage=${jspage} 没有数据，停止获取`)
+              foundEmpty = true
+              hasMoreData = false
+              break  // 遇到空数据，停止后续处理
+            } else {
+              // 将获取课程列表时使用的参数传递给 extractEssentialData，保存到课程数据中
+              const essentialCourses = extractEssentialData(courses, undefined, formDataPart1)
+              // 验证参数是否正确保存
+              if (essentialCourses.length > 0) {
+                const firstCourse = essentialCourses[0]
+                console.log(`✅ 验证参数保存: 第一个课程的参数 _rwlx=${firstCourse._rwlx}, _xklc=${firstCourse._xklc}, _xkly=${firstCourse._xkly}, _xkkz_id=${firstCourse._xkkz_id}`)
+              }
+              allCourses.push(...essentialCourses)
+              console.log(`✅ kspage=${kspage}, jspage=${jspage} 获取到 ${essentialCourses.length} 个课程`)
+            }
+          } else {
+            console.error(`❌ kspage=${kspage}, jspage=${jspage} 请求失败`)
+            // 如果请求失败，也停止获取
+            foundEmpty = true
+            hasMoreData = false
+            break
           }
-        } else {
-          console.error(`kspage=${currentKspage}, jspage=${currentJspage} 请求失败，停止获取`)
-          hasMoreData = false
+        }
+        
+        // 如果这一批中有空数据，停止获取
+        if (foundEmpty) {
+          break
         }
       }
       

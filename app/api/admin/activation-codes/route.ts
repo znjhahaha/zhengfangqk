@@ -25,6 +25,9 @@ async function saveActivationCodes(codes: ActivationCode[]): Promise<void> {
   console.log(`✅ 激活码数据已保存（自动使用COS存储，如果已配置）`)
 }
 
+// 强制动态渲染（避免静态导出问题）
+export const dynamic = 'force-dynamic'
+
 // GET: 获取所有激活码（需要管理员权限）
 export async function GET(request: NextRequest) {
   try {

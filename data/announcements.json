@@ -1,0 +1,65 @@
+{
+  "announcements": [
+    {
+      "id": "announcement-1",
+      "title": "11",
+      "content": "1111",
+      "type": "info",
+      "priority": "normal",
+      "createdAt": 1762093089898,
+      "updatedAt": 1762093089898,
+      "isActive": true
+    },
+    {
+      "id": "announcement-2",
+      "title": "111",
+      "content": "3131313123131",
+      "type": "info",
+      "priority": "high",
+      "createdAt": 1762093851878,
+      "updatedAt": 1762093851878,
+      "isActive": true
+    },
+    {
+      "id": "announcement-3",
+      "title": "313",
+      "content": "131313",
+      "type": "info",
+      "priority": "normal",
+      "createdAt": 1762137462975,
+      "updatedAt": 1762137462975,
+      "isActive": true
+    },
+    {
+      "id": "announcement-4",
+      "title": "3213",
+      "content": "1313131",
+      "type": "info",
+      "priority": "normal",
+      "createdAt": 1762178398880,
+      "updatedAt": 1762178398880,
+      "isActive": true
+    },
+    {
+      "id": "announcement-5",
+      "title": "31313",
+      "content": "131313123",
+      "type": "info",
+      "priority": "normal",
+      "createdAt": 1762179547578,
+      "updatedAt": 1762179547578,
+      "isActive": true
+    },
+    {
+      "id": "announcement-6",
+      "title": "11",
+      "content": "1111",
+      "type": "info",
+      "priority": "normal",
+      "createdAt": 1762180318137,
+      "updatedAt": 1762180318137,
+      "isActive": true
+    }
+  ],
+  "lastUpdated": 1762180318137
+}

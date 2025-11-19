@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMaxConcurrentTasks, setMaxConcurrentTasks, getTaskStats } from '@/lib/server-course-selection-manager'
 
+// 强制动态渲染（避免静态导出问题）
+export const dynamic = 'force-dynamic'
+
 // GET: 获取服务器端抢课配置
 export async function GET(request: NextRequest) {
   try {

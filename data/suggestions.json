@@ -1,0 +1,38 @@
+{
+  "suggestions": [
+    {
+      "id": "suggestion-1",
+      "type": "other",
+      "title": "231313",
+      "content": "13131313",
+      "contact": "",
+      "status": "approved",
+      "createdAt": 1762094318664,
+      "updatedAt": 1762094364647,
+      "reviewedBy": "管理员"
+    },
+    {
+      "id": "suggestion-2",
+      "type": "other",
+      "title": "11",
+      "content": "111",
+      "contact": "",
+      "status": "approved",
+      "createdAt": 1762096669021,
+      "updatedAt": 1762140954212,
+      "reviewedBy": "管理员"
+    },
+    {
+      "id": "suggestion-3",
+      "type": "school",
+      "title": "121",
+      "content": "212121",
+      "contact": "",
+      "status": "approved",
+      "createdAt": 1762137435143,
+      "updatedAt": 1762140953523,
+      "reviewedBy": "管理员"
+    }
+  ],
+  "lastUpdated": 1762140954212
+}

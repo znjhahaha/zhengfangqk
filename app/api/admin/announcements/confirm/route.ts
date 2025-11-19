@@ -34,6 +34,9 @@ async function saveConfirmations(confirmations: Confirmation[]) {
   await saveDataToFile<Confirmation>(filePath, 'confirmations', confirmations, dataDir)
 }
 
+// 强制动态渲染（避免静态导出问题）
+export const dynamic = 'force-dynamic'
+
 // POST: 确认收到公告
 export async function POST(request: NextRequest) {
   try {

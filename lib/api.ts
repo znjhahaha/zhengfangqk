@@ -1,7 +1,24 @@
 // Next.js API路由调用
 import LocalCookieManager from './local-cookie-manager'
+import { getApiBaseUrl } from './apk-config'
 
-const API_BASE_URL = '/api'
+// 动态获取 API 基础 URL（APK 环境使用独立服务器，网页版使用相对路径）
+const getApiBaseUrlDynamic = () => {
+  if (typeof window !== 'undefined') {
+    return getApiBaseUrl()
+  }
+  return '/api' // 服务器端默认使用相对路径
+}
+
+/**
+ * 获取完整的 API URL（供直接使用 fetch 的地方调用）
+ */
+export function getApiUrl(path: string): string {
+  const apiBaseUrl = getApiBaseUrlDynamic()
+  // 确保 path 以 / 开头
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${apiBaseUrl}${normalizedPath}`
+}
 
 // 通用请求函数
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -19,7 +36,8 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const apiBaseUrl = getApiBaseUrlDynamic()
+    const response = await fetch(`${apiBaseUrl}${url}`, {
       headers,
       ...options,
     })
@@ -104,8 +122,13 @@ export const courseAPI = {
   },
   
   // 课程信息
-  getAvailableCourses: (schoolId?: string) => 
-    request(`/courses/available${schoolId ? `?schoolId=${schoolId}` : ''}`),
+  getAvailableCourses: (schoolId?: string, options?: { forceRefresh?: boolean }) => {
+    const params = new URLSearchParams()
+    if (schoolId) params.append('schoolId', schoolId)
+    if (options?.forceRefresh) params.append('forceRefresh', '1')
+    const queryString = params.toString()
+    return request(`/courses/available${queryString ? `?${queryString}` : ''}`)
+  },
   getSelectedCourses: (schoolId?: string) => 
     request(`/courses/selected${schoolId ? `?schoolId=${schoolId}` : ''}`),
   getScheduleData: (schoolId?: string) => 
@@ -134,6 +157,10 @@ export const courseAPI = {
     kklxdm?: string
     kcmc?: string
     jxbmc?: string
+    _rwlx?: string  // 获取课程列表时使用的 rwlx 参数
+    _xklc?: string  // 获取课程列表时使用的 xklc 参数
+    _xkly?: string  // 获取课程列表时使用的 xkly 参数
+    _xkkz_id?: string  // 获取课程列表时使用的 xkkz_id 参数
   }, schoolId?: string) => 
     request(`/course-selection/single${schoolId ? `?schoolId=${schoolId}` : ''}`, {
       method: 'POST',

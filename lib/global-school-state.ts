@@ -495,6 +495,9 @@ function generateApiUrls(baseUrl: string, urlConfig: {
     // 选课参数
     courseSelectionParams: `${baseUrl}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=${urlConfig.courseGnmkdm}&layout=default&su=${school.domain}`,
     
+    // 选课显示页面（用于获取完整参数）
+    courseSelectionDisplay: `${baseUrl}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbDisplay.html?gnmkdm=${urlConfig.courseGnmkdm}`,
+    
     // 可选课程
     availableCourses: `${baseUrl}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbPartDisplay.html?gnmkdm=${urlConfig.courseGnmkdm}`,
     
@@ -604,6 +607,9 @@ export async function getApiUrlsAsync(schoolId?: string) {
     
     // 选课参数
     courseSelectionParams: `${baseUrl}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbIndex.html?gnmkdm=${urlConfig.courseGnmkdm}&layout=default&su=${school.domain}`,
+    
+    // 选课显示页面（用于获取完整参数）
+    courseSelectionDisplay: `${baseUrl}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbDisplay.html?gnmkdm=${urlConfig.courseGnmkdm}`,
     
     // 可选课程
     availableCourses: `${baseUrl}/jwglxt/xsxk/zzxkyzb_cxZzxkYzbPartDisplay.html?gnmkdm=${urlConfig.courseGnmkdm}`,

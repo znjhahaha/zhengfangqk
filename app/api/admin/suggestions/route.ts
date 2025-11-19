@@ -64,6 +64,9 @@ async function initSuggestions() {
   return suggestions
 }
 
+// 强制动态渲染（避免静态导出问题）
+export const dynamic = 'force-dynamic'
+
 // GET: 获取所有建议（需要管理员权限查看全部，普通用户只能查看自己的）
 export async function GET(request: NextRequest) {
   try {

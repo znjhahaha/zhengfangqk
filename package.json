@@ -5,12 +5,18 @@
   "private": true,
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
-    "build": "next build",
+    "build": "node scripts/prepare-static-export.js && next build && node scripts/restore-dynamic-routes.js",
     "build:analyze": "ANALYZE=true next build",
+    "build:apk": "BUILD_APK=true npm run build && npx cap sync android",
+    "build:apk:full": "npm run build && npx cap sync android && npx cap open android",
     "start": "next start",
     "lint": "next lint",
     "perf": "next build && next start",
-    "clean": "rm -rf .next out"
+    "clean": "rm -rf .next out",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open android",
+    "cap:add": "npx cap add android",
+    "cap:init": "npx cap init \"正方教务工具\" \"com.tyust.course.selector\" --web-dir=out"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "1.0.4",
@@ -45,6 +51,9 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
     "@types/html2canvas": "^0.5.35",
     "eslint": "8.0.0",
     "eslint-config-next": "14.0.0",

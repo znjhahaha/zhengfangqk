@@ -1,0 +1,31 @@
+{
+  "appId": "com.tyust.course.selector",
+  "appName": "正方教务工具",
+  "webDir": "out",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": [
+      "*"
+    ]
+  },
+  "android": {
+    "buildOptions": {
+      "keystorePath": "",
+      "keystorePassword": "",
+      "keystoreAlias": "",
+      "keystoreAliasPassword": "",
+      "releaseType": "AAB"
+    },
+    "allowMixedContent": true,
+    "captureInput": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0f172a",
+      "showSpinner": false
+    }
+  }
+}
+

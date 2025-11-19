@@ -1,0 +1,45 @@
+{
+  "confirmations": [
+    {
+      "announcementId": "announcement-2",
+      "userId": "user-1762093641077-lzjni5d7v",
+      "confirmedAt": 1762093887452
+    },
+    {
+      "announcementId": "announcement-1",
+      "userId": "user-1762093641077-lzjni5d7v",
+      "confirmedAt": 1762094045275
+    },
+    {
+      "announcementId": "announcement-3",
+      "userId": "user-1762136732390-wrwhky26c",
+      "confirmedAt": 1762137496234
+    },
+    {
+      "announcementId": "announcement-4",
+      "userId": "user-1762176909270-4c51xhsfe",
+      "confirmedAt": 1762178424610
+    },
+    {
+      "announcementId": "announcement-5",
+      "userId": "user-1762176909270-4c51xhsfe",
+      "confirmedAt": 1762179930901
+    },
+    {
+      "announcementId": "announcement-6",
+      "userId": "user-1762176909270-4c51xhsfe",
+      "confirmedAt": 1762181236581
+    },
+    {
+      "announcementId": "announcement-2",
+      "userId": "user-1762529834948-elex1uf8c",
+      "confirmedAt": 1762529838783
+    },
+    {
+      "announcementId": "announcement-5",
+      "userId": "user-1762529834948-elex1uf8c",
+      "confirmedAt": 1762529840720
+    }
+  ],
+  "lastUpdated": 1762529840720
+}
