@@ -1,0 +1,28 @@
+{
+  "name": "mobile-api-server",
+  "version": "1.0.0",
+  "description": "手机版APK专用后端API服务器",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 5000",
+    "build": "next build",
+    "start": "next start -p 5000",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@types/node": "20.0.0",
+    "cheerio": "^1.1.2",
+    "cos-nodejs-sdk-v5": "^2.15.4",
+    "next": "14.0.0",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.0",
+    "@types/react-dom": "18.2.0",
+    "eslint": "8.0.0",
+    "eslint-config-next": "14.0.0"
+  }
+}
+
