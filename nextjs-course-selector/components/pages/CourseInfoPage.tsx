@@ -32,6 +32,17 @@ import { courseAPI } from '@/lib/api'
 import { useCourseStore } from '@/lib/course-store'
 import { useStudentStore } from '@/lib/student-store'
 
+// 前向声明 CourseCard 组件类型
+type CourseCardProps = {
+  course: Course
+  onGrab: () => void
+  isGrabbing: boolean
+  showGrabButton: boolean
+  isMultiSelectMode: boolean
+  isSelected: boolean
+  onToggleSelection?: () => void
+}
+
 interface Course {
   kch_id: string
   kcmc: string
@@ -1397,15 +1408,7 @@ const CourseCardComponent = function CourseCard({
   isMultiSelectMode,
   isSelected,
   onToggleSelection
-}: { 
-  course: Course
-  onGrab: () => void
-  isGrabbing: boolean
-  showGrabButton: boolean
-  isMultiSelectMode: boolean
-  isSelected: boolean
-  onToggleSelection?: () => void
-}) {
+}: CourseCardProps) {
   // 统一字段映射，兼容已选课程和可选课程的不同字段名
   const courseName = course.course_name || course.kcmc || '未知课程'
   const teacherName = course.teacher || course.jsxm || '未知教师'
