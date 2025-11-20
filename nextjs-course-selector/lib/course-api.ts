@@ -327,87 +327,63 @@ export async function getAvailableCourses(
 
 // 获取已选课程动态参数（支持传入schoolId参数）
 async function getSelectedCoursesDynamicParams(sessionId?: string, tempCookie?: string, schoolId?: string) {
-  try {
-    const urls = getApiUrls(schoolId)
-    const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
-    const config = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
-    
-    console.log('🔍 获取已选课程动态参数...')
-    
-    // 访问选课页面获取动态参数
-    const response = await robustFetch(urls.courseSelectionParams, config)
-    
-    if (!response.ok) {
-      throw new Error(`获取选课页面失败，状态码: ${response.status}`)
-    }
-    
-    const html = await response.text()
-    const $ = cheerio.load(html)
-    
-    // 提取动态参数 - 完全从HTML中提取，不使用硬编码默认值
-    const params: Record<string, string> = {}
-    
-    // 方法1: 查找所有 type="hidden" 的 input 元素
-    $('input[type="hidden"]').each((_, element) => {
-      const name = $(element).attr('name')
-      const value = $(element).attr('value') || ''
-      if (name) {
-        params[name] = value
-        console.log(`已选课程参数: ${name} = ${value}`)
-      }
-    })
-    
-    // 方法2: 也查找所有 input 元素（有些可能没有明确指定 type="hidden"）
-    $('input').each((_, element) => {
-      const type = $(element).attr('type')
-      const name = $(element).attr('name')
-      const value = $(element).attr('value') || ''
-      // 如果是隐藏字段或者没有指定type，也提取
-      if (name && (type === 'hidden' || !type) && !params[name]) {
-        params[name] = value
-        if (type !== 'hidden') {
-          console.log(`已选课程参数（无type）: ${name} = ${value}`)
-        }
-      }
-    })
-    
-    // 检查必需参数是否存在
-    const requiredParams = ['jg_id', 'zyh_id', 'njdm_id', 'xkxnm', 'xkxqm']
-    const missingParams: string[] = []
-    
-    for (const paramName of requiredParams) {
-      if (!params[paramName] || params[paramName].trim() === '') {
-        missingParams.push(paramName)
-      }
-    }
-    
-    if (missingParams.length > 0) {
-      throw new Error(`缺少必需的已选课程参数: ${missingParams.join(', ')}。请检查Cookie是否有效。`)
-    }
-    
-    // 确保所有参数都有值（空字符串也是有效值）
-    const finalParams = {
-      jg_id: params.jg_id || '',
-      zyh_id: params.zyh_id || '',
-      njdm_id: params.njdm_id || '',
-      zyfx_id: params.zyfx_id || '',
-      bh_id: params.bh_id || '',
-      xz: params.xz || '',
-      ccdm: params.ccdm || '',
-      xqh_id: params.xqh_id || '',
-      xkxnm: params.xkxnm || '',
-      xkxqm: params.xkxqm || '',
-      xkly: params.xkly || ''
-    }
-    
-    console.log('✅ 已选课程动态参数获取成功:', finalParams)
-    return finalParams
-    
-  } catch (error: any) {
-    console.error('❌ 获取已选课程动态参数失败:', error)
-    // 不再返回硬编码的默认参数，直接抛出错误
-    throw new Error(`获取已选课程动态参数失败: ${error.message || '未知错误'}。请检查Cookie是否有效。`)
+  const urls = getApiUrls(schoolId)
+  const currentSchool = schoolId ? (getSchoolById(schoolId) || getCurrentSchool()) : getCurrentSchool()
+  const config = createRequestConfig('GET', undefined, sessionId, tempCookie, schoolId)
+  
+  console.log('🔍 获取已选课程动态参数...')
+  
+  // 访问选课页面获取动态参数
+  const response = await robustFetch(urls.courseSelectionParams, config)
+  
+  if (!response.ok) {
+    throw new Error(`获取选课页面失败，状态码: ${response.status}`)
   }
+  
+  const html = await response.text()
+  const $ = cheerio.load(html)
+  
+  // 定义必需参数列表
+  const requiredParams = [
+    'jg_id',
+    'zyh_id',
+    'njdm_id',
+    'zyfx_id',
+    'xz',
+    'ccdm',
+    'xqh_id',
+    'xkxnm',
+    'xkxqm',
+    'xkly'
+  ]
+  
+  // 提取动态参数，不提供默认值
+  const params: Record<string, string> = {}
+  const missingParams: string[] = []
+  
+  // 提取必需参数
+  for (const paramName of requiredParams) {
+    const value = $('input[name="' + paramName + '"]').attr('value')
+    if (value === undefined || value === null || value === '') {
+      missingParams.push(paramName)
+    } else {
+      params[paramName] = value
+    }
+  }
+  
+  // 提取可选参数（bh_id可以为空）
+  const bh_id = $('input[name="bh_id"]').attr('value') || ''
+  params['bh_id'] = bh_id
+  
+  // 如果有缺失的必需参数，抛出错误
+  if (missingParams.length > 0) {
+    const errorMessage = `无法从页面提取已选课程必需参数: ${missingParams.join(', ')}。请检查Cookie是否有效或页面结构是否发生变化。`
+    console.error('❌ 获取已选课程动态参数失败:', errorMessage)
+    throw new Error(errorMessage)
+  }
+  
+  console.log('✅ 已选课程动态参数获取成功:', params)
+  return params
 }
 
 // 获取已选课程 - 基于Python版本的实现

@@ -120,29 +120,15 @@ export async function ensureDataDir(dataDir: string): Promise<void> {
   }
 }
 
-// 内存缓存（减少文件IO）
-const fileCache = new Map<string, { data: any, timestamp: number }>()
-const CACHE_TTL = 5 * 60 * 1000 // 5分钟缓存
-
 /**
  * 从文件或 COS 加载数据（通用）
  * 优先使用 COS，如果 COS 未配置则使用文件系统
- * 使用内存缓存减少IO操作
  */
 export async function loadDataFromFile<T>(
   filePath: string,
   dataKey: string,
   defaultValue: T[] = [] as T[]
 ): Promise<T[]> {
-  // 检查缓存
-  const cacheKey = `${filePath}:${dataKey}`
-  const cached = fileCache.get(cacheKey)
-  if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-    return cached.data
-  }
-
-  let result: T[] = defaultValue
-
   // 优先使用 COS 存储
   if (isCosEnabled()) {
     try {
@@ -150,10 +136,8 @@ export async function loadDataFromFile<T>(
       const cosKey = `qiangke-data/${path.basename(filePath)}`
       const data = await loadFromCos(cosKey)
       if (data && data[dataKey]) {
-        result = data[dataKey]
-        // 更新缓存
-        fileCache.set(cacheKey, { data: result, timestamp: Date.now() })
-        return result
+        console.log(`✅ 从 COS 加载数据: ${cosKey}`)
+        return data[dataKey]
       }
       // COS 中没有数据，返回默认值
       return defaultValue
@@ -168,10 +152,7 @@ export async function loadDataFromFile<T>(
     if (existsSync(filePath)) {
       const content = await readFile(filePath, 'utf-8')
       const data = JSON.parse(content)
-      result = data[dataKey] || defaultValue
-      // 更新缓存
-      fileCache.set(cacheKey, { data: result, timestamp: Date.now() })
-      return result
+      return data[dataKey] || defaultValue
     }
   } catch (error: any) {
     const errorMessage = error?.message || String(error)
@@ -185,16 +166,12 @@ export async function loadDataFromFile<T>(
       code: error?.code
     })
   }
-  
-  // 缓存默认值
-  fileCache.set(cacheKey, { data: result, timestamp: Date.now() })
-  return result
+  return defaultValue
 }
 
 /**
  * 保存数据到文件或 COS（通用）
  * 优先使用 COS，如果 COS 未配置则使用文件系统
- * 更新内存缓存
  */
 export async function saveDataToFile<T>(
   filePath: string,
@@ -207,16 +184,13 @@ export async function saveDataToFile<T>(
     lastUpdated: Date.now()
   }
 
-  // 更新缓存
-  const cacheKey = `${filePath}:${dataKey}`
-  fileCache.set(cacheKey, { data, timestamp: Date.now() })
-
   // 优先使用 COS 存储
   if (isCosEnabled()) {
     try {
       // 使用文件名作为 COS key（去除路径前缀）
       const cosKey = `qiangke-data/${path.basename(filePath)}`
       await saveToCos(cosKey, fileData)
+      console.log(`✅ 数据已保存到 COS: ${cosKey}`)
       return // COS 保存成功，直接返回
     } catch (error: any) {
       console.warn('⚠️ 保存数据到 COS 失败，尝试使用文件系统:', error?.message)
@@ -228,6 +202,7 @@ export async function saveDataToFile<T>(
   try {
     await ensureDataDir(dataDir)
     await writeFile(filePath, JSON.stringify(fileData, null, 2), 'utf-8')
+    console.log(`✅ 数据已保存到文件: ${filePath}`)
   } catch (error: any) {
     const errorMessage = error?.message || String(error)
     console.error('❌ 保存数据失败:', {
@@ -238,46 +213,5 @@ export async function saveDataToFile<T>(
     })
     throw new Error(`保存数据失败: ${errorMessage}. 目录: ${dataDir}`)
   }
-}
-
-/**
- * 清除文件缓存（用于强制刷新）
- */
-export function clearFileCache(filePath?: string, dataKey?: string): void {
-  if (filePath && dataKey) {
-    const cacheKey = `${filePath}:${dataKey}`
-    fileCache.delete(cacheKey)
-  } else {
-    fileCache.clear()
-  }
-}
-
-/**
- * 清理过期的缓存
- */
-export function cleanupExpiredCache(): number {
-  const now = Date.now()
-  let removed = 0
-  for (const [key, value] of fileCache.entries()) {
-    if (now - value.timestamp > CACHE_TTL) {
-      fileCache.delete(key)
-      removed++
-    }
-  }
-  return removed
-}
-
-// 定期清理过期缓存（每10分钟）
-if (typeof process !== 'undefined') {
-  setInterval(() => {
-    try {
-      const removed = cleanupExpiredCache()
-      if (removed > 0) {
-        console.log(`🧹 清理了 ${removed} 个过期缓存项`)
-      }
-    } catch (error) {
-      // 忽略清理错误
-    }
-  }, 10 * 60 * 1000)
 }
 

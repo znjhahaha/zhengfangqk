@@ -44,3 +44,7 @@ next-env.d.ts
 *.aab
 *.jks
 *.keystore
+
+# EdgeOne Pages Functions build output
+/functions-dist
+/_worker.js

@@ -21,97 +21,48 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { userId, sessionId, schoolId, courses, cookie, activationCode, scheduledTime } = body
 
-    // 验证激活码（优化：直接调用函数而不是HTTP请求）
+    // 验证激活码
     if (activationCode) {
-      try {
-        const { validateActivationCode } = await import('@/lib/activation-code-manager')
-        const { loadDataFromFile, getDataDir, saveDataToFile } = await import('@/lib/data-storage')
-        const dataDir = await getDataDir()
-        const activationCodesFile = path.join(dataDir, 'activation-codes.json')
-        const activationRecordsFile = path.join(dataDir, 'activation-records.json')
-        
-        const trimmedCode = activationCode.trim().replace(/\s+/g, '')
-        const codes = await loadDataFromFile<ActivationCode>(activationCodesFile, 'activationCodes', [])
-        const records = await loadDataFromFile<any>(activationRecordsFile, 'activationRecords', [])
-        
-        const activationCodeObj = codes.find(c => c.code === trimmedCode || c.code === activationCode)
-        if (!activationCodeObj) {
-          return NextResponse.json({
-            success: false,
-            error: '激活码无效',
-            message: '激活码不存在'
-          }, { status: 401 })
-        }
-        
-        const validation = validateActivationCode(trimmedCode, activationCodeObj, userId)
-        if (!validation.valid) {
-          return NextResponse.json({
-            success: false,
-            error: '激活码无效',
-            message: validation.message || '激活码验证失败'
-          }, { status: 401 })
-        }
-        
-        // 检查是否已被其他用户绑定
-        const existingRecordForCode = records.find((r: any) => r.code === activationCodeObj.code && r.userId !== userId)
-        if (existingRecordForCode && existingRecordForCode.expiresAt > Date.now()) {
-          return NextResponse.json({
-            success: false,
-            error: '激活码已被绑定',
-            message: '该激活码已被其他用户绑定，无法重复绑定'
-          }, { status: 400 })
-        }
-      } catch (error: any) {
-        console.error('激活码验证失败:', error)
+      const verifyResponse = await fetch(`${request.nextUrl.origin}/api/activation/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: activationCode, userId })
+      })
+      
+      const verifyResult = await verifyResponse.json()
+      if (!verifyResult.success || !verifyResult.activated) {
         return NextResponse.json({
           success: false,
-          error: '激活码验证失败',
-          message: error.message || '验证过程出错'
-        }, { status: 500 })
+          error: '激活码无效',
+          message: verifyResult.message || '激活码验证失败'
+        }, { status: 401 })
       }
     } else {
-      // 检查用户是否已激活（优化：直接调用函数而不是HTTP请求）
-      try {
-        const { loadDataFromFile, getDataDir } = await import('@/lib/data-storage')
-        const dataDir = await getDataDir()
-        const activationRecordsFile = path.join(dataDir, 'activation-records.json')
-        const activationCodesFile = path.join(dataDir, 'activation-codes.json')
-        
-        const records = await loadDataFromFile<any>(activationRecordsFile, 'activationRecords', [])
-        const userRecord = records.find((r: any) => r.userId === userId && r.expiresAt > Date.now())
-        
-        if (!userRecord) {
-          return NextResponse.json({
-            success: false,
-            error: '未激活',
-            message: '请先激活服务器端抢课功能'
-          }, { status: 401 })
-        }
-        
-        // 检查课程数限制
-        const codes = await loadDataFromFile<ActivationCode>(activationCodesFile, 'activationCodes', [])
-        const activationCode = codes.find(c => c.code === userRecord.code)
-        
-        if (activationCode && activationCode.maxCourses !== undefined) {
-          const maxCourses = activationCode.maxCourses
-          const usedCourses = activationCode.usedCourses || 0
-          const requestedCourses = courses.length
-
-          if (usedCourses + requestedCourses > maxCourses) {
-            return NextResponse.json({
-              success: false,
-              error: '课程数超限',
-              message: `激活码可抢课程数不足。已使用 ${usedCourses}/${maxCourses}，本次请求 ${requestedCourses} 门课程`
-            }, { status: 400 })
-          }
-        }
-      } catch (error: any) {
-        console.error('检查激活状态失败:', error)
+      // 检查用户是否已激活
+      const checkResponse = await fetch(`${request.nextUrl.origin}/api/activation/verify?userId=${userId}`)
+      const checkResult = await checkResponse.json()
+      
+      if (!checkResult.success || !checkResult.activated) {
         return NextResponse.json({
           success: false,
-          error: '检查激活状态失败',
-          message: error.message || '检查过程出错'
-        }, { status: 500 })
+          error: '未激活',
+          message: '请先激活服务器端抢课功能'
+        }, { status: 401 })
+      }
+
+      // 检查课程数限制
+      if (checkResult.data?.maxCourses !== undefined) {
+        const maxCourses = checkResult.data.maxCourses
+        const usedCourses = checkResult.data.usedCourses || 0
+        const requestedCourses = courses.length
+
+        if (usedCourses + requestedCourses > maxCourses) {
+          return NextResponse.json({
+            success: false,
+            error: '课程数超限',
+            message: `激活码可抢课程数不足。已使用 ${usedCourses}/${maxCourses}，本次请求 ${requestedCourses} 门课程`
+          }, { status: 400 })
+        }
       }
 
       // 检查该激活码是否已经有正在运行的抢课任务（一个激活码只能有一个抢课进程）
@@ -175,29 +126,12 @@ export async function POST(request: NextRequest) {
     // 如果有定时时间，等待到指定时间再启动；否则立即启动
     if (task.scheduledTime && task.scheduledTime > Date.now()) {
       const delay = task.scheduledTime - Date.now()
-      // 限制最大延迟时间（不超过24小时）
-      const maxDelay = 24 * 60 * 60 * 1000
-      if (delay > maxDelay) {
-        return NextResponse.json({
-          success: false,
-          error: '定时时间超出限制',
-          message: '定时时间不能超过24小时'
-        }, { status: 400 })
-      }
-      
       console.log(`⏰ 任务 ${taskId} 将在 ${Math.round(delay / 1000)} 秒后启动`)
-      const timer = setTimeout(() => {
+      setTimeout(() => {
         processTask(task).catch(error => {
           console.error('处理任务失败:', error)
         })
-        // 清理定时器引用
-        const { cancelScheduledTaskTimer } = require('@/lib/server-course-selection-manager')
-        cancelScheduledTaskTimer(taskId)
       }, delay)
-      
-      // 注册定时器，以便可以取消
-      const { registerScheduledTaskTimer } = require('@/lib/server-course-selection-manager')
-      registerScheduledTaskTimer(taskId, timer)
     } else {
       // 启动任务处理（异步，不阻塞响应）
       processTask(task).catch(error => {
@@ -257,18 +191,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (userId) {
-      // 获取用户的所有任务（优化：限制返回数量，避免内存问题）
+      // 获取用户的所有任务
       const tasks = getUserTasks(userId)
-      // 只返回最近100个任务，按创建时间倒序
-      const sortedTasks = tasks
-        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-        .slice(0, 100)
-      
       return NextResponse.json({
         success: true,
-        data: sortedTasks,
-        total: tasks.length,
-        returned: sortedTasks.length
+        data: tasks
       })
     }
 
