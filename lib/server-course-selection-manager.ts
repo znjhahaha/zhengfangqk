@@ -288,7 +288,8 @@ function cleanupOldTasks(): number {
   
   // 按用户分组任务
   const tasksByUser = new Map<string, ServerSelectionTask[]>()
-  for (const task of taskQueue.values()) {
+  const taskValues = Array.from(taskQueue.values())
+  for (const task of taskValues) {
     if (!tasksByUser.has(task.userId)) {
       tasksByUser.set(task.userId, [])
     }
@@ -296,7 +297,8 @@ function cleanupOldTasks(): number {
   }
   
   // 清理每个用户的任务
-  for (const [userId, tasks] of tasksByUser.entries()) {
+  const userEntries = Array.from(tasksByUser.entries())
+  for (const [userId, tasks] of userEntries) {
     // 分离已完成和未完成的任务
     const completed = tasks.filter(t => 
       t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled'
