@@ -1602,7 +1602,7 @@ const CourseCardComponent = function CourseCard({
 }
 
 // 使用 memo 包装组件，添加自定义比较函数
-export const CourseCard = memo(CourseCardComponent, (prevProps, nextProps) => {
+const CourseCardMemo = memo(CourseCardComponent, (prevProps, nextProps) => {
   // 自定义比较函数，只在关键属性变化时重新渲染
   return (
     prevProps.course.kch_id === nextProps.course.kch_id &&
@@ -1613,3 +1613,6 @@ export const CourseCard = memo(CourseCardComponent, (prevProps, nextProps) => {
     prevProps.showGrabButton === nextProps.showGrabButton
   )
 })
+
+// 导出 CourseCard 组件
+export { CourseCardMemo as CourseCard }
