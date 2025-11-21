@@ -32,17 +32,6 @@ import { courseAPI } from '@/lib/api'
 import { useCourseStore } from '@/lib/course-store'
 import { useStudentStore } from '@/lib/student-store'
 
-// 前向声明 CourseCard 组件类型
-type CourseCardProps = {
-  course: Course
-  onGrab: () => void
-  isGrabbing: boolean
-  showGrabButton: boolean
-  isMultiSelectMode: boolean
-  isSelected: boolean
-  onToggleSelection?: () => void
-}
-
 interface Course {
   kch_id: string
   kcmc: string
@@ -72,225 +61,6 @@ interface Course {
   _xkkz_id?: string  // 获取课程列表时使用的 xkkz_id 参数
   [key: string]: any // 允许其他属性
 }
-
-// 课程卡片组件 - 使用 memo 优化性能，添加自定义比较函数
-// 必须在 CourseInfoPage 之前定义，以便在组件内部使用
-const CourseCardComponent = function CourseCard({ 
-  course, 
-  onGrab, 
-  isGrabbing, 
-  showGrabButton,
-  isMultiSelectMode,
-  isSelected,
-  onToggleSelection
-}: CourseCardProps) {
-  // 统一字段映射，兼容已选课程和可选课程的不同字段名
-  const courseName = course.course_name || course.kcmc || '未知课程'
-  const teacherName = course.teacher || course.jsxm || '未知教师'
-  const category = course.kclb || '无'
-  const courseType = course.type_course || course.course_type || '未知类型'
-  const credit = course.credit || course.xf || '0'
-  const location = course.location || course.skdd || course.jxdd || '未知地点'
-  const time = course.time || course.sksj || '未知时间'
-  const selectedCount = (
-    course.selected_count ??
-    course.yxzrs ??
-    course.selected ??
-    course.selectedCount ??
-    '0'
-  ).toString()
-  const maxCapacity = (
-    course.max_capacity ??
-    course.bjrs ??
-    course.capacity ??
-    course.maxCapacity ??
-    '0'
-  ).toString()
-  const classId = course.class_name || course.jxbmc || ''
-  const courseId = course.course_id || course.kch || course.kch_id || ''
-  const jxbId = course.jxb_id || ''
-  
-  // 处理课程详细信息 - 基于Python版本的实现
-  let detailedTeacher = teacherName
-  let detailedTime = time
-  let detailedLocation = location
-  let detailedCollege = course.kkxy || course.kkxymc || '未知学院'
-  let detailedCategory = category
-  let detailedNature = course.kcxz || course.kcxzm || '未知性质'
-  let detailedMode = course.jxms || '未知模式'
-  let detailedCapacity = maxCapacity
-  
-  // 如果有课程详细信息，则使用详细信息
-  if (course.course_details && Array.isArray(course.course_details) && course.course_details.length > 0) {
-    // 根据当前教学班的jxb_id找到对应的详细信息
-    let detailItem = null
-    for (const item of course.course_details) {
-      if (item.jxb_id === jxbId) {
-        detailItem = item
-        break
-      }
-    }
-    
-    // 如果找不到匹配的jxb_id，则使用第一个条目
-    if (!detailItem && course.course_details.length > 0) {
-      detailItem = course.course_details[0]
-    }
-    
-    if (detailItem) {
-      // 处理教师信息 - 格式如 "2006078/卫郭敏/教授"
-      const teacherInfo = detailItem.jsxx || ''
-      if (teacherInfo && teacherInfo.includes('/')) {
-        const parts = teacherInfo.split('/')
-        const teacherName = parts[1] || '未知教师'
-        const teacherTitle = parts[2] || ''
-        detailedTeacher = `【${teacherName}】 ${teacherTitle}`
-      } else {
-        const teacherName = detailItem.jsxm || '未知教师'
-        const teacherTitle = detailItem.jszc || ''
-        detailedTeacher = `【${teacherName}】 ${teacherTitle}`
-      }
-      
-      detailedTime = detailItem.sksj || time
-      detailedLocation = detailItem.jxdd || location
-      detailedCollege = detailItem.kkxymc || detailItem.jgmc || detailedCollege
-      detailedCategory = detailItem.kclbmc || category
-      detailedNature = detailItem.kcxzmc || detailItem.kcxz || detailedNature
-      detailedMode = detailItem.jxms || detailedMode
-      detailedCapacity = detailItem.jxbrl || maxCapacity
-    }
-  }
-  
-  return (
-    <div style={{ willChange: 'transform', contain: 'layout style' }}>
-      <Card 
-        className={`glass card-hover relative overflow-hidden transition-colors ${
-          isMultiSelectMode ? 'cursor-pointer' : ''
-        } ${isSelected ? 'ring-2 ring-green-500/50 bg-green-500/5' : ''}`}
-        onClick={isMultiSelectMode ? onToggleSelection : undefined}
-        style={{ 
-          contentVisibility: 'auto', // 优化不可见元素的渲染
-          containIntrinsicSize: '200px auto'
-        }}
-      >
-        <CardContent className="p-4 sm:p-6 relative z-10">
-          <div className="flex items-start justify-between">
-            <div className="flex-1 space-y-3">
-              <div className="flex items-center space-x-3">
-                {/* 多选状态指示器 */}
-                {isMultiSelectMode && (
-                  <div className="flex items-center">
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                      isSelected 
-                        ? 'bg-green-500 border-green-500' 
-                        : 'border-gray-400 hover:border-green-400'
-                    }`}>
-                      {isSelected && (
-                        <svg
-                          className="w-4 h-4 text-white"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                <h3 className={`text-base sm:text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}>
-                  {courseName}
-                </h3>
-                <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full">
-                  {category}
-                </span>
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  courseType === '必修' 
-                    ? 'bg-red-500/20 text-red-400' 
-                    : courseType === '选修' 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-gray-500/20 text-gray-400'
-                }`}>
-                  {courseType}
-                </span>
-                {classId && (
-                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
-                    {classId}
-                  </span>
-                )}
-              </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              {[
-                { icon: Users, label: "教师", value: detailedTeacher },
-                { icon: Clock, label: "学分", value: credit },
-                { icon: MapPin, label: "地点", value: detailedLocation },
-                { icon: Users, label: "人数", value: `${selectedCount}/${detailedCapacity}` },
-                { icon: Building, label: "学院", value: detailedCollege },
-                { icon: BookOpen, label: "性质", value: detailedNature },
-                { icon: Settings, label: "模式", value: detailedMode },
-                { icon: Calendar, label: "时间", value: detailedTime }
-              ].map((item, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center space-x-2"
-                >
-                  <item.icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">{item.label}:</span>
-                  <span className="text-white font-medium">{item.value}</span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="text-sm text-muted-foreground">
-              <div>时间: {time}</div>
-              <div>课程ID: {courseId} | 教学班ID: {jxbId}</div>
-            </div>
-          </div>
-          
-          {showGrabButton && !isMultiSelectMode && (
-            <div className="ml-4">
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation() // 防止事件冒泡到卡片
-                  onGrab()
-                }}
-                disabled={isGrabbing}
-                className="btn-hover"
-                size="sm"
-              >
-                {isGrabbing ? (
-                  <div className="flex items-center">
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    抢课中...
-                  </div>
-                ) : (
-                  <div className="flex items-center">
-                    <Play className="h-4 w-4 mr-2" />
-                    抢课
-                  </div>
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-    </div>
-  )
-}
-
-// 使用 memo 包装组件，添加自定义比较函数
-const CourseCard = memo(CourseCardComponent, (prevProps: CourseCardProps, nextProps: CourseCardProps) => {
-  // 自定义比较函数，只在关键属性变化时重新渲染
-  return (
-    prevProps.course.kch_id === nextProps.course.kch_id &&
-    prevProps.course.jxb_id === nextProps.course.jxb_id &&
-    prevProps.isGrabbing === nextProps.isGrabbing &&
-    prevProps.isSelected === nextProps.isSelected &&
-    prevProps.isMultiSelectMode === nextProps.isMultiSelectMode &&
-    prevProps.showGrabButton === nextProps.showGrabButton
-  )
-})
 
 export default function CourseInfoPage() {
   // 使用全局状态管理
@@ -1618,3 +1388,228 @@ export default function CourseInfoPage() {
   )
 }
 
+// 课程卡片组件 - 使用 memo 优化性能，添加自定义比较函数
+const CourseCardComponent = function CourseCard({ 
+  course, 
+  onGrab, 
+  isGrabbing, 
+  showGrabButton,
+  isMultiSelectMode,
+  isSelected,
+  onToggleSelection
+}: { 
+  course: Course
+  onGrab: () => void
+  isGrabbing: boolean
+  showGrabButton: boolean
+  isMultiSelectMode: boolean
+  isSelected: boolean
+  onToggleSelection?: () => void
+}) {
+  // 统一字段映射，兼容已选课程和可选课程的不同字段名
+  const courseName = course.course_name || course.kcmc || '未知课程'
+  const teacherName = course.teacher || course.jsxm || '未知教师'
+  const category = course.kclb || '无'
+  const courseType = course.type_course || course.course_type || '未知类型'
+  const credit = course.credit || course.xf || '0'
+  const location = course.location || course.skdd || course.jxdd || '未知地点'
+  const time = course.time || course.sksj || '未知时间'
+  const selectedCount = (
+    course.selected_count ??
+    course.yxzrs ??
+    course.selected ??
+    course.selectedCount ??
+    '0'
+  ).toString()
+  const maxCapacity = (
+    course.max_capacity ??
+    course.bjrs ??
+    course.capacity ??
+    course.maxCapacity ??
+    '0'
+  ).toString()
+  const classId = course.class_name || course.jxbmc || ''
+  const courseId = course.course_id || course.kch || course.kch_id || ''
+  const jxbId = course.jxb_id || ''
+  
+  // 处理课程详细信息 - 基于Python版本的实现
+  let detailedTeacher = teacherName
+  let detailedTime = time
+  let detailedLocation = location
+  let detailedCollege = course.kkxy || course.kkxymc || '未知学院'
+  let detailedCategory = category
+  let detailedNature = course.kcxz || course.kcxzm || '未知性质'
+  let detailedMode = course.jxms || '未知模式'
+  let detailedCapacity = maxCapacity
+  
+  // 如果有课程详细信息，则使用详细信息
+  if (course.course_details && Array.isArray(course.course_details) && course.course_details.length > 0) {
+    // 根据当前教学班的jxb_id找到对应的详细信息
+    let detailItem = null
+    for (const item of course.course_details) {
+      if (item.jxb_id === jxbId) {
+        detailItem = item
+        break
+      }
+    }
+    
+    // 如果找不到匹配的jxb_id，则使用第一个条目
+    if (!detailItem && course.course_details.length > 0) {
+      detailItem = course.course_details[0]
+    }
+    
+    if (detailItem) {
+      // 处理教师信息 - 格式如 "2006078/卫郭敏/教授"
+      const teacherInfo = detailItem.jsxx || ''
+      if (teacherInfo && teacherInfo.includes('/')) {
+        const parts = teacherInfo.split('/')
+        const teacherName = parts[1] || '未知教师'
+        const teacherTitle = parts[2] || ''
+        detailedTeacher = `【${teacherName}】 ${teacherTitle}`
+      } else {
+        const teacherName = detailItem.jsxm || '未知教师'
+        const teacherTitle = detailItem.jszc || ''
+        detailedTeacher = `【${teacherName}】 ${teacherTitle}`
+      }
+      
+      detailedTime = detailItem.sksj || time
+      detailedLocation = detailItem.jxdd || location
+      detailedCollege = detailItem.kkxymc || detailItem.jgmc || detailedCollege
+      detailedCategory = detailItem.kclbmc || category
+      detailedNature = detailItem.kcxzmc || detailItem.kcxz || detailedNature
+      detailedMode = detailItem.jxms || detailedMode
+      detailedCapacity = detailItem.jxbrl || maxCapacity
+    }
+  }
+  
+  return (
+    <div style={{ willChange: 'transform', contain: 'layout style' }}>
+      <Card 
+        className={`glass card-hover relative overflow-hidden transition-colors ${
+          isMultiSelectMode ? 'cursor-pointer' : ''
+        } ${isSelected ? 'ring-2 ring-green-500/50 bg-green-500/5' : ''}`}
+        onClick={isMultiSelectMode ? onToggleSelection : undefined}
+        style={{ 
+          contentVisibility: 'auto', // 优化不可见元素的渲染
+          containIntrinsicSize: '200px auto'
+        }}
+      >
+        <CardContent className="p-4 sm:p-6 relative z-10">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 space-y-3">
+              <div className="flex items-center space-x-3">
+                {/* 多选状态指示器 */}
+                {isMultiSelectMode && (
+                  <div className="flex items-center">
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                      isSelected 
+                        ? 'bg-green-500 border-green-500' 
+                        : 'border-gray-400 hover:border-green-400'
+                    }`}>
+                      {isSelected && (
+                        <svg
+                          className="w-4 h-4 text-white"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                <h3 className={`text-base sm:text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}>
+                  {courseName}
+                </h3>
+                <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full">
+                  {category}
+                </span>
+                <span className={`px-2 py-1 text-xs rounded-full ${
+                  courseType === '必修' 
+                    ? 'bg-red-500/20 text-red-400' 
+                    : courseType === '选修' 
+                      ? 'bg-green-500/20 text-green-400' 
+                      : 'bg-gray-500/20 text-gray-400'
+                }`}>
+                  {courseType}
+                </span>
+                {classId && (
+                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs rounded-full">
+                    {classId}
+                  </span>
+                )}
+              </div>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              {[
+                { icon: Users, label: "教师", value: detailedTeacher },
+                { icon: Clock, label: "学分", value: credit },
+                { icon: MapPin, label: "地点", value: detailedLocation },
+                { icon: Users, label: "人数", value: `${selectedCount}/${detailedCapacity}` },
+                { icon: Building, label: "学院", value: detailedCollege },
+                { icon: BookOpen, label: "性质", value: detailedNature },
+                { icon: Settings, label: "模式", value: detailedMode },
+                { icon: Calendar, label: "时间", value: detailedTime }
+              ].map((item, index) => (
+                <div 
+                  key={index}
+                  className="flex items-center space-x-2"
+                >
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">{item.label}:</span>
+                  <span className="text-white font-medium">{item.value}</span>
+                </div>
+              ))}
+            </div>
+            
+            <div className="text-sm text-muted-foreground">
+              <div>时间: {time}</div>
+              <div>课程ID: {courseId} | 教学班ID: {jxbId}</div>
+            </div>
+          </div>
+          
+          {showGrabButton && !isMultiSelectMode && (
+            <div className="ml-4">
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation() // 防止事件冒泡到卡片
+                  onGrab()
+                }}
+                disabled={isGrabbing}
+                className="btn-hover"
+                size="sm"
+              >
+                {isGrabbing ? (
+                  <div className="flex items-center">
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    抢课中...
+                  </div>
+                ) : (
+                  <div className="flex items-center">
+                    <Play className="h-4 w-4 mr-2" />
+                    抢课
+                  </div>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+    </div>
+  )
+}
+
+// 使用 memo 包装组件，添加自定义比较函数
+export const CourseCard = memo(CourseCardComponent, (prevProps, nextProps) => {
+  // 自定义比较函数，只在关键属性变化时重新渲染
+  return (
+    prevProps.course.kch_id === nextProps.course.kch_id &&
+    prevProps.course.jxb_id === nextProps.course.jxb_id &&
+    prevProps.isGrabbing === nextProps.isGrabbing &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isMultiSelectMode === nextProps.isMultiSelectMode &&
+    prevProps.showGrabButton === nextProps.showGrabButton
+  )
+})
