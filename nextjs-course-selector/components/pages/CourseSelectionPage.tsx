@@ -22,7 +22,7 @@ import toast from 'react-hot-toast'
 import { courseAPI, getApiUrl } from '@/lib/api'
 import { useCourseStore } from '@/lib/course-store'
 import { useStudentStore } from '@/lib/student-store'
-import { CourseCard } from './CourseInfoPage'
+import { CourseCard } from '@/components/pages/CourseInfoPage'
 
 interface Course {
   kch_id: string
