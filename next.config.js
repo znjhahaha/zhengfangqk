@@ -6,7 +6,7 @@ const nextConfig = {
   // 静态导出配置（用于打包APK）
   // 只在构建APK时启用静态导出，开发模式下禁用以支持API路由
   // 构建APK时设置环境变量: BUILD_APK=true npm run build
-  ...(process.env.BUILD_APK === 'true' ? { output: 'export' } : { output: 'standalone' }),
+  ...(process.env.BUILD_APK === 'true' ? { output: 'export' } : {}),
 
   // 图片优化
   images: {
