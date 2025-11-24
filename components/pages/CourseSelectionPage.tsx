@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Target, 
+import {
+  Target,
   Square,
   Clock,
   CheckCircle,
@@ -22,17 +22,20 @@ import {
   Play,
   X,
   Settings,
-  Users
+  Users,
+  List
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { courseAPI, getApiUrl } from '@/lib/api'
+import DataCacheManager, { CACHE_KEYS } from '@/lib/data-cache-manager'
+import { useStudentStore } from '@/lib/student-store'
 
 export default function CourseSelectionPage() {
   const [availableCourses, setAvailableCourses] = useState<any[]>([])
   const [selectedCourses, setSelectedCourses] = useState<Set<string>>(new Set())
   const [searchTerm, setSearchTerm] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  
+
   // 服务器端抢课相关状态
   const [useServerSelection, setUseServerSelection] = useState(false)
   const [isServerSelectionActivated, setIsServerSelectionActivated] = useState(false)
@@ -42,6 +45,61 @@ export default function CourseSelectionPage() {
   const [scheduledTime, setScheduledTime] = useState<string>('')
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [grabbingCourses, setGrabbingCourses] = useState<Set<string>>(new Set())
+  const [showTaskPanel, setShowTaskPanel] = useState(false) // 任务面板展开/收起状态
+
+  const { studentInfo } = useStudentStore()
+
+  // 获取当前有效的 userId
+  const getUserId = useCallback(() => {
+    if (studentInfo?.name && studentInfo?.studentId) {
+      const newId = `${studentInfo.name}_${studentInfo.studentId}`
+      // 同步到 localStorage，保持兼容性
+      if (typeof window !== 'undefined') {
+        const currentStored = localStorage.getItem('userId')
+        if (currentStored !== newId) {
+          localStorage.setItem('userId', newId)
+          console.log(`👤 切换用户ID: ${newId}`)
+        }
+      }
+      return newId
+    }
+    return typeof window !== 'undefined' ? localStorage.getItem('userId') || '' : ''
+  }, [studentInfo])
+
+  // 页面加载时从缓存恢复数据
+  useEffect(() => {
+    // 1. 确保 userId 存在
+    let userId = getUserId()
+    if (!userId && typeof window !== 'undefined') {
+      userId = `user_${Date.now()}`
+      localStorage.setItem('userId', userId)
+      console.log(`🔧 初始化临时用户ID: ${userId}`)
+    } else {
+      console.log(`👤 当前用户ID: ${userId}`)
+    }
+
+    const { getCurrentSchool } = require('@/lib/global-school-state')
+    const schoolId = getCurrentSchool().id
+
+    // 2. 恢复可选课程列表
+    const cachedCourses = DataCacheManager.get<any[]>(CACHE_KEYS.COURSES_AVAILABLE, userId, schoolId)
+    if (cachedCourses) {
+      setAvailableCourses(cachedCourses)
+      console.log(`📦 从缓存恢复了 ${cachedCourses.length} 门可选课程`)
+    }
+
+    // 3. 恢复服务器任务列表 - 使用 userId 作为隔离键
+    // 强制使用 undefined 作为 schoolId，确保与 save 逻辑一致
+    const cachedTasks = DataCacheManager.get<any[]>(CACHE_KEYS.SERVER_TASKS, userId, undefined)
+    if (cachedTasks) {
+      setServerTasks(cachedTasks)
+      console.log(`📦 从缓存恢复了 ${cachedTasks.length} 个用户任务 (Key: ${CACHE_KEYS.SERVER_TASKS}, User: ${userId})`)
+    } else {
+      console.log(`⚠️ 未找到缓存的任务 (Key: ${CACHE_KEYS.SERVER_TASKS}, User: ${userId})`)
+      // 如果切换了用户且缓存为空，可能需要清空当前显示的任务
+      setServerTasks([])
+    }
+  }, [studentInfo, getUserId])
 
   // 获取可选课程
   const fetchAvailableCourses = async () => {
@@ -49,9 +107,13 @@ export default function CourseSelectionPage() {
     try {
       const { getCurrentSchool } = require('@/lib/global-school-state')
       const currentSchool = getCurrentSchool()
+      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || '' : ''
+
       const response = await courseAPI.getAvailableCourses(currentSchool.id) as any
       if (response.success) {
         setAvailableCourses(response.data || [])
+        // 保存到缓存
+        DataCacheManager.set(CACHE_KEYS.COURSES_AVAILABLE, response.data || [], userId, currentSchool.id)
       }
     } catch (error: any) {
       const errorMessage = error.message || '获取可选课程失败'
@@ -70,9 +132,12 @@ export default function CourseSelectionPage() {
   useEffect(() => {
     const checkActivationStatus = async () => {
       try {
-        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
-        if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+        // 确保 userId 存在且一致
+        let userId = getUserId()
+        if (!userId && typeof window !== 'undefined') {
+          userId = `user_${Date.now()}`
           localStorage.setItem('userId', userId)
+          console.log(`🔧 [checkActivationStatus] 初始化临时用户ID: ${userId}`)
         }
         const response = await fetch(getApiUrl(`/activation/verify?userId=${userId}`))
         const result = await response.json()
@@ -99,9 +164,12 @@ export default function CourseSelectionPage() {
 
     setIsLoadingActivation(true)
     try {
-      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
-      if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
+      // 确保 userId 存在且一致
+      let userId = getUserId()
+      if (!userId && typeof window !== 'undefined') {
+        userId = `user_${Date.now()}`
         localStorage.setItem('userId', userId)
+        console.log(`🔧 [activateCode] 初始化临时用户ID: ${userId}`)
       }
 
       const response = await fetch(getApiUrl('/activation/verify'), {
@@ -116,7 +184,7 @@ export default function CourseSelectionPage() {
       })
 
       const result = await response.json()
-      
+
       if (result.success && result.activated !== false) {
         setIsServerSelectionActivated(true)
         setActivationCode('')
@@ -136,11 +204,21 @@ export default function CourseSelectionPage() {
   // 加载用户任务
   const loadUserTasks = useCallback(async () => {
     try {
-      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 'unknown' : 'unknown'
+      // 确保 userId 存在且一致
+      let userId = getUserId()
+      if (!userId && typeof window !== 'undefined') {
+        userId = `user_${Date.now()}`
+        localStorage.setItem('userId', userId)
+        console.log(`🔧 [loadUserTasks] 初始化临时用户ID: ${userId}`)
+      }
       const response = await fetch(getApiUrl(`/server-selection/tasks?userId=${userId}`))
       const result = await response.json()
       if (result.success) {
-        setServerTasks(result.data || [])
+        const tasks = result.data || []
+        setServerTasks(tasks)
+        // 保存到缓存 - 使用 userId 作为隔离键（第二个参数），schoolId 设为 undefined
+        DataCacheManager.set(CACHE_KEYS.SERVER_TASKS, tasks, userId, undefined)
+        console.log(`💾 已缓存用户任务: ${tasks.length} 个任务 (userId: ${userId})`)
       }
     } catch (error) {
       console.error('加载任务失败:', error)
@@ -170,19 +248,22 @@ export default function CourseSelectionPage() {
 
     const courseKey = `${course.kch_id}_${course.jxb_id}`
     setGrabbingCourses(prev => new Set(prev).add(courseKey))
-    
+
     try {
       const { getCurrentSchool } = require('@/lib/global-school-state')
       const currentSchool = getCurrentSchool()
-      
+
       // 如果开启了服务器端抢课且已激活，提交到服务器端任务
       if (useServerSelection && isServerSelectionActivated) {
-        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
+        const userId = getUserId()
+        console.log(`🚀 提交抢课任务, 用户: ${userId}`)
+
         if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
           localStorage.setItem('userId', userId)
         }
-        
-        const cookie = typeof window !== 'undefined' ? localStorage.getItem('course-cookie') || '' : ''
+
+        const { default: LocalCookieManager } = await import('@/lib/local-cookie-manager')
+        const cookie = LocalCookieManager.getCookie()
         if (!cookie) {
           toast.error('请先配置Cookie')
           setGrabbingCourses(prev => {
@@ -192,7 +273,7 @@ export default function CourseSelectionPage() {
           })
           return
         }
-        
+
         // 计算定时时间（如果有）
         let scheduledTimestamp: number | undefined
         if (scheduledTime) {
@@ -207,7 +288,7 @@ export default function CourseSelectionPage() {
             return
           }
         }
-        
+
         // 提交到服务器端任务
         const response = await fetch(getApiUrl('/server-selection/tasks'), {
           method: 'POST',
@@ -237,7 +318,7 @@ export default function CourseSelectionPage() {
             scheduledTime: scheduledTimestamp
           })
         })
-        
+
         const result = await response.json()
         if (result.success) {
           if (scheduledTime) {
@@ -259,7 +340,7 @@ export default function CourseSelectionPage() {
         })
         return
       }
-      
+
       // 本地抢课（也需要激活才能使用）
       if (!isServerSelectionActivated) {
         toast.error('请先激活服务器端抢课功能才能使用抢课Pro+', {
@@ -272,7 +353,7 @@ export default function CourseSelectionPage() {
         })
         return
       }
-      
+
       const response = await courseAPI.executeSingleCourseSelection({
         jxb_id: course.jxb_id,
         do_jxb_id: course.do_jxb_id || course.jxb_id,
@@ -286,7 +367,7 @@ export default function CourseSelectionPage() {
         _xkly: course._xkly,
         _xkkz_id: course._xkkz_id
       }, currentSchool.id) as any
-      
+
       if (response.success) {
         toast.success(`课程 "${course.kcmc}" 抢课成功！`)
         fetchAvailableCourses()
@@ -310,7 +391,9 @@ export default function CourseSelectionPage() {
   // 取消任务
   const cancelServerTask = async (taskId: string) => {
     try {
-      const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || 'unknown' : 'unknown'
+      const userId = getUserId()
+      console.log(`🚫 尝试取消任务: ${taskId}, 用户: ${userId}`)
+
       const response = await fetch(getApiUrl('/server-selection/tasks'), {
         method: 'DELETE',
         headers: {
@@ -365,21 +448,39 @@ export default function CourseSelectionPage() {
           <h2 className="text-xl sm:text-3xl font-bold text-white mb-1 sm:mb-2">🎯 抢课Pro+</h2>
           <p className="text-xs sm:text-base text-muted-foreground">手动选择课程进行抢课，支持本地和服务器端抢课</p>
         </div>
-        <Button
-          onClick={fetchAvailableCourses}
-          disabled={isLoading || !isServerSelectionActivated}
-          variant="outline"
-          className="btn-hover text-xs sm:text-sm px-3 sm:px-4"
-          title={!isServerSelectionActivated ? '请先激活服务器端抢课功能' : ''}
-        >
-          {isLoading ? (
-            <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-          )}
-          <span className="hidden sm:inline">刷新课程</span>
-          <span className="sm:hidden">刷新</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => setShowTaskPanel(!showTaskPanel)}
+            disabled={!isServerSelectionActivated || serverTasks.length === 0}
+            variant={showTaskPanel ? "default" : "outline"}
+            className="btn-hover text-xs sm:text-sm px-3 sm:px-4"
+            title={!isServerSelectionActivated ? '请先激活服务器端抢课功能' : serverTasks.length === 0 ? '暂无任务' : showTaskPanel ? '收起任务' : '查看任务'}
+          >
+            <List className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">{showTaskPanel ? '收起任务' : '查看任务'}</span>
+            <span className="sm:hidden">任务</span>
+            {serverTasks.length > 0 && (
+              <span className="ml-2 px-1.5 py-0.5 bg-purple-500 rounded-full text-xs">
+                {serverTasks.filter(t => t.status === 'running' || t.status === 'pending').length}
+              </span>
+            )}
+          </Button>
+          <Button
+            onClick={fetchAvailableCourses}
+            disabled={isLoading || !isServerSelectionActivated}
+            variant="outline"
+            className="btn-hover text-xs sm:text-sm px-3 sm:px-4"
+            title={!isServerSelectionActivated ? '请先激活服务器端抢课功能' : ''}
+          >
+            {isLoading ? (
+              <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            )}
+            <span className="hidden sm:inline">刷新课程</span>
+            <span className="sm:hidden">刷新</span>
+          </Button>
+        </div>
       </motion.div>
 
       {/* 服务器端抢课激活 - 必须激活才能使用 */}
@@ -559,6 +660,123 @@ export default function CourseSelectionPage() {
         </motion.div>
       )}
 
+      {/* 可展开/收起的任务面板 - 放在页面空白处 */}
+      {isServerSelectionActivated && showTaskPanel && serverTasks.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, height: 0, marginTop: 0 }}
+          animate={{ opacity: 1, height: 'auto', marginTop: 16 }}
+          exit={{ opacity: 0, height: 0, marginTop: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="glass" data-task-list>
+            <CardHeader className="p-3 sm:p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                    <Server className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                    <span>服务器端抢课任务</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    查看和管理服务器端抢课任务
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    onClick={loadUserTasks}
+                    variant="outline"
+                    size="sm"
+                    className="btn-hover text-xs sm:text-sm"
+                  >
+                    <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">刷新</span>
+                  </Button>
+                  <Button
+                    onClick={() => setShowTaskPanel(false)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-xs sm:text-sm"
+                  >
+                    <X className="h-3 w-3 sm:h-4 sm:w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-3 sm:p-6 space-y-3">
+              {serverTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700/50"
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge
+                          variant="outline"
+                          className={
+                            task.status === 'running' ? 'text-yellow-400 border-yellow-400' :
+                              task.status === 'completed' ? 'text-green-400 border-green-400' :
+                                task.status === 'failed' ? 'text-red-400 border-red-400' :
+                                  task.status === 'pending' ? 'text-blue-400 border-blue-400' :
+                                    'text-gray-400 border-gray-400'
+                          }
+                        >
+                          {task.status === 'pending' ? '等待中' :
+                            task.status === 'running' ? '运行中' :
+                              task.status === 'completed' ? '已完成' :
+                                task.status === 'failed' ? '失败' :
+                                  '已取消'}
+                        </Badge>
+                        {task.scheduledTime && task.scheduledTime > Date.now() && (
+                          <Badge variant="outline" className="text-blue-400 border-blue-400">
+                            <Clock className="h-3 w-3 mr-1" />
+                            定时: {new Date(task.scheduledTime).toLocaleString('zh-CN')}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
+                        <p>课程数: {task.courses?.length || 0} | 尝试次数: {task.attemptCount || 0}</p>
+                        {task.courses && task.courses.length > 0 && (
+                          <p className="text-white">课程: {task.courses.map((c: any) => c.kcmc || c.name).join(', ')}</p>
+                        )}
+                        {task.result && (
+                          <div className="mt-2">
+                            <p className={task.result.success ? 'text-green-400' : 'text-red-400'}>
+                              {task.result.message}
+                            </p>
+                            {task.result.data && task.result.data.flag && (
+                              <p className="text-gray-500 text-xs mt-1">
+                                {task.result.data.flag === '1' ? '✅ 选课成功 (flag=1)' : `状态: flag=${task.result.data.flag}`}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        {task.createdAt && (
+                          <p className="text-gray-500 text-xs">
+                            创建时间: {new Date(task.createdAt).toLocaleString('zh-CN')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {(task.status === 'pending' || task.status === 'running') && (
+                      <Button
+                        onClick={() => cancelServerTask(task.id)}
+                        variant="destructive"
+                        size="sm"
+                        className="btn-hover text-xs sm:text-sm whitespace-nowrap"
+                      >
+                        <Square className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                        <span className="hidden sm:inline">暂停</span>
+                        <span className="sm:hidden">暂停</span>
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
       {/* 搜索框 - 只有激活后才能使用 */}
       {isServerSelectionActivated && (
         <motion.div
@@ -608,7 +826,7 @@ export default function CourseSelectionPage() {
                 const isGrabbing = grabbingCourses.has(courseKey)
                 const selectedCount = parseInt(course.selected_count || course.yxzrs || course.selected || '0')
                 const maxCapacity = parseInt(course.max_capacity || course.bjrs || course.capacity || '0')
-                
+
                 return (
                   <Card key={courseKey} className="glass hover:bg-accent/50 transition-colors">
                     <CardContent className="p-3 sm:p-6">
@@ -695,111 +913,6 @@ export default function CourseSelectionPage() {
         </motion.div>
       )}
 
-      {/* 服务器端抢课任务列表 */}
-      {isServerSelectionActivated && serverTasks.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card className="glass">
-            <CardHeader className="p-3 sm:p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
-                    <Server className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                    <span>服务器端抢课任务</span>
-                  </CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">
-                    查看和管理服务器端抢课任务
-                  </CardDescription>
-                </div>
-                <Button
-                  onClick={loadUserTasks}
-                  variant="outline"
-                  size="sm"
-                  className="btn-hover text-xs sm:text-sm"
-                >
-                  <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">刷新</span>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6 space-y-3">
-              {serverTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700/50"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge
-                          variant="outline"
-                          className={
-                            task.status === 'running' ? 'text-yellow-400 border-yellow-400' :
-                            task.status === 'completed' ? 'text-green-400 border-green-400' :
-                            task.status === 'failed' ? 'text-red-400 border-red-400' :
-                            task.status === 'pending' ? 'text-blue-400 border-blue-400' :
-                            'text-gray-400 border-gray-400'
-                          }
-                        >
-                          {task.status === 'pending' ? '等待中' :
-                           task.status === 'running' ? '运行中' :
-                           task.status === 'completed' ? '已完成' :
-                           task.status === 'failed' ? '失败' :
-                           '已取消'}
-                        </Badge>
-                        {task.scheduledTime && task.scheduledTime > Date.now() && (
-                          <Badge variant="outline" className="text-blue-400 border-blue-400">
-                            <Clock className="h-3 w-3 mr-1" />
-                            定时: {new Date(task.scheduledTime).toLocaleString('zh-CN')}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-xs sm:text-sm text-muted-foreground space-y-1">
-                        <p>课程数: {task.courses?.length || 0} | 尝试次数: {task.attemptCount || 0}</p>
-                        {task.courses && task.courses.length > 0 && (
-                          <p className="text-white">课程: {task.courses.map((c: any) => c.kcmc || c.name).join(', ')}</p>
-                        )}
-                        {task.result && (
-                          <div className="mt-2">
-                            <p className={task.result.success ? 'text-green-400' : 'text-red-400'}>
-                              {task.result.message}
-                            </p>
-                            {task.result.data && task.result.data.flag && (
-                              <p className="text-gray-500 text-xs mt-1">
-                                {task.result.data.flag === '1' ? '✅ 选课成功 (flag=1)' : `状态: flag=${task.result.data.flag}`}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        {task.createdAt && (
-                          <p className="text-gray-500 text-xs">
-                            创建时间: {new Date(task.createdAt).toLocaleString('zh-CN')}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    {(task.status === 'pending' || task.status === 'running') && (
-                      <Button
-                        onClick={() => cancelServerTask(task.id)}
-                        variant="destructive"
-                        size="sm"
-                        className="btn-hover text-xs sm:text-sm whitespace-nowrap"
-                      >
-                        <Square className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                        <span className="hidden sm:inline">暂停</span>
-                        <span className="sm:hidden">暂停</span>
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
     </div>
   )
 }

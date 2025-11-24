@@ -5,13 +5,23 @@
       "name": "",
       "description": "",
       "expiresAt": 1765084080000,
-      "maxUses": 1,
+      "maxUses": 100,
       "isActive": true,
       "usedCount": 1,
       "createdAt": 1762261980466,
       "maxCourses": 10,
       "usedCourses": 0
+    },
+    {
+      "code": "IOIIKB7G-B4P5-8BSC-RB1D-S70F5YNCYCLH",
+      "name": "",
+      "description": "",
+      "expiresAt": 1766570257698,
+      "usedCourses": 0,
+      "isActive": true,
+      "usedCount": 1,
+      "createdAt": 1763978259324
     }
   ],
-  "lastUpdated": 1762263095309
+  "lastUpdated": 1763978264984
 }

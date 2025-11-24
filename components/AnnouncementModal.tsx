@@ -43,7 +43,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
         sessionStorage.setItem('user-id', id)
       }
       setUserId(id)
-      
+
       // 加载已确认的公告
       const confirmed = localStorage.getItem('confirmed-announcements')
       if (confirmed) {
@@ -146,10 +146,10 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
       }
       return newSet
     })
-    
+
     // 同时标记为已查看
     markAsViewed(id)
-    
+
     // 如果还有下一个未查看的公告，显示下一个
     if (currentIndex < unviewedAnnouncements.length - 1) {
       setCurrentIndex(prev => prev + 1)
@@ -379,25 +379,6 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
         )}
       </AnimatePresence>
 
-      {/* 历史公告按钮 */}
-      {allActiveAnnouncements.length > 0 && (
-        <div className="fixed bottom-4 right-4 z-40">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-          >
-            <Button
-              onClick={() => setShowHistory(true)}
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg text-xs sm:text-sm"
-              size="sm"
-            >
-              <History className="h-4 w-4 mr-2" />
-              历史公告
-            </Button>
-          </motion.div>
-        </div>
-      )}
 
       {/* 历史公告弹窗 */}
       <AnimatePresence>
@@ -537,7 +518,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
                   <p className="text-xs sm:text-sm opacity-75 mb-4">
                     {new Date(selectedAnnouncement.createdAt).toLocaleString('zh-CN')}
                   </p>
-                  
+
                   {/* 底部按钮 */}
                   <div className="flex gap-3 mt-6">
                     {!confirmedIds.has(selectedAnnouncement.id) && (

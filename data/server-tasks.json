@@ -1,0 +1,155 @@
+{
+  "tasks": [
+    {
+      "id": "task_1763995082202_t4bo9mx8c",
+      "userId": "user_1763976658359",
+      "schoolId": "tyust",
+      "courses": [
+        {
+          "kch": "ED297A4711200B1EE0530B3C10AC7A7B",
+          "kxh": "434D116307D29870E0630C3C10AC766E",
+          "name": "气排球",
+          "jxb_id": "434D116307D29870E0630C3C10AC766E",
+          "do_jxb_id": "434D116307D29870E0630C3C10AC766E",
+          "kch_id": "ED297A4711200B1EE0530B3C10AC7A7B",
+          "jxbzls": "1",
+          "kklxdm": "10",
+          "kcmc": "气排球",
+          "jxbmc": "气排球-0002",
+          "_rwlx": "1",
+          "_xklc": "2",
+          "_xkly": "0",
+          "_xkkz_id": "4418C98EA73A108CE0630C3C10AC9361"
+        }
+      ],
+      "cookie": "JSESSIONID=9F46E9FDDB81A648C47DB0BB9DD54DFF; route=aec33f5c13ed8018b3e10c7e7e2f1e6d; _webvpn_key=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiMjAyNDIwMDEwMTM4IiwiZ3JvdXBzIjpbMTc3Miw1XSwiaWF0IjoxNzYzOTAzOTE2LCJleHAiOjE3NjM5OTAzMTZ9.8QJ5cpUzRgilgeTHJ546l2ZhwGRwjTCpV9bTK2YCMNA; webvpn_username=202420010138%7C1763903916%7C658afb0dee8b2c9faea8992339d462ef22b17bda",
+      "status": "cancelled",
+      "createdAt": 1763995082202,
+      "attemptCount": 43,
+      "startedAt": 1763995082205,
+      "lastAttemptAt": 1763995161966,
+      "completedAt": 1763995999740
+    },
+    {
+      "id": "task_1763996015839_64xvocs60",
+      "userId": "user_1763976658359",
+      "schoolId": "tyust",
+      "courses": [
+        {
+          "kch": "2027D3EE9B410ECCE0630C3C10AC07D7",
+          "kxh": "42A6D42261CC88B0E0630B3C10ACFC53",
+          "name": "习近平新时代中国特色社会主义思想概论(超星尔雅）        ",
+          "jxb_id": "42A6D42261CC88B0E0630B3C10ACFC53",
+          "do_jxb_id": "42A6D42261CC88B0E0630B3C10ACFC53",
+          "kch_id": "2027D3EE9B410ECCE0630C3C10AC07D7",
+          "jxbzls": "1",
+          "kklxdm": "10",
+          "kcmc": "习近平新时代中国特色社会主义思想概论(超星尔雅）        ",
+          "jxbmc": "习近平新时代中国特色社会主义思想概论(超星尔雅）        -0002",
+          "_rwlx": "1",
+          "_xklc": "2",
+          "_xkly": "0",
+          "_xkkz_id": "4418C98EA73A108CE0630C3C10AC9361"
+        }
+      ],
+      "cookie": "JSESSIONID=9F46E9FDDB81A648C47DB0BB9DD54DFF; route=aec33f5c13ed8018b3e10c7e7e2f1e6d; _webvpn_key=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiMjAyNDIwMDEwMTM4IiwiZ3JvdXBzIjpbMTc3Miw1XSwiaWF0IjoxNzYzOTAzOTE2LCJleHAiOjE3NjM5OTAzMTZ9.8QJ5cpUzRgilgeTHJ546l2ZhwGRwjTCpV9bTK2YCMNA; webvpn_username=202420010138%7C1763903916%7C658afb0dee8b2c9faea8992339d462ef22b17bda",
+      "status": "cancelled",
+      "createdAt": 1763996015840,
+      "attemptCount": 26,
+      "startedAt": 1763996015842,
+      "lastAttemptAt": 1763996063143,
+      "completedAt": 1763996952278
+    },
+    {
+      "id": "task_1763996955673_4nw43t0tn",
+      "userId": "user_1763976658359",
+      "schoolId": "tyust",
+      "courses": [
+        {
+          "kch": "X010400013",
+          "kxh": "433571A61C3D66EAE0630B3C10AC6592",
+          "name": "大学英语四级写作",
+          "jxb_id": "433571A61C3D66EAE0630B3C10AC6592",
+          "do_jxb_id": "433571A61C3D66EAE0630B3C10AC6592",
+          "kch_id": "X010400013",
+          "jxbzls": "1",
+          "kklxdm": "10",
+          "kcmc": "大学英语四级写作",
+          "jxbmc": "大学英语四级写作-0003",
+          "_rwlx": "1",
+          "_xklc": "2",
+          "_xkly": "0",
+          "_xkkz_id": "4418C98EA73A108CE0630C3C10AC9361"
+        }
+      ],
+      "cookie": "JSESSIONID=9F46E9FDDB81A648C47DB0BB9DD54DFF; route=aec33f5c13ed8018b3e10c7e7e2f1e6d; _webvpn_key=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiMjAyNDIwMDEwMTM4IiwiZ3JvdXBzIjpbMTc3Miw1XSwiaWF0IjoxNzYzOTAzOTE2LCJleHAiOjE3NjM5OTAzMTZ9.8QJ5cpUzRgilgeTHJ546l2ZhwGRwjTCpV9bTK2YCMNA; webvpn_username=202420010138%7C1763903916%7C658afb0dee8b2c9faea8992339d462ef22b17bda",
+      "status": "cancelled",
+      "createdAt": 1763996955674,
+      "attemptCount": 19,
+      "startedAt": 1763996955676,
+      "lastAttemptAt": 1763996996393,
+      "completedAt": 1763997968412
+    },
+    {
+      "id": "task_1763997984485_zr8prdlxg",
+      "userId": "user_1763976658359",
+      "schoolId": "tyust",
+      "courses": [
+        {
+          "kch": "X011600005",
+          "kxh": "43399169652C4BA1E0630C3C10ACD78C",
+          "name": "时尚手工产品创新实践",
+          "jxb_id": "43399169652C4BA1E0630C3C10ACD78C",
+          "do_jxb_id": "43399169652C4BA1E0630C3C10ACD78C",
+          "kch_id": "X011600005",
+          "jxbzls": "1",
+          "kklxdm": "10",
+          "kcmc": "时尚手工产品创新实践",
+          "jxbmc": "时尚手工产品创新实践-0001",
+          "_rwlx": "1",
+          "_xklc": "2",
+          "_xkly": "0",
+          "_xkkz_id": "4418C98EA73A108CE0630C3C10AC9361"
+        }
+      ],
+      "cookie": "JSESSIONID=9F46E9FDDB81A648C47DB0BB9DD54DFF; route=aec33f5c13ed8018b3e10c7e7e2f1e6d; _webvpn_key=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiMjAyNDIwMDEwMTM4IiwiZ3JvdXBzIjpbMTc3Miw1XSwiaWF0IjoxNzYzOTAzOTE2LCJleHAiOjE3NjM5OTAzMTZ9.8QJ5cpUzRgilgeTHJ546l2ZhwGRwjTCpV9bTK2YCMNA; webvpn_username=202420010138%7C1763903916%7C658afb0dee8b2c9faea8992339d462ef22b17bda",
+      "status": "cancelled",
+      "createdAt": 1763997984486,
+      "attemptCount": 2,
+      "startedAt": 1763997984488,
+      "lastAttemptAt": 1763997992815,
+      "completedAt": 1763997992361
+    },
+    {
+      "id": "task_1763998003377_416pnfaqt",
+      "userId": "user_1763976658359",
+      "schoolId": "tyust",
+      "courses": [
+        {
+          "kch": "X013400006",
+          "kxh": "434D116307939870E0630C3C10AC766E",
+          "name": "龙狮表演",
+          "jxb_id": "434D116307939870E0630C3C10AC766E",
+          "do_jxb_id": "434D116307939870E0630C3C10AC766E",
+          "kch_id": "X013400006",
+          "jxbzls": "1",
+          "kklxdm": "10",
+          "kcmc": "龙狮表演",
+          "jxbmc": "龙狮表演-0002",
+          "_rwlx": "1",
+          "_xklc": "2",
+          "_xkly": "0",
+          "_xkkz_id": "4418C98EA73A108CE0630C3C10AC9361"
+        }
+      ],
+      "cookie": "JSESSIONID=9F46E9FDDB81A648C47DB0BB9DD54DFF; route=aec33f5c13ed8018b3e10c7e7e2f1e6d; _webvpn_key=eyJhbGciOiJIUzI1NiJ9.eyJ1c2VyIjoiMjAyNDIwMDEwMTM4IiwiZ3JvdXBzIjpbMTc3Miw1XSwiaWF0IjoxNzYzOTAzOTE2LCJleHAiOjE3NjM5OTAzMTZ9.8QJ5cpUzRgilgeTHJ546l2ZhwGRwjTCpV9bTK2YCMNA; webvpn_username=202420010138%7C1763903916%7C658afb0dee8b2c9faea8992339d462ef22b17bda",
+      "status": "cancelled",
+      "createdAt": 1763998003377,
+      "attemptCount": 4,
+      "startedAt": 1763998003380,
+      "lastAttemptAt": 1763998015831,
+      "completedAt": 1763998014818
+    }
+  ],
+  "updatedAt": 1763998015831
+}

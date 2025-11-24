@@ -4,9 +4,9 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { 
-  BookOpen, 
-  Search, 
+import {
+  BookOpen,
+  Search,
   RefreshCw,
   Play,
   CheckCircle,
@@ -31,6 +31,7 @@ import toast from 'react-hot-toast'
 import { courseAPI } from '@/lib/api'
 import { useCourseStore } from '@/lib/course-store'
 import { useStudentStore } from '@/lib/student-store'
+import DataCacheManager, { CACHE_KEYS } from '@/lib/data-cache-manager'
 
 interface Course {
   kch_id: string
@@ -74,30 +75,30 @@ export default function CourseInfoPage() {
     clearAvailableCourses,
     clearSelectedCourses
   } = useCourseStore()
-  
+
   // 学生信息状态
   const { studentInfo } = useStudentStore()
-  
+
   const [isLoading, setIsLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTab, setSelectedTab] = useState<'available' | 'selected'>('available')
   const [grabbingCourses, setGrabbingCourses] = useState<Set<string>>(new Set())
-  
+
   // 分类相关状态
   const [groupByCategory, setGroupByCategory] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
-  
+
   // 多选功能状态
   const [multiSelectedCourses, setMultiSelectedCourses] = useState<Set<string>>(new Set())
   const [isMultiSelectMode, setIsMultiSelectMode] = useState(false)
   const [isBatchGrabbing, setIsBatchGrabbing] = useState(false)
-  
+
   // 服务器端抢课相关状态
   const [isServerSelectionActivated, setIsServerSelectionActivated] = useState(false)
   const [useServerSelection, setUseServerSelection] = useState(false)
   const [scheduledTime, setScheduledTime] = useState<string>('') // 定时抢课时间
   const [showScheduleDialog, setShowScheduleDialog] = useState(false) // 显示时间选择对话框
-  
+
   // 虚拟滚动相关状态
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 50 })
   const containerRef = useRef<HTMLDivElement>(null)
@@ -111,7 +112,7 @@ export default function CourseInfoPage() {
     // 清理全局状态缓存
     clearAvailableCourses()
     clearSelectedCourses()
-    
+
     // 清理API层缓存（如果有的话）
     if (typeof window !== 'undefined') {
       // 清理本地存储中的课程相关缓存
@@ -124,7 +125,7 @@ export default function CourseInfoPage() {
       }
       keysToRemove.forEach(key => localStorage.removeItem(key))
     }
-    
+
     toast.success('缓存已清理，下次查询将重新获取数据')
     console.log('🗑️ 已清理所有课程缓存数据')
   }, [clearAvailableCourses, clearSelectedCourses])
@@ -136,7 +137,7 @@ export default function CourseInfoPage() {
       console.log('📦 可选课程已缓存，跳过请求')
       return
     }
-    
+
     setIsLoading(true)
     const startTime = Date.now()
     try {
@@ -147,6 +148,9 @@ export default function CourseInfoPage() {
       if (response.success) {
         const duration = Date.now() - startTime
         setAvailableCourses(response.data || [])
+        // 保存到缓存
+        const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || '' : ''
+        DataCacheManager.set(CACHE_KEYS.COURSES_AVAILABLE, response.data || [], userId, currentSchool.id)
         toast.success(`可选课程获取成功 (${duration}ms)`, {
           duration: 3000
         })
@@ -177,7 +181,7 @@ export default function CourseInfoPage() {
       console.log('📦 已选课程已缓存，跳过请求')
       return
     }
-    
+
     setIsLoading(true)
     const startTime = Date.now()
     try {
@@ -186,12 +190,12 @@ export default function CourseInfoPage() {
       const currentSchool = getCurrentSchool()
       const response = await courseAPI.getSelectedCourses(currentSchool.id) as any
       console.log('📊 前端：已选课程API响应:', response)
-      
+
       if (response.success) {
         // 处理已选课程数据格式 - 基于新的格式化函数
         const data = response.data || {}
         let courses = []
-        
+
         if (data.courses && Array.isArray(data.courses)) {
           // 使用格式化后的数据
           courses = data.courses
@@ -200,18 +204,15 @@ export default function CourseInfoPage() {
           // 如果直接返回数组
           courses = data
           console.log(`📚 前端：获取到 ${courses.length} 门已选课程（数组格式）`)
-        } else {
-          // 尝试从对象中提取
-          courses = data.tmpList || data.courses || []
-          console.log(`📚 前端：获取到 ${courses.length} 门已选课程（对象格式）`)
         }
-        
+
+        // 设置已选课程并保存到缓存
         setSelectedCourses(courses)
-        console.log('📊 前端：已选课程数据:', courses)
-        
+        DataCacheManager.set(CACHE_KEYS.COURSES_SELECTED, courses)
+
         const duration = Date.now() - startTime
         if (courses.length > 0) {
-          toast.success(`已选课程获取成功，共 ${courses.length} 门课程 (${duration}ms)`, {
+          toast.success(`已加载 ${courses.length} 门已选课程 (${duration}ms)`, {
             duration: 3000
           })
         } else {
@@ -236,28 +237,28 @@ export default function CourseInfoPage() {
   const grabCourse = useCallback(async (course: Course, scheduledTime?: string) => {
     const courseKey = `${course.kch_id}_${course.jxb_id}`
     setGrabbingCourses(prev => new Set(prev).add(courseKey))
-    
+
     try {
       const { getCurrentSchool } = require('@/lib/global-school-state')
       const { getApiUrl } = require('@/lib/api')
       const currentSchool = getCurrentSchool()
-      
+
       // 检查是否应该使用服务器端抢课
       console.log('🔍 抢课模式检查:', {
         useServerSelection,
         isServerSelectionActivated,
         shouldUseServer: useServerSelection && isServerSelectionActivated
       })
-      
+
       // 如果开启了服务器端抢课且已激活，提交到服务器端任务
       if (useServerSelection && isServerSelectionActivated) {
         console.log('✅ 使用服务器端抢课模式')
-        
+
         const userId = typeof window !== 'undefined' ? localStorage.getItem('userId') || `user_${Date.now()}` : 'unknown'
         if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
           localStorage.setItem('userId', userId)
         }
-        
+
         const cookie = typeof window !== 'undefined' ? localStorage.getItem('course-cookie') || '' : ''
         if (!cookie) {
           toast.error('请先配置Cookie')
@@ -268,7 +269,7 @@ export default function CourseInfoPage() {
           })
           return
         }
-        
+
         // 计算定时时间（如果有）
         let scheduledTimestamp: number | undefined
         if (scheduledTime) {
@@ -283,7 +284,7 @@ export default function CourseInfoPage() {
             return
           }
         }
-        
+
         // 提交到服务器端任务
         console.log('📤 提交到服务器端任务:', {
           userId,
@@ -291,7 +292,7 @@ export default function CourseInfoPage() {
           course: course.kcmc,
           scheduledTime: scheduledTimestamp
         })
-        
+
         try {
           const response = await fetch(getApiUrl('/server-selection/tasks'), {
             method: 'POST',
@@ -322,16 +323,16 @@ export default function CourseInfoPage() {
               scheduledTime: scheduledTimestamp // 传递定时时间
             })
           })
-          
+
           const result = await response.json()
           console.log('📥 服务器端任务响应:', result)
-          
+
           if (result.success) {
             if (scheduledTime) {
               const timeStr = new Date(scheduledTime).toLocaleString('zh-CN')
-            toast.success(`课程 "${course.kcmc}" 已设定定时抢课任务（${timeStr}）！可在"抢课Pro+"页面查看进度。`)
-          } else {
-            toast.success(`课程 "${course.kcmc}" 已提交到服务器端抢课任务！服务器将持续尝试抢课，可在"抢课Pro+"页面查看进度。`)
+              toast.success(`课程 "${course.kcmc}" 已设定定时抢课任务（${timeStr}）！可在"抢课Pro+"页面查看进度。`)
+            } else {
+              toast.success(`课程 "${course.kcmc}" 已提交到服务器端抢课任务！服务器将持续尝试抢课，可在"抢课Pro+"页面查看进度。`)
             }
             setScheduledTime('') // 清空时间选择
             setShowScheduleDialog(false) // 关闭对话框
@@ -360,10 +361,10 @@ export default function CourseInfoPage() {
         }
         return // 重要：提交到服务器端后，直接返回，不执行本地抢课逻辑
       }
-      
+
       // 如果没有开启服务器端抢课，使用本地抢课
       console.log('⚠️ 使用本地抢课模式（浏览器端）')
-      
+
       // 调试：检查课程数据中的参数
       console.log(`🔍 前端：准备选课，课程数据中的参数:`, {
         _rwlx: course._rwlx,
@@ -373,7 +374,7 @@ export default function CourseInfoPage() {
         kch_id: course.kch_id,
         kcmc: course.kcmc
       })
-      
+
       // 本地抢课
       const response = await courseAPI.executeSingleCourseSelection({
         jxb_id: course.jxb_id,
@@ -389,7 +390,7 @@ export default function CourseInfoPage() {
         _xkly: course._xkly,
         _xkkz_id: course._xkkz_id
       }, currentSchool.id) as any
-      
+
       if (response.success) {
         toast.success(`课程 "${course.kcmc}" 抢课成功！`)
         // 刷新课程列表
@@ -419,30 +420,30 @@ export default function CourseInfoPage() {
   const filteredCourses = useMemo(() => {
     const courses = selectedTab === 'available' ? availableCourses : selectedCourses
     if (!searchTerm) return courses
-    
+
     const lowerSearchTerm = searchTerm.toLowerCase()
     return courses.filter(course => {
       if (!course) return false
-      
+
       // 可选课程和已选课程的字段名不同，需要分别处理
       if (selectedTab === 'available') {
         // 可选课程字段
         const courseName = course.kcmc || ''
         const teacherName = course.jsxm || ''
         const category = course.kclb || ''
-        
+
         return courseName.toLowerCase().includes(lowerSearchTerm) ||
-               teacherName.toLowerCase().includes(lowerSearchTerm) ||
-               category.toLowerCase().includes(lowerSearchTerm)
+          teacherName.toLowerCase().includes(lowerSearchTerm) ||
+          category.toLowerCase().includes(lowerSearchTerm)
       } else {
         // 已选课程字段
         const courseName = course.course_name || course.kcmc || ''
         const teacherName = course.teacher || course.jsxm || ''
         const className = course.class_name || course.jxbmc || ''
-        
+
         return courseName.toLowerCase().includes(lowerSearchTerm) ||
-               teacherName.toLowerCase().includes(lowerSearchTerm) ||
-               className.toLowerCase().includes(lowerSearchTerm)
+          teacherName.toLowerCase().includes(lowerSearchTerm) ||
+          className.toLowerCase().includes(lowerSearchTerm)
       }
     })
   }, [selectedTab, availableCourses, selectedCourses, searchTerm])
@@ -524,7 +525,7 @@ export default function CourseInfoPage() {
         if (!course) {
           throw new Error(`课程不存在: ${courseKey}`)
         }
-        
+
         return {
           jxb_id: course.jxb_id,
           do_jxb_id: course.do_jxb_id || course.jxb_id,
@@ -549,7 +550,7 @@ export default function CourseInfoPage() {
 
       if (response.success) {
         const { success, failed, results } = response.data
-        
+
         // 显示每个课程的结果
         results.forEach((result: any) => {
           if (result.success) {
@@ -600,7 +601,7 @@ export default function CourseInfoPage() {
     filteredCourses.forEach(course => {
       const courseName = selectedTab === 'available' ? course.kcmc : (course.course_name || course.kcmc)
       const category = courseName || '未命名课程'
-      
+
       if (!grouped[category]) {
         grouped[category] = []
       }
@@ -614,7 +615,7 @@ export default function CourseInfoPage() {
       if (b === '未命名课程') return -1
       return a.localeCompare(b, 'zh-CN')
     })
-    
+
     sortedKeys.forEach(key => {
       sortedGrouped[key] = grouped[key]
     })
@@ -626,7 +627,7 @@ export default function CourseInfoPage() {
   const categoryIndexMap = useMemo(() => {
     const map = new Map<string, { start: number, end: number }>()
     let currentIndex = 0
-    
+
     Object.entries(groupedCourses).forEach(([category, courses]) => {
       map.set(category, {
         start: currentIndex,
@@ -634,7 +635,7 @@ export default function CourseInfoPage() {
       })
       currentIndex += courses.length
     })
-    
+
     return map
   }, [groupedCourses])
 
@@ -644,7 +645,7 @@ export default function CourseInfoPage() {
     if (scrollRafRef.current !== null) {
       cancelAnimationFrame(scrollRafRef.current)
     }
-    
+
     // 使用 requestAnimationFrame 优化滚动性能
     scrollRafRef.current = requestAnimationFrame(() => {
       // 使用 ref 获取容器元素，避免事件对象失效
@@ -653,10 +654,10 @@ export default function CourseInfoPage() {
         scrollRafRef.current = null
         return
       }
-      
+
       const scrollTop = container.scrollTop
       const containerHeight = container.clientHeight
-      
+
       // 计算可见范围（提前和延后加载更多，确保滚动流畅）
       const buffer = 20 // 缓冲区大小
       const start = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - buffer)
@@ -664,7 +665,7 @@ export default function CourseInfoPage() {
         filteredCourses.length,
         Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + buffer
       )
-      
+
       // 只有当范围变化较大时才更新（减少状态更新）
       setVisibleRange(prev => {
         if (Math.abs(start - prev.start) > 5 || Math.abs(end - prev.end) > 5) {
@@ -672,11 +673,11 @@ export default function CourseInfoPage() {
         }
         return prev
       })
-      
+
       scrollRafRef.current = null
     })
   }, [filteredCourses.length])
-  
+
   // 清理 RAF 当组件卸载时
   useEffect(() => {
     return () => {
@@ -694,26 +695,26 @@ export default function CourseInfoPage() {
     }
   }, [filteredCourses.length, selectedTab])
 
-        // 创建课程回调函数映射（避免每次渲染时创建新函数）
-        // 注意：这里需要包含 useServerSelection 和 isServerSelectionActivated，确保状态变化时重新创建回调
-        const courseCallbacks = useMemo(() => {
-          const callbacks = new Map<string, { onGrab: () => void, onToggle: () => void }>()
-          filteredCourses.forEach(course => {
-            const key = `${course.kch_id}_${course.jxb_id}`
-            callbacks.set(key, {
-              onGrab: () => {
-                console.log('🎯 点击抢课按钮，当前状态:', {
-                  useServerSelection,
-                  isServerSelectionActivated,
-                  course: course.kcmc
-                })
-                grabCourse(course, scheduledTime || undefined)
-              },
-              onToggle: () => toggleCourseSelection(key)
-            })
+  // 创建课程回调函数映射（避免每次渲染时创建新函数）
+  // 注意：这里需要包含 useServerSelection 和 isServerSelectionActivated，确保状态变化时重新创建回调
+  const courseCallbacks = useMemo(() => {
+    const callbacks = new Map<string, { onGrab: () => void, onToggle: () => void }>()
+    filteredCourses.forEach(course => {
+      const key = `${course.kch_id}_${course.jxb_id}`
+      callbacks.set(key, {
+        onGrab: () => {
+          console.log('🎯 点击抢课按钮，当前状态:', {
+            useServerSelection,
+            isServerSelectionActivated,
+            course: course.kcmc
           })
-          return callbacks
-        }, [filteredCourses, grabCourse, toggleCourseSelection, scheduledTime, useServerSelection, isServerSelectionActivated])
+          grabCourse(course, scheduledTime || undefined)
+        },
+        onToggle: () => toggleCourseSelection(key)
+      })
+    })
+    return callbacks
+  }, [filteredCourses, grabCourse, toggleCourseSelection, scheduledTime, useServerSelection, isServerSelectionActivated])
 
   // 获取所有分类
   const allCategories = useMemo(() => {
@@ -735,13 +736,13 @@ export default function CourseInfoPage() {
         if (typeof window !== 'undefined' && !localStorage.getItem('userId')) {
           localStorage.setItem('userId', userId)
         }
-        
+
         const { getApiUrl } = require('@/lib/api')
         const response = await fetch(getApiUrl(`/activation/verify?userId=${userId}`))
         const result = await response.json()
-        
+
         console.log('🔍 检查激活状态结果:', result)
-        
+
         if (result.success && result.activated) {
           setIsServerSelectionActivated(true)
           console.log('✅ 服务器端抢课已激活')
@@ -755,10 +756,10 @@ export default function CourseInfoPage() {
         setIsServerSelectionActivated(false)
       }
     }
-    
+
     checkActivationStatus()
   }, [])
-  
+
   // 移除自动查询，改为手动查询
   // useEffect(() => {
   //   fetchAvailableCourses()
@@ -777,7 +778,7 @@ export default function CourseInfoPage() {
                 <p className="text-xs sm:text-base text-muted-foreground mb-4 sm:mb-6">
                   您需要先在"系统设置"页面配置有效的Cookie才能查看课程信息
                 </p>
-                <Button 
+                <Button
                   onClick={() => {
                     // 这里可以添加跳转到设置页面的逻辑
                     toast('请切换到"系统设置"页面配置Cookie')
@@ -938,7 +939,7 @@ export default function CourseInfoPage() {
               )}
             </>
           )}
-          
+
           <Button
             onClick={() => {
               const newTab = selectedTab === 'available' ? 'selected' : 'available'
@@ -957,7 +958,7 @@ export default function CourseInfoPage() {
             <span className="hidden sm:inline">{selectedTab === 'available' ? '查看已选课程' : '查看可选课程'}</span>
             <span className="sm:hidden">{selectedTab === 'available' ? '已选' : '可选'}</span>
           </Button>
-          
+
           <Button
             onClick={() => setGroupByCategory(!groupByCategory)}
             variant={groupByCategory ? "default" : "outline"}
@@ -967,7 +968,7 @@ export default function CourseInfoPage() {
             <span className="hidden sm:inline">{groupByCategory ? '取消分类' : '按名称'}</span>
             <span className="sm:hidden">分类</span>
           </Button>
-          
+
           {groupByCategory && (
             <Button
               onClick={toggleAllCategories}
@@ -983,7 +984,7 @@ export default function CourseInfoPage() {
               <span className="sm:hidden">{expandedCategories.size === 0 ? '展开' : '收起'}</span>
             </Button>
           )}
-          
+
           <Button
             onClick={() => {
               // 强制刷新当前标签页的数据
@@ -1026,7 +1027,7 @@ export default function CourseInfoPage() {
                 <span className="hidden sm:inline">{isMultiSelectMode ? '退出多选' : '多选模式'}</span>
                 <span className="sm:hidden">{isMultiSelectMode ? '退出' : '多选'}</span>
               </Button>
-              
+
               {isMultiSelectMode && (
                 <>
                   <Button
@@ -1039,7 +1040,7 @@ export default function CourseInfoPage() {
                     <span className="hidden sm:inline">全选</span>
                     <span className="sm:hidden">全选</span>
                   </Button>
-                  
+
                   <Button
                     onClick={clearAllSelections}
                     variant="outline"
@@ -1050,7 +1051,7 @@ export default function CourseInfoPage() {
                     <span className="hidden sm:inline">清空选择</span>
                     <span className="sm:hidden">清空</span>
                   </Button>
-                  
+
                   <Button
                     onClick={batchGrabCourses}
                     variant="default"
@@ -1085,7 +1086,7 @@ export default function CourseInfoPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="glass">
           <CardContent className="p-2 sm:p-4">
             <div className="flex items-center space-x-1.5 sm:space-x-2">
@@ -1097,7 +1098,7 @@ export default function CourseInfoPage() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card className="glass">
           <CardContent className="p-2 sm:p-4">
             <div className="flex items-center space-x-1.5 sm:space-x-2">
@@ -1155,11 +1156,11 @@ export default function CourseInfoPage() {
       )}
 
       {/* 课程列表 - 使用虚拟滚动优化性能 */}
-      <div 
+      <div
         ref={containerRef}
         className="space-y-4 max-h-[calc(100vh-400px)] overflow-y-auto"
         onScroll={handleScroll}
-        style={{ 
+        style={{
           scrollBehavior: 'auto', // 改为 auto 提升性能
           WebkitOverflowScrolling: 'touch', // iOS 平滑滚动
           willChange: 'scroll-position', // 提示浏览器优化滚动
@@ -1193,28 +1194,28 @@ export default function CourseInfoPage() {
               <>
                 {/* 顶部占位符 */}
                 {visibleRange.start > 0 && (
-                  <div 
-                    style={{ 
-                      height: visibleRange.start * ITEM_HEIGHT, 
+                  <div
+                    style={{
+                      height: visibleRange.start * ITEM_HEIGHT,
                       minHeight: '1px',
                       contentVisibility: 'auto', // 优化占位符渲染
                       containIntrinsicSize: `${ITEM_HEIGHT}px`
-                    }} 
-                    aria-hidden="true" 
+                    }}
+                    aria-hidden="true"
                   />
                 )}
-                
+
                 {/* 可见的课程 */}
                 {Object.entries(groupedCourses).map(([category, courses]) => {
                   // 使用预计算的索引范围（避免重复计算）
                   const indexRange = categoryIndexMap.get(category)
                   if (!indexRange) return null
-                  
+
                   // 检查该分类是否在可见范围内
                   const isVisible = indexRange.end >= visibleRange.start && indexRange.start < visibleRange.end
-                  
+
                   if (!isVisible) return null
-                  
+
                   return (
                     <div key={category}>
                       {groupByCategory && category !== 'all' ? (
@@ -1239,7 +1240,7 @@ export default function CourseInfoPage() {
                               </span>
                             </div>
                           </div>
-                          
+
                           {expandedCategories.has(category) && (
                             <div className="grid grid-cols-1 gap-4 pl-8">
                               {courses.map((course) => {
@@ -1249,12 +1250,12 @@ export default function CourseInfoPage() {
                                   <CourseCard
                                     key={courseKey}
                                     course={course}
-                                    onGrab={callbacks?.onGrab || (() => {})}
+                                    onGrab={callbacks?.onGrab || (() => { })}
                                     isGrabbing={grabbingCourses.has(courseKey)}
                                     showGrabButton={selectedTab === 'available'}
                                     isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
                                     isSelected={selectedTab === 'available' ? multiSelectedCourses.has(courseKey) : false}
-                                    onToggleSelection={selectedTab === 'available' ? (callbacks?.onToggle || (() => {})) : undefined}
+                                    onToggleSelection={selectedTab === 'available' ? (callbacks?.onToggle || (() => { })) : undefined}
                                   />
                                 )
                               })}
@@ -1280,7 +1281,7 @@ export default function CourseInfoPage() {
                               showGrabButton={selectedTab === 'available'}
                               isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
                               isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
-                              onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
+                              onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => { }}
                             />
                           ))}
                         </div>
@@ -1288,17 +1289,17 @@ export default function CourseInfoPage() {
                     </div>
                   )
                 })}
-                
+
                 {/* 底部占位符 */}
                 {visibleRange.end < filteredCourses.length && (
-                  <div 
-                    style={{ 
-                      height: (filteredCourses.length - visibleRange.end) * ITEM_HEIGHT, 
+                  <div
+                    style={{
+                      height: (filteredCourses.length - visibleRange.end) * ITEM_HEIGHT,
                       minHeight: '1px',
                       contentVisibility: 'auto', // 优化占位符渲染
                       containIntrinsicSize: `${ITEM_HEIGHT}px`
-                    }} 
-                    aria-hidden="true" 
+                    }}
+                    aria-hidden="true"
                   />
                 )}
               </>
@@ -1328,7 +1329,7 @@ export default function CourseInfoPage() {
                           </span>
                         </div>
                       </div>
-                      
+
                       {expandedCategories.has(category) && (
                         <div className="grid grid-cols-1 gap-4 pl-8">
                           {courses.map((course) => (
@@ -1347,7 +1348,7 @@ export default function CourseInfoPage() {
                               showGrabButton={selectedTab === 'available'}
                               isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
                               isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
-                              onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
+                              onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => { }}
                             />
                           ))}
                         </div>
@@ -1372,7 +1373,7 @@ export default function CourseInfoPage() {
                           showGrabButton={selectedTab === 'available'}
                           isMultiSelectMode={selectedTab === 'available' ? isMultiSelectMode : false}
                           isSelected={selectedTab === 'available' ? multiSelectedCourses.has(`${course.kch_id}_${course.jxb_id}`) : false}
-                          onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => {}}
+                          onToggleSelection={selectedTab === 'available' ? () => toggleCourseSelection(`${course.kch_id}_${course.jxb_id}`) : () => { }}
                         />
                       ))}
                     </div>
@@ -1389,15 +1390,15 @@ export default function CourseInfoPage() {
 }
 
 // 课程卡片组件 - 使用 memo 优化性能，添加自定义比较函数
-const CourseCardComponent = function CourseCard({ 
-  course, 
-  onGrab, 
-  isGrabbing, 
+const CourseCardComponent = function CourseCard({
+  course,
+  onGrab,
+  isGrabbing,
   showGrabButton,
   isMultiSelectMode,
   isSelected,
   onToggleSelection
-}: { 
+}: {
   course: Course
   onGrab: () => void
   isGrabbing: boolean
@@ -1431,7 +1432,7 @@ const CourseCardComponent = function CourseCard({
   const classId = course.class_name || course.jxbmc || ''
   const courseId = course.course_id || course.kch || course.kch_id || ''
   const jxbId = course.jxb_id || ''
-  
+
   // 处理课程详细信息 - 基于Python版本的实现
   let detailedTeacher = teacherName
   let detailedTime = time
@@ -1441,7 +1442,7 @@ const CourseCardComponent = function CourseCard({
   let detailedNature = course.kcxz || course.kcxzm || '未知性质'
   let detailedMode = course.jxms || '未知模式'
   let detailedCapacity = maxCapacity
-  
+
   // 如果有课程详细信息，则使用详细信息
   if (course.course_details && Array.isArray(course.course_details) && course.course_details.length > 0) {
     // 根据当前教学班的jxb_id找到对应的详细信息
@@ -1452,12 +1453,12 @@ const CourseCardComponent = function CourseCard({
         break
       }
     }
-    
+
     // 如果找不到匹配的jxb_id，则使用第一个条目
     if (!detailItem && course.course_details.length > 0) {
       detailItem = course.course_details[0]
     }
-    
+
     if (detailItem) {
       // 处理教师信息 - 格式如 "2006078/卫郭敏/教授"
       const teacherInfo = detailItem.jsxx || ''
@@ -1471,7 +1472,7 @@ const CourseCardComponent = function CourseCard({
         const teacherTitle = detailItem.jszc || ''
         detailedTeacher = `【${teacherName}】 ${teacherTitle}`
       }
-      
+
       detailedTime = detailItem.sksj || time
       detailedLocation = detailItem.jxdd || location
       detailedCollege = detailItem.kkxymc || detailItem.jgmc || detailedCollege
@@ -1481,15 +1482,14 @@ const CourseCardComponent = function CourseCard({
       detailedCapacity = detailItem.jxbrl || maxCapacity
     }
   }
-  
+
   return (
     <div style={{ willChange: 'transform', contain: 'layout style' }}>
-      <Card 
-        className={`glass card-hover relative overflow-hidden transition-colors ${
-          isMultiSelectMode ? 'cursor-pointer' : ''
-        } ${isSelected ? 'ring-2 ring-green-500/50 bg-green-500/5' : ''}`}
+      <Card
+        className={`glass card-hover relative overflow-hidden transition-colors ${isMultiSelectMode ? 'cursor-pointer' : ''
+          } ${isSelected ? 'ring-2 ring-green-500/50 bg-green-500/5' : ''}`}
         onClick={isMultiSelectMode ? onToggleSelection : undefined}
-        style={{ 
+        style={{
           contentVisibility: 'auto', // 优化不可见元素的渲染
           containIntrinsicSize: '200px auto'
         }}
@@ -1501,11 +1501,10 @@ const CourseCardComponent = function CourseCard({
                 {/* 多选状态指示器 */}
                 {isMultiSelectMode && (
                   <div className="flex items-center">
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                      isSelected 
-                        ? 'bg-green-500 border-green-500' 
-                        : 'border-gray-400 hover:border-green-400'
-                    }`}>
+                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${isSelected
+                      ? 'bg-green-500 border-green-500'
+                      : 'border-gray-400 hover:border-green-400'
+                      }`}>
                       {isSelected && (
                         <svg
                           className="w-4 h-4 text-white"
@@ -1518,20 +1517,19 @@ const CourseCardComponent = function CourseCard({
                     </div>
                   </div>
                 )}
-                
+
                 <h3 className={`text-base sm:text-lg font-semibold ${isSelected ? 'text-green-400' : 'text-white'}`}>
                   {courseName}
                 </h3>
                 <span className="px-2 py-1 bg-primary/20 text-primary text-xs rounded-full">
                   {category}
                 </span>
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  courseType === '必修' 
-                    ? 'bg-red-500/20 text-red-400' 
-                    : courseType === '选修' 
-                      ? 'bg-green-500/20 text-green-400' 
-                      : 'bg-gray-500/20 text-gray-400'
-                }`}>
+                <span className={`px-2 py-1 text-xs rounded-full ${courseType === '必修'
+                  ? 'bg-red-500/20 text-red-400'
+                  : courseType === '选修'
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-gray-500/20 text-gray-400'
+                  }`}>
                   {courseType}
                 </span>
                 {classId && (
@@ -1540,63 +1538,63 @@ const CourseCardComponent = function CourseCard({
                   </span>
                 )}
               </div>
-            
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-              {[
-                { icon: Users, label: "教师", value: detailedTeacher },
-                { icon: Clock, label: "学分", value: credit },
-                { icon: MapPin, label: "地点", value: detailedLocation },
-                { icon: Users, label: "人数", value: `${selectedCount}/${detailedCapacity}` },
-                { icon: Building, label: "学院", value: detailedCollege },
-                { icon: BookOpen, label: "性质", value: detailedNature },
-                { icon: Settings, label: "模式", value: detailedMode },
-                { icon: Calendar, label: "时间", value: detailedTime }
-              ].map((item, index) => (
-                <div 
-                  key={index}
-                  className="flex items-center space-x-2"
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                {[
+                  { icon: Users, label: "教师", value: detailedTeacher },
+                  { icon: Clock, label: "学分", value: credit },
+                  { icon: MapPin, label: "地点", value: detailedLocation },
+                  { icon: Users, label: "人数", value: `${selectedCount}/${detailedCapacity}` },
+                  { icon: Building, label: "学院", value: detailedCollege },
+                  { icon: BookOpen, label: "性质", value: detailedNature },
+                  { icon: Settings, label: "模式", value: detailedMode },
+                  { icon: Calendar, label: "时间", value: detailedTime }
+                ].map((item, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center space-x-2"
+                  >
+                    <item.icon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">{item.label}:</span>
+                    <span className="text-white font-medium">{item.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                <div>时间: {time}</div>
+                <div>课程ID: {courseId} | 教学班ID: {jxbId}</div>
+              </div>
+            </div>
+
+            {showGrabButton && !isMultiSelectMode && (
+              <div className="ml-4">
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation() // 防止事件冒泡到卡片
+                    onGrab()
+                  }}
+                  disabled={isGrabbing}
+                  className="btn-hover"
+                  size="sm"
                 >
-                  <item.icon className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-muted-foreground">{item.label}:</span>
-                  <span className="text-white font-medium">{item.value}</span>
-                </div>
-              ))}
-            </div>
-            
-            <div className="text-sm text-muted-foreground">
-              <div>时间: {time}</div>
-              <div>课程ID: {courseId} | 教学班ID: {jxbId}</div>
-            </div>
+                  {isGrabbing ? (
+                    <div className="flex items-center">
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      抢课中...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <Play className="h-4 w-4 mr-2" />
+                      抢课
+                    </div>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
-          
-          {showGrabButton && !isMultiSelectMode && (
-            <div className="ml-4">
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation() // 防止事件冒泡到卡片
-                  onGrab()
-                }}
-                disabled={isGrabbing}
-                className="btn-hover"
-                size="sm"
-              >
-                {isGrabbing ? (
-                  <div className="flex items-center">
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    抢课中...
-                  </div>
-                ) : (
-                  <div className="flex items-center">
-                    <Play className="h-4 w-4 mr-2" />
-                    抢课
-                  </div>
-                )}
-              </Button>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
     </div>
   )
 }

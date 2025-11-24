@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { 
-  Settings, 
-  Plus, 
-  Edit, 
-  Trash2, 
-  Save, 
-  X, 
+import {
+  Settings,
+  Plus,
+  Edit,
+  Trash2,
+  Save,
+  X,
   School,
   Globe,
   Lock,
@@ -47,12 +47,13 @@ import {
   Copy
 } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { 
-  SchoolConfig, 
+import DataCacheManager, { CACHE_KEYS } from '@/lib/data-cache-manager'
+import {
+  SchoolConfig,
   getAllSchools,
-  getAllSchoolsSync, 
-  addSchool, 
-  updateSchool, 
+  getAllSchoolsSync,
+  addSchool,
+  updateSchool,
   deleteSchool,
   getSchoolUrlConfig,
   setSchoolUrlConfig
@@ -110,11 +111,11 @@ function AnimatedSelect({ value, onChange, options, className = '' }: AnimatedSe
           })
         }
       }
-      
+
       updatePosition()
       window.addEventListener('scroll', updatePosition, { passive: true })
       window.addEventListener('resize', updatePosition)
-      
+
       return () => {
         window.removeEventListener('scroll', updatePosition)
         window.removeEventListener('resize', updatePosition)
@@ -126,7 +127,7 @@ function AnimatedSelect({ value, onChange, options, className = '' }: AnimatedSe
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
-        selectRef.current && 
+        selectRef.current &&
         !selectRef.current.contains(event.target as Node) &&
         dropdownRef.current &&
         !dropdownRef.current.contains(event.target as Node)
@@ -175,7 +176,7 @@ function AnimatedSelect({ value, onChange, options, className = '' }: AnimatedSe
               exit={{ opacity: 0, y: -10, scale: 0.95 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               className="fixed bg-slate-700/95 backdrop-blur-xl border border-purple-400/30 rounded-lg shadow-2xl overflow-hidden z-[99999]"
-              style={{ 
+              style={{
                 position: 'fixed',
                 top: dropdownPosition.top,
                 left: dropdownPosition.left,
@@ -192,11 +193,10 @@ function AnimatedSelect({ value, onChange, options, className = '' }: AnimatedSe
                       onChange(option.value)
                       setIsOpen(false)
                     }}
-                    className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-left flex items-center justify-between hover:bg-purple-500/20 transition-colors text-xs sm:text-sm ${
-                      value === option.value 
-                        ? 'bg-purple-500/30 text-purple-300' 
-                        : 'text-gray-300'
-                    }`}
+                    className={`w-full px-3 sm:px-4 py-2 sm:py-3 text-left flex items-center justify-between hover:bg-purple-500/20 transition-colors text-xs sm:text-sm ${value === option.value
+                      ? 'bg-purple-500/30 text-purple-300'
+                      : 'text-gray-300'
+                      }`}
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: index * 0.05, duration: 0.2 }}
@@ -265,7 +265,7 @@ export default function AdminPage() {
   const [isLoadingActivationCodes, setIsLoadingActivationCodes] = useState(false)
   const [isAddingActivationCode, setIsAddingActivationCode] = useState(false)
   const [editingActivationCode, setEditingActivationCode] = useState<any>(null)
-  
+
   // 服务器端抢课任务状态
   const [serverSelectionTasks, setServerSelectionTasks] = useState<any[]>([])
   const [isLoadingServerTasks, setIsLoadingServerTasks] = useState(false)
@@ -300,7 +300,7 @@ export default function AdminPage() {
     loadStorageData()
     loadLogs()
     loadVisitStats()
-    
+
     // 记录初始加载日志（延迟执行，避免重复记录）
     const hasInitialLog = getAllLogs().some(log => log.action === '后台管理页面加载')
     if (!hasInitialLog) {
@@ -325,19 +325,23 @@ export default function AdminPage() {
 
   // 自动刷新
   useEffect(() => {
-    if (activeTab === 'logs' || activeTab === 'stats' || activeTab === 'monitor') {
+    if (activeTab === 'logs' || activeTab === 'stats' || activeTab === 'monitor' || activeTab === 'server-selection') {
       const interval = setInterval(() => {
         loadLogs()
         loadStorageData()
         loadVisitStats()
+        // 如果在服务器抢课标签页，也刷新任务列表
+        if (activeTab === 'server-selection') {
+          loadServerSelectionTasks()
+        }
       }, 5000) // 每5秒刷新一次
-      
+
       return () => {
         clearInterval(interval)
       }
     }
     // 如果不在需要自动刷新的标签页，返回空清理函数
-    return () => {}
+    return () => { }
   }, [activeTab])
 
   // 切换到 COS 标签页时自动加载文件列表
@@ -396,10 +400,10 @@ export default function AdminPage() {
   const loadCosFiles = async () => {
     setIsLoadingCosFiles(true)
     try {
-      const adminToken = typeof window !== 'undefined' && localStorage.getItem('admin-logged-in') === 'true' 
-        ? 'Znj00751_admin_2024' 
+      const adminToken = typeof window !== 'undefined' && localStorage.getItem('admin-logged-in') === 'true'
+        ? 'Znj00751_admin_2024'
         : ''
-      
+
       const response = await fetch(`/api/admin/cos-files?t=${Date.now()}`, {
         headers: {
           'x-admin-token': adminToken
@@ -424,10 +428,10 @@ export default function AdminPage() {
   const loadSuggestions = async () => {
     setIsLoadingSuggestions(true)
     try {
-      const adminToken = typeof window !== 'undefined' && localStorage.getItem('admin-logged-in') === 'true' 
-        ? 'Znj00751_admin_2024' 
+      const adminToken = typeof window !== 'undefined' && localStorage.getItem('admin-logged-in') === 'true'
+        ? 'Znj00751_admin_2024'
         : ''
-      
+
       // 添加时间戳防止缓存
       const response = await fetch(`/api/admin/suggestions?t=${Date.now()}`, {
         headers: {
@@ -474,6 +478,14 @@ export default function AdminPage() {
   // 加载服务器端抢课任务
   const loadServerSelectionTasks = async () => {
     setIsLoadingServerTasks(true)
+
+    // 先从缓存加载（立即显示）
+    const cachedTasks = DataCacheManager.get<any[]>(CACHE_KEYS.ADMIN_TASKS)
+    if (cachedTasks) {
+      setServerSelectionTasks(cachedTasks)
+      console.log('使用缓存的管理员任务数据')
+    }
+
     try {
       const adminToken = 'Znj00751_admin_2024'
       const response = await fetch(`/api/server-selection/tasks?t=${Date.now()}`, {
@@ -482,9 +494,15 @@ export default function AdminPage() {
         }
       })
       const result = await response.json()
+
       if (result.success) {
-        setServerSelectionTasks(result.data || [])
+        const tasks = result.data || []
+        setServerSelectionTasks(tasks)
         setServerSelectionStats(result.stats || null)
+
+        // 保存到缓存
+        DataCacheManager.set(CACHE_KEYS.ADMIN_TASKS, tasks)
+        console.log(`已缓存管理员任务数据: ${tasks.length} 个任务`)
       } else {
         toast.error(result.message || '加载任务失败')
       }
@@ -501,7 +519,10 @@ export default function AdminPage() {
       }
     } catch (error) {
       console.error('加载服务器端抢课任务失败:', error)
-      toast.error('加载任务失败')
+      // 如果网络请求失败但有缓存，至少显示缓存数据
+      if (!cachedTasks) {
+        toast.error('加载任务失败')
+      }
     } finally {
       setIsLoadingServerTasks(false)
     }
@@ -532,15 +553,15 @@ export default function AdminPage() {
     try {
       const adminToken = 'Znj00751_admin_2024'
       const action = editingAnnouncement ? 'update' : 'create'
-      
+
       const announcementData = {
         ...(editingAnnouncement ? { id: editingAnnouncement.id } : {}),
         title: announcementForm.title.trim(),
         content: announcementForm.content.trim(),
         type: announcementForm.type,
         priority: announcementForm.priority,
-        expiresAt: announcementForm.expiresAt 
-          ? new Date(announcementForm.expiresAt).getTime() 
+        expiresAt: announcementForm.expiresAt
+          ? new Date(announcementForm.expiresAt).getTime()
           : undefined,
         isActive: announcementForm.isActive
       }
@@ -591,7 +612,7 @@ export default function AdminPage() {
       // 异步加载并同步学校列表
       const allSchools = await getAllSchools(true)
       setSchools(allSchools)
-    
+
       // 加载URL配置
       const configs: Record<string, any> = {}
       allSchools.forEach(school => {
@@ -703,7 +724,7 @@ export default function AdminPage() {
         }
         await addSchool(newSchool)
         addLog('success', '添加学校', `学校: ${newSchool.name} (${newSchool.id})`)
-        
+
         // 保存URL配置
         if (formData.gradeGnmkdm || formData.courseGnmkdm || formData.scheduleGnmkdm) {
           await setSchoolUrlConfig(formData.id, {
@@ -712,7 +733,7 @@ export default function AdminPage() {
             scheduleGnmkdm: formData.scheduleGnmkdm || undefined
           })
         }
-        
+
         toast.success('学校添加成功并已同步')
         loadLogs()
       } else if (editingSchool) {
@@ -725,21 +746,21 @@ export default function AdminPage() {
         }
         await updateSchool(editingSchool.id, updatedSchool)
         addLog('success', '更新学校', `学校: ${updatedSchool.name} (${updatedSchool.id})`)
-        
+
         // 保存URL配置
         await setSchoolUrlConfig(formData.id, {
           gradeGnmkdm: formData.gradeGnmkdm || undefined,
           courseGnmkdm: formData.courseGnmkdm || undefined,
           scheduleGnmkdm: formData.scheduleGnmkdm || undefined
         })
-        
+
         toast.success('学校更新成功并已同步')
         loadLogs()
       }
 
       resetForm()
       await loadData()
-      
+
       // 强制触发全局学校列表同步，确保新添加的学校立即可用
       try {
         const { getSupportedSchoolsAsync } = await import('@/lib/global-school-state')
@@ -748,9 +769,9 @@ export default function AdminPage() {
       } catch (error) {
         console.warn('⚠️ 强制同步学校列表失败:', error)
       }
-      
+
       // 提示已同步
-      toast('配置已保存并同步到服务器，新添加的学校现在可用', { 
+      toast('配置已保存并同步到服务器，新添加的学校现在可用', {
         icon: '✅',
         duration: 4000
       })
@@ -771,7 +792,7 @@ export default function AdminPage() {
       toast.success('学校删除成功并已同步')
       await loadData()
       loadLogs()
-      
+
       if (editingSchool?.id === schoolId) {
         resetForm()
       }
@@ -959,127 +980,127 @@ export default function AdminPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
               >
-            <Card className="glass border-purple-500/30">
-              <CardHeader className="p-3 sm:p-6">
-                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                  {isAdding ? <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> : <Edit className="h-4 w-4 sm:h-5 sm:w-5" />}
-                  {isAdding ? '添加新学校' : '编辑学校'}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">
-                      学校ID <span className="text-red-400">*</span>
-                    </label>
-                    <Input
-                      value={formData.id}
-                      onChange={(e) => setFormData({ ...formData, id: e.target.value })}
-                      placeholder="例如: tyust"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                      disabled={!isAdding}
-                    />
-                    <p className="text-[10px] sm:text-xs text-gray-400">只能包含字母、数字和下划线</p>
-                  </div>
+                <Card className="glass border-purple-500/30">
+                  <CardHeader className="p-3 sm:p-6">
+                    <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                      {isAdding ? <Plus className="h-4 w-4 sm:h-5 sm:w-5" /> : <Edit className="h-4 w-4 sm:h-5 sm:w-5" />}
+                      {isAdding ? '添加新学校' : '编辑学校'}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3 sm:p-6 space-y-3 sm:space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">
+                          学校ID <span className="text-red-400">*</span>
+                        </label>
+                        <Input
+                          value={formData.id}
+                          onChange={(e) => setFormData({ ...formData, id: e.target.value })}
+                          placeholder="例如: tyust"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                          disabled={!isAdding}
+                        />
+                        <p className="text-[10px] sm:text-xs text-gray-400">只能包含字母、数字和下划线</p>
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">
-                      学校名称 <span className="text-red-400">*</span>
-                    </label>
-                    <Input
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="例如: 太原科技大学"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                    />
-                  </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">
+                          学校名称 <span className="text-red-400">*</span>
+                        </label>
+                        <Input
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="例如: 太原科技大学"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">
-                      域名 <span className="text-red-400">*</span>
-                    </label>
-                    <Input
-                      value={formData.domain}
-                      onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                      placeholder="例如: newjwc.tyust.edu.cn"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                    />
-                  </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">
+                          域名 <span className="text-red-400">*</span>
+                        </label>
+                        <Input
+                          value={formData.domain}
+                          onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                          placeholder="例如: newjwc.tyust.edu.cn"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">协议</label>
-                    <AnimatedSelect
-                      value={formData.protocol}
-                      onChange={(value) => setFormData({ ...formData, protocol: value as 'http' | 'https' })}
-                      options={[
-                        { value: 'https', label: 'HTTPS' },
-                        { value: 'http', label: 'HTTP' }
-                      ]}
-                    />
-                  </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">协议</label>
+                        <AnimatedSelect
+                          value={formData.protocol}
+                          onChange={(value) => setFormData({ ...formData, protocol: value as 'http' | 'https' })}
+                          options={[
+                            { value: 'https', label: 'HTTPS' },
+                            { value: 'http', label: 'HTTP' }
+                          ]}
+                        />
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2 md:col-span-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">描述</label>
-                    <Input
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="学校教务系统描述（可选）"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                    />
-                  </div>
+                      <div className="space-y-1.5 sm:space-y-2 md:col-span-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">描述</label>
+                        <Input
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          placeholder="学校教务系统描述（可选）"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">成绩查询 gnmkdm</label>
-                    <Input
-                      value={formData.gradeGnmkdm}
-                      onChange={(e) => setFormData({ ...formData, gradeGnmkdm: e.target.value })}
-                      placeholder="例如: N305005"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                    />
-                  </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">成绩查询 gnmkdm</label>
+                        <Input
+                          value={formData.gradeGnmkdm}
+                          onChange={(e) => setFormData({ ...formData, gradeGnmkdm: e.target.value })}
+                          placeholder="例如: N305005"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">选课 gnmkdm</label>
-                    <Input
-                      value={formData.courseGnmkdm}
-                      onChange={(e) => setFormData({ ...formData, courseGnmkdm: e.target.value })}
-                      placeholder="例如: N253512"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                    />
-                  </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">选课 gnmkdm</label>
+                        <Input
+                          value={formData.courseGnmkdm}
+                          onChange={(e) => setFormData({ ...formData, courseGnmkdm: e.target.value })}
+                          placeholder="例如: N253512"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <label className="text-xs sm:text-sm font-medium text-white">课表 gnmkdm</label>
-                    <Input
-                      value={formData.scheduleGnmkdm}
-                      onChange={(e) => setFormData({ ...formData, scheduleGnmkdm: e.target.value })}
-                      placeholder="例如: N253508"
-                      className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
-                    />
-                  </div>
-                </div>
+                      <div className="space-y-1.5 sm:space-y-2">
+                        <label className="text-xs sm:text-sm font-medium text-white">课表 gnmkdm</label>
+                        <Input
+                          value={formData.scheduleGnmkdm}
+                          onChange={(e) => setFormData({ ...formData, scheduleGnmkdm: e.target.value })}
+                          placeholder="例如: N253508"
+                          className="bg-slate-800/50 border-slate-600 text-white text-xs sm:text-sm"
+                        />
+                      </div>
+                    </div>
 
-                <div className="flex gap-2 pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleCancel}
-                    className="flex-1 text-xs sm:text-sm"
-                  >
-                    <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    取消
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-xs sm:text-sm"
-                  >
-                    <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                    保存
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        variant="outline"
+                        onClick={handleCancel}
+                        className="flex-1 text-xs sm:text-sm"
+                      >
+                        <X className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                        取消
+                      </Button>
+                      <Button
+                        onClick={handleSave}
+                        className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-xs sm:text-sm"
+                      >
+                        <Save className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                        保存
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* 学校列表 */}
             <motion.div
@@ -1087,103 +1108,103 @@ export default function AdminPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
             >
-          <Card className="glass">
-            <CardHeader className="p-3 sm:p-6">
-              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
-                <School className="h-4 w-4 sm:h-5 sm:w-5" />
-                学校列表 ({schools.length})
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm">
-                管理所有已配置的学校信息
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="p-3 sm:p-6">
-              <div className="space-y-2 sm:space-y-3">
-                {schools.length === 0 ? (
-                  <div className="text-center py-8 text-gray-400">
-                    <School className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-sm">暂无学校配置</p>
-                  </div>
-                ) : (
-                  schools.map((school) => {
-                    const urlConfig = urlConfigs[school.id] || {}
-                    return (
-                      <motion.div
-                        key={school.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-purple-500/50 transition-colors"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 flex-shrink-0" />
-                              <h3 className="text-base sm:text-lg font-semibold text-white truncate">
-                                {school.name}
-                              </h3>
-                            </div>
-                            <div className="space-y-1 text-xs sm:text-sm text-gray-400 ml-6 sm:ml-7">
-                              <p className="truncate">
-                                <span className="text-purple-400">ID:</span> {school.id}
-                              </p>
-                              <p className="truncate">
-                                <span className="text-purple-400">域名:</span> {school.protocol}://{school.domain}
-                              </p>
-                              {school.description && (
-                                <p className="truncate">
-                                  <span className="text-purple-400">描述:</span> {school.description}
-                                </p>
-                              )}
-                              {(urlConfig.gradeGnmkdm || urlConfig.courseGnmkdm || urlConfig.scheduleGnmkdm) && (
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                  {urlConfig.gradeGnmkdm && (
-                                    <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-[10px] sm:text-xs">
-                                      成绩: {urlConfig.gradeGnmkdm}
-                                    </span>
+              <Card className="glass">
+                <CardHeader className="p-3 sm:p-6">
+                  <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                    <School className="h-4 w-4 sm:h-5 sm:w-5" />
+                    学校列表 ({schools.length})
+                  </CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">
+                    管理所有已配置的学校信息
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-6">
+                  <div className="space-y-2 sm:space-y-3">
+                    {schools.length === 0 ? (
+                      <div className="text-center py-8 text-gray-400">
+                        <School className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p className="text-sm">暂无学校配置</p>
+                      </div>
+                    ) : (
+                      schools.map((school) => {
+                        const urlConfig = urlConfigs[school.id] || {}
+                        return (
+                          <motion.div
+                            key={school.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className="p-3 sm:p-4 bg-slate-800/50 rounded-lg border border-slate-700 hover:border-purple-500/50 transition-colors"
+                          >
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <Globe className="h-4 w-4 sm:h-5 sm:w-5 text-blue-400 flex-shrink-0" />
+                                  <h3 className="text-base sm:text-lg font-semibold text-white truncate">
+                                    {school.name}
+                                  </h3>
+                                </div>
+                                <div className="space-y-1 text-xs sm:text-sm text-gray-400 ml-6 sm:ml-7">
+                                  <p className="truncate">
+                                    <span className="text-purple-400">ID:</span> {school.id}
+                                  </p>
+                                  <p className="truncate">
+                                    <span className="text-purple-400">域名:</span> {school.protocol}://{school.domain}
+                                  </p>
+                                  {school.description && (
+                                    <p className="truncate">
+                                      <span className="text-purple-400">描述:</span> {school.description}
+                                    </p>
                                   )}
-                                  {urlConfig.courseGnmkdm && (
-                                    <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] sm:text-xs">
-                                      选课: {urlConfig.courseGnmkdm}
-                                    </span>
-                                  )}
-                                  {urlConfig.scheduleGnmkdm && (
-                                    <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-[10px] sm:text-xs">
-                                      课表: {urlConfig.scheduleGnmkdm}
-                                    </span>
+                                  {(urlConfig.gradeGnmkdm || urlConfig.courseGnmkdm || urlConfig.scheduleGnmkdm) && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {urlConfig.gradeGnmkdm && (
+                                        <span className="px-2 py-0.5 bg-green-500/20 text-green-400 rounded text-[10px] sm:text-xs">
+                                          成绩: {urlConfig.gradeGnmkdm}
+                                        </span>
+                                      )}
+                                      {urlConfig.courseGnmkdm && (
+                                        <span className="px-2 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px] sm:text-xs">
+                                          选课: {urlConfig.courseGnmkdm}
+                                        </span>
+                                      )}
+                                      {urlConfig.scheduleGnmkdm && (
+                                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 rounded text-[10px] sm:text-xs">
+                                          课表: {urlConfig.scheduleGnmkdm}
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
-                              )}
+                              </div>
+                              <div className="flex gap-2 sm:ml-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(school)}
+                                  className="text-xs sm:text-sm"
+                                >
+                                  <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                  <span className="hidden sm:inline">编辑</span>
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleDelete(school.id, school.name)}
+                                  className="text-red-400 hover:text-red-300 hover:border-red-400 text-xs sm:text-sm"
+                                >
+                                  <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                  <span className="hidden sm:inline">删除</span>
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                          <div className="flex gap-2 sm:ml-4">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEdit(school)}
-                              className="text-xs sm:text-sm"
-                            >
-                              <Edit className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                              <span className="hidden sm:inline">编辑</span>
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDelete(school.id, school.name)}
-                              className="text-red-400 hover:text-red-300 hover:border-red-400 text-xs sm:text-sm"
-                            >
-                              <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-                              <span className="hidden sm:inline">删除</span>
-                            </Button>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )
-                  })
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                          </motion.div>
+                        )
+                      })
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           </>
         )}
 
@@ -1212,10 +1233,9 @@ export default function AdminPage() {
                   </div>
                   <div className="w-full bg-slate-700 rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full transition-all ${
-                        storageUsage.percentage > 80 ? 'bg-red-500' :
+                      className={`h-2 rounded-full transition-all ${storageUsage.percentage > 80 ? 'bg-red-500' :
                         storageUsage.percentage > 60 ? 'bg-yellow-500' : 'bg-green-500'
-                      }`}
+                        }`}
                       style={{ width: `${Math.min(storageUsage.percentage, 100)}%` }}
                     />
                   </div>
@@ -1680,10 +1700,9 @@ export default function AdminPage() {
                           initial={{ width: 0 }}
                           animate={{ width: `${Math.min(storageUsage.percentage, 100)}%` }}
                           transition={{ duration: 1 }}
-                          className={`h-full rounded-full ${
-                            storageUsage.percentage > 80 ? 'bg-red-500' :
+                          className={`h-full rounded-full ${storageUsage.percentage > 80 ? 'bg-red-500' :
                             storageUsage.percentage > 60 ? 'bg-yellow-500' : 'bg-green-500'
-                          }`}
+                            }`}
                         />
                       </div>
                     </div>
@@ -1902,7 +1921,7 @@ export default function AdminPage() {
                     <div>
                       <p className="text-xs sm:text-sm text-gray-400 mb-1">运行时间</p>
                       <p className="text-lg sm:text-xl font-bold text-blue-400">
-                        {typeof window !== 'undefined' 
+                        {typeof window !== 'undefined'
                           ? `${Math.floor((Date.now() - (window.performance?.timing?.navigationStart || Date.now())) / 1000 / 60)} 分钟`
                           : 'N/A'
                         }
@@ -2122,9 +2141,9 @@ export default function AdminPage() {
                   initial={{ opacity: 0, height: 0, y: -20 }}
                   animate={{ opacity: 1, height: 'auto', y: 0 }}
                   exit={{ opacity: 0, height: 0, y: -20 }}
-                  transition={{ 
-                    type: "spring", 
-                    stiffness: 300, 
+                  transition={{
+                    type: "spring",
+                    stiffness: 300,
                     damping: 30,
                     duration: 0.3
                   }}
@@ -2167,13 +2186,13 @@ export default function AdminPage() {
                         </p>
                       </div>
 
-                      <motion.div 
+                      <motion.div
                         className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1, duration: 0.3 }}
                       >
-                        <motion.div 
+                        <motion.div
                           className="space-y-1.5 sm:space-y-2"
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -2192,7 +2211,7 @@ export default function AdminPage() {
                           />
                         </motion.div>
 
-                        <motion.div 
+                        <motion.div
                           className="space-y-1.5 sm:space-y-2"
                           initial={{ opacity: 0, x: 20 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -2255,9 +2274,9 @@ export default function AdminPage() {
                         </Button>
                       </div>
                     </CardContent>
-                </Card>
-              </motion.div>
-            )}
+                  </Card>
+                </motion.div>
+              )}
             </AnimatePresence>
 
             <Card className="glass">
@@ -2305,12 +2324,11 @@ export default function AdminPage() {
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <h3 className="font-medium text-xs sm:text-sm text-white">{ann.title}</h3>
-                              <span className={`px-2 py-0.5 text-[10px] rounded ${
-                                ann.type === 'info' ? 'bg-blue-500/20 text-blue-300' :
+                              <span className={`px-2 py-0.5 text-[10px] rounded ${ann.type === 'info' ? 'bg-blue-500/20 text-blue-300' :
                                 ann.type === 'success' ? 'bg-green-500/20 text-green-300' :
-                                ann.type === 'warning' ? 'bg-yellow-500/20 text-yellow-300' :
-                                'bg-red-500/20 text-red-300'
-                              }`}>
+                                  ann.type === 'warning' ? 'bg-yellow-500/20 text-yellow-300' :
+                                    'bg-red-500/20 text-red-300'
+                                }`}>
                                 {ann.type}
                               </span>
                               {!ann.isActive && (
@@ -2343,7 +2361,7 @@ export default function AdminPage() {
                                   content: ann.content,
                                   type: ann.type,
                                   priority: ann.priority,
-                                  expiresAt: ann.expiresAt 
+                                  expiresAt: ann.expiresAt
                                     ? new Date(ann.expiresAt).toISOString().split('T')[0]
                                     : '',
                                   isActive: ann.isActive
@@ -2428,38 +2446,35 @@ export default function AdminPage() {
                 ) : (
                   <div className="space-y-3">
                     {suggestions.map((sug) => (
-                      <div key={sug.id} className={`p-3 sm:p-4 rounded-lg border ${
-                        sug.status === 'pending' ? 'bg-yellow-500/10 border-yellow-500/30' :
+                      <div key={sug.id} className={`p-3 sm:p-4 rounded-lg border ${sug.status === 'pending' ? 'bg-yellow-500/10 border-yellow-500/30' :
                         sug.status === 'reviewing' ? 'bg-blue-500/10 border-blue-500/30' :
-                        sug.status === 'approved' ? 'bg-green-500/10 border-green-500/30' :
-                        sug.status === 'rejected' ? 'bg-red-500/10 border-red-500/30' :
-                        'bg-purple-500/10 border-purple-500/30'
-                      }`}>
+                          sug.status === 'approved' ? 'bg-green-500/10 border-green-500/30' :
+                            sug.status === 'rejected' ? 'bg-red-500/10 border-red-500/30' :
+                              'bg-purple-500/10 border-purple-500/30'
+                        }`}>
                         <div className="flex items-start justify-between gap-3 mb-2">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap mb-2">
                               <h3 className="font-medium text-xs sm:text-sm text-white">{sug.title}</h3>
-                              <span className={`px-2 py-0.5 text-[10px] rounded ${
-                                sug.type === 'school' ? 'bg-blue-500/20 text-blue-300' :
+                              <span className={`px-2 py-0.5 text-[10px] rounded ${sug.type === 'school' ? 'bg-blue-500/20 text-blue-300' :
                                 sug.type === 'bug' ? 'bg-red-500/20 text-red-300' :
-                                sug.type === 'feature' ? 'bg-purple-500/20 text-purple-300' :
-                                'bg-gray-500/20 text-gray-300'
-                              }`}>
+                                  sug.type === 'feature' ? 'bg-purple-500/20 text-purple-300' :
+                                    'bg-gray-500/20 text-gray-300'
+                                }`}>
                                 {sug.type === 'school' ? '添加学校' :
-                                 sug.type === 'bug' ? 'BUG反馈' :
-                                 sug.type === 'feature' ? '功能建议' : '其他'}
+                                  sug.type === 'bug' ? 'BUG反馈' :
+                                    sug.type === 'feature' ? '功能建议' : '其他'}
                               </span>
-                              <span className={`px-2 py-0.5 text-[10px] rounded ${
-                                sug.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
+                              <span className={`px-2 py-0.5 text-[10px] rounded ${sug.status === 'pending' ? 'bg-yellow-500/20 text-yellow-300' :
                                 sug.status === 'reviewing' ? 'bg-blue-500/20 text-blue-300' :
-                                sug.status === 'approved' ? 'bg-green-500/20 text-green-300' :
-                                sug.status === 'rejected' ? 'bg-red-500/20 text-red-300' :
-                                'bg-purple-500/20 text-purple-300'
-                              }`}>
+                                  sug.status === 'approved' ? 'bg-green-500/20 text-green-300' :
+                                    sug.status === 'rejected' ? 'bg-red-500/20 text-red-300' :
+                                      'bg-purple-500/20 text-purple-300'
+                                }`}>
                                 {sug.status === 'pending' ? '待处理' :
-                                 sug.status === 'reviewing' ? '审核中' :
-                                 sug.status === 'approved' ? '已通过' :
-                                 sug.status === 'rejected' ? '已拒绝' : '已完成'}
+                                  sug.status === 'reviewing' ? '审核中' :
+                                    sug.status === 'approved' ? '已通过' :
+                                      sug.status === 'rejected' ? '已拒绝' : '已完成'}
                               </span>
                             </div>
                             <p className="text-[10px] sm:text-xs text-gray-400 whitespace-pre-wrap mb-2">{sug.content}</p>
@@ -3134,16 +3149,16 @@ export default function AdminPage() {
                                 variant="outline"
                                 className={
                                   task.status === 'running' ? 'text-yellow-400 border-yellow-400' :
-                                  task.status === 'completed' ? 'text-green-400 border-green-400' :
-                                  task.status === 'failed' ? 'text-red-400 border-red-400' :
-                                  'text-gray-400 border-gray-400'
+                                    task.status === 'completed' ? 'text-green-400 border-green-400' :
+                                      task.status === 'failed' ? 'text-red-400 border-red-400' :
+                                        'text-gray-400 border-gray-400'
                                 }
                               >
                                 {task.status === 'pending' ? '等待中' :
-                                 task.status === 'running' ? '运行中' :
-                                 task.status === 'completed' ? '已完成' :
-                                 task.status === 'failed' ? '失败' :
-                                 '已取消'}
+                                  task.status === 'running' ? '运行中' :
+                                    task.status === 'completed' ? '已完成' :
+                                      task.status === 'failed' ? '失败' :
+                                        '已取消'}
                               </Badge>
                             </div>
                             <div className="space-y-1 text-xs sm:text-sm text-gray-400">
