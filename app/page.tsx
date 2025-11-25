@@ -5,10 +5,10 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { 
-  BookOpen, 
-  Target, 
-  Settings, 
+import {
+  BookOpen,
+  Target,
+  Settings,
   RefreshCw,
   CheckCircle,
   AlertCircle,
@@ -21,7 +21,6 @@ import { School, Menu, X, Shield, MessageSquare, Bell } from 'lucide-react'
 import toast from 'react-hot-toast'
 import PerformanceMonitor from '@/components/ui/PerformanceMonitor'
 import AutoLoginModal from '@/components/AutoLoginModal'
-import WelcomeAnimation from '@/components/ui/WelcomeAnimation'
 import AdminLoginModal from '@/components/AdminLoginModal'
 import AnnouncementModal from '@/components/AnnouncementModal'
 import SuggestionModal from '@/components/SuggestionModal'
@@ -52,23 +51,21 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking')
   const [showAutoLogin, setShowAutoLogin] = useState(false)
-  const [showWelcome, setShowWelcome] = useState(false)
-  const [showTopBar, setShowTopBar] = useState(false)
   const [showMobileMenu, setShowMobileMenu] = useState(false)
   const [showAdminLogin, setShowAdminLogin] = useState(false)
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false)
   const [showSuggestionModal, setShowSuggestionModal] = useState(false)
   const [showAnnouncements, setShowAnnouncements] = useState(false)
   const [hasUnviewedAnnouncements, setHasUnviewedAnnouncements] = useState(false)
-  
+
   // 学生信息状态
-  const { 
-    studentInfo, 
-    hasShownWelcome, 
-    isFirstVisit, 
-    setStudentInfo, 
-    setHasShownWelcome, 
-    setIsFirstVisit 
+  const {
+    studentInfo,
+    hasShownWelcome,
+    isFirstVisit,
+    setStudentInfo,
+    setHasShownWelcome,
+    setIsFirstVisit
   } = useStudentStore()
 
   // 检查本地Cookie和服务器状态
@@ -77,7 +74,7 @@ export default function Home() {
       try {
         // 记录访问（只记录一次）
         recordVisit()
-        
+
         // 强制同步学校列表（确保后台添加的学校能被使用）
         try {
           const { getSupportedSchoolsAsync } = await import('@/lib/global-school-state')
@@ -86,23 +83,23 @@ export default function Home() {
         } catch (error) {
           console.warn('⚠️ 同步学校列表失败，使用本地缓存:', error)
         }
-        
+
         // 初始化学校配置
         const currentSchool = getCurrentSchool()
         console.log(`🏫 应用启动 - 当前学校配置: ${currentSchool.name} (${currentSchool.domain})`)
         console.log(`🔍 检查localStorage中的学校ID: ${typeof window !== 'undefined' ? localStorage.getItem('selected-school-id') : 'N/A'}`)
-        
+
         // 首先验证Cookie有效性并清理无效数据
         await CookieValidator.initialize()
-        
+
         // 1. 优先检查本地localStorage中的Cookie
         const localCookie = LocalCookieManager.getCookie()
         const localUserInfo = LocalCookieManager.getUserInfo()
-        
+
         if (localCookie && localUserInfo) {
           console.log('🔄 从本地存储恢复Cookie和用户信息')
           setStudentInfo(localUserInfo)
-          
+
           // 验证本地Cookie是否仍然有效
           try {
             const response = await courseAPI.healthCheck() as any
@@ -235,46 +232,20 @@ export default function Home() {
     setShowMobileMenu(false)
   }
 
-  // 欢迎动画完成处理
-  const handleWelcomeComplete = () => {
-    setShowWelcome(false)
-    setShowTopBar(true) // 确保顶部栏显示
-  }
-
-  // 监听学生信息变化，自动显示欢迎动画
-  useEffect(() => {
-    if (studentInfo && isFirstVisit && !hasShownWelcome) {
-      console.log('🎉 检测到学生信息更新，准备显示欢迎动画:', studentInfo.name)
-      setShowWelcome(true)
-      // 延迟更新状态，确保动画能正常显示
-      setTimeout(() => {
-        setHasShownWelcome(true)
-        setIsFirstVisit(false)
-      }, 100)
-    }
-  }, [studentInfo, isFirstVisit, hasShownWelcome])
-
-  // 监听学生信息变化，确保顶部栏显示
-  useEffect(() => {
-    if (studentInfo && !showTopBar) {
-      console.log('📌 确保顶部学生信息栏显示:', studentInfo.name)
-      setShowTopBar(true)
-    }
-  }, [studentInfo, showTopBar])
 
   // 检查未查看公告
   useEffect(() => {
     if (typeof window === 'undefined') return
-    
+
     const checkUnviewedAnnouncements = async () => {
       try {
         // 从 localStorage 读取已查看的公告
         const viewedIds = new Set(JSON.parse(localStorage.getItem('viewed-announcements') || '[]'))
-        
+
         // 获取所有活跃公告
         const response = await fetch(`/api/admin/announcements?activeOnly=true&t=${Date.now()}`)
         const result = await response.json()
-        
+
         if (result.success && result.data) {
           // 检查是否有未查看的公告
           const unviewed = result.data.filter((a: any) => !viewedIds.has(a.id))
@@ -291,29 +262,13 @@ export default function Home() {
     return () => clearInterval(interval)
   }, [])
 
-  // 监听自定义事件，显示欢迎动画
-  useEffect(() => {
-    const handleShowWelcomeAnimation = (event: CustomEvent) => {
-      console.log('🎉 收到显示欢迎动画事件:', event.detail)
-      setShowWelcome(true)
-      setHasShownWelcome(true)
-      setIsFirstVisit(false)
-    }
-
-    window.addEventListener('showWelcomeAnimation', handleShowWelcomeAnimation as EventListener)
-    
-    return () => {
-      window.removeEventListener('showWelcomeAnimation', handleShowWelcomeAnimation as EventListener)
-    }
-  }, [])
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
         <motion.div
           initial={{ opacity: 0, scale: 0.8, y: 50 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ 
+          transition={{
             duration: 0.8,
             ease: [0.25, 0.46, 0.45, 0.94]
           }}
@@ -322,7 +277,7 @@ export default function Home() {
           <motion.div
             initial={{ rotate: 0 }}
             animate={{ rotate: 360 }}
-            transition={{ 
+            transition={{
               duration: 2,
               repeat: Infinity,
               ease: "linear"
@@ -331,7 +286,7 @@ export default function Home() {
           >
             <BookOpen className="h-16 w-16 text-primary mx-auto" />
           </motion.div>
-          
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -340,7 +295,7 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-white mb-2">正在启动选课工具</h2>
             <p className="text-muted-foreground mb-4">检查服务器连接中...</p>
           </motion.div>
-          
+
           <motion.div
             initial={{ width: 0 }}
             animate={{ width: "100%" }}
@@ -356,35 +311,26 @@ export default function Home() {
     <div className="min-h-screen particles-bg">
       {/* 公告弹窗 */}
       <AnnouncementModal forceShowHistory={showAnnouncements} onCloseHistory={() => setShowAnnouncements(false)} />
-      
-      {/* 欢迎动画 - 固定在整个页面顶部 */}
-      {(showWelcome && studentInfo) || showTopBar ? (
-        <WelcomeAnimation
-          studentName={studentInfo?.name || ''}
-          onAnimationComplete={handleWelcomeComplete}
-          showTopBar={showTopBar}
-        />
-      ) : null}
+
+
       {/* 头部导航 */}
       <motion.header
         initial={animationConfig.enabled ? { y: -100, opacity: 0 } : false}
         animate={animationConfig.enabled ? { y: 0, opacity: 1 } : {}}
-        transition={animationConfig.enabled ? { 
+        transition={animationConfig.enabled ? {
           duration: animationConfig.duration,
           ease: [0.25, 0.46, 0.45, 0.94]
         } : {}}
-        className={`bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border-b border-gray-200/50 dark:border-gray-700/50 p-2 sm:p-4 relative transition-all duration-300 shadow-sm ${
-          (showWelcome && studentInfo) || showTopBar ? 'mt-20' : ''
-        }`}
+        className={`bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border-b border-gray-200/50 dark:border-gray-700/50 p-2 sm:p-4 relative transition-all duration-300 shadow-sm`}
       >
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          <motion.div 
+          <motion.div
             className="flex items-center space-x-2 sm:space-x-4"
             initial={animationConfig.enabled ? { x: -50, opacity: 0 } : false}
             animate={animationConfig.enabled ? { x: 0, opacity: 1 } : {}}
             transition={animationConfig.enabled ? { delay: animationConfig.reduceMotion ? 0 : 0.2, duration: animationConfig.duration } : {}}
           >
-            <motion.div 
+            <motion.div
               className="flex items-center space-x-1 sm:space-x-2"
               whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
               transition={{ type: "spring", stiffness: 300 }}
@@ -393,11 +339,11 @@ export default function Home() {
                 <BookOpen className="h-5 w-5 sm:h-8 sm:w-8 text-primary" />
               ) : (
                 <motion.div
-                  animate={{ 
+                  animate={{
                     rotate: [0, 5, -5, 0],
                     scale: [1, 1.1, 1]
                   }}
-                  transition={{ 
+                  transition={{
                     duration: 2,
                     repeat: Infinity,
                     repeatDelay: 3
@@ -410,15 +356,15 @@ export default function Home() {
                 正方教务工具
               </h1>
             </motion.div>
-            
-            <motion.div 
+
+            <motion.div
               className="flex items-center space-x-1 sm:space-x-2"
               initial={animationConfig.enabled ? { opacity: 0, scale: 0.8 } : false}
               animate={animationConfig.enabled ? { opacity: 1, scale: 1 } : {}}
               transition={animationConfig.enabled ? { delay: animationConfig.reduceMotion ? 0 : 0.4, duration: animationConfig.duration } : {}}
             >
               {serverStatus === 'online' && (
-                <motion.div 
+                <motion.div
                   className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -426,21 +372,21 @@ export default function Home() {
                 >
                   <motion.div
                     className="w-2 h-2 bg-green-500 rounded-full"
-                    animate={{ 
+                    animate={{
                       scale: [1, 1.2, 1],
                       opacity: [1, 0.7, 1]
                     }}
-                    transition={{ 
-                      duration: 2, 
-                      repeat: Infinity, 
-                      ease: "easeInOut" 
+                    transition={{
+                      duration: 2,
+                      repeat: Infinity,
+                      ease: "easeInOut"
                     }}
                   />
                   <span className="text-[10px] sm:text-sm font-medium text-green-700 dark:text-green-300">在线</span>
                 </motion.div>
               )}
               {serverStatus === 'offline' && (
-                <motion.div 
+                <motion.div
                   className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 bg-red-50 dark:bg-red-900/20 rounded-full"
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -448,14 +394,14 @@ export default function Home() {
                 >
                   <motion.div
                     className="w-2 h-2 bg-red-500 rounded-full"
-                    animate={{ 
+                    animate={{
                       scale: [1, 1.2, 1],
                       opacity: [1, 0.7, 1]
                     }}
-                    transition={{ 
-                      duration: 1.5, 
-                      repeat: Infinity, 
-                      ease: "easeInOut" 
+                    transition={{
+                      duration: 1.5,
+                      repeat: Infinity,
+                      ease: "easeInOut"
                     }}
                   />
                   <span className="text-[10px] sm:text-sm font-medium text-red-700 dark:text-red-300">离线</span>
@@ -463,7 +409,7 @@ export default function Home() {
               )}
             </motion.div>
           </motion.div>
-          
+
           <motion.div
             initial={animationConfig.enabled ? { x: 50, opacity: 0 } : false}
             animate={animationConfig.enabled ? { x: 0, opacity: 1 } : {}}
@@ -493,7 +439,7 @@ export default function Home() {
                 <span className="relative z-10 sm:hidden">登录</span>
               </Button>
             </motion.div>
-            
+
             {/* 后台管理按钮 */}
             <motion.div
               whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
@@ -553,7 +499,7 @@ export default function Home() {
                 <span className="sm:hidden">管理</span>
               </Button>
             </motion.div>
-            
+
             {/* 刷新按钮 */}
             <motion.div
               whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.05 }}
@@ -637,11 +583,10 @@ export default function Home() {
                       <motion.button
                         key={item.value}
                         onClick={() => handleTabChange(item.value)}
-                        className={`flex items-center gap-1.5 p-1.5 rounded-md text-[10px] font-medium transition-all ${
-                          isActive
-                            ? colorClasses[item.color] || ''
-                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-                        }`}
+                        className={`flex items-center gap-1.5 p-1.5 rounded-md text-[10px] font-medium transition-all ${isActive
+                          ? colorClasses[item.color] || ''
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                          }`}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
@@ -676,7 +621,7 @@ export default function Home() {
             className="hidden sm:block"
           >
             <TabsList className={`inline-flex w-full max-w-full mx-auto mb-4 sm:mb-8 bg-white/80 dark:bg-gray-900/80 ${animationConfig.disableBackdropBlur ? '' : 'backdrop-blur-xl'} border border-gray-200/50 dark:border-gray-700/50 rounded-xl sm:rounded-2xl p-2 sm:p-8 shadow-lg flex-wrap sm:flex-nowrap`}>
-              
+
               <motion.div
                 whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
                 whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
@@ -696,7 +641,7 @@ export default function Home() {
                   <span className="relative z-10 sm:hidden">课程</span>
                 </TabsTrigger>
               </motion.div>
-              
+
               <motion.div
                 whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
                 whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
@@ -716,8 +661,8 @@ export default function Home() {
                   <span className="relative z-10 sm:hidden">课表</span>
                 </TabsTrigger>
               </motion.div>
-              
-              
+
+
               <motion.div
                 whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
                 whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
@@ -737,7 +682,7 @@ export default function Home() {
                   <span className="relative z-10 sm:hidden">Pro+</span>
                 </TabsTrigger>
               </motion.div>
-              
+
               <motion.div
                 whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
                 whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
@@ -757,7 +702,7 @@ export default function Home() {
                   <span className="relative z-10 sm:hidden">成绩</span>
                 </TabsTrigger>
               </motion.div>
-              
+
               <motion.div
                 whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
                 whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
@@ -777,7 +722,7 @@ export default function Home() {
                   <span className="relative z-10 sm:hidden">学校</span>
                 </TabsTrigger>
               </motion.div>
-              
+
               <motion.div
                 whileHover={animationConfig.disableHoverEffects ? {} : { scale: 1.02 }}
                 whileTap={animationConfig.disableHoverEffects ? {} : { scale: 0.98 }}
@@ -806,12 +751,12 @@ export default function Home() {
               initial={animationConfig.enabled ? { opacity: 0, y: animationConfig.reduceMotion ? 0 : 30, scale: animationConfig.reduceMotion ? 1 : 0.95 } : false}
               animate={animationConfig.enabled ? { opacity: 1, y: 0, scale: 1 } : {}}
               exit={animationConfig.enabled ? { opacity: 0, y: animationConfig.reduceMotion ? 0 : -30, scale: animationConfig.reduceMotion ? 1 : 0.95 } : {}}
-              transition={{ 
+              transition={{
                 duration: animationConfig.duration,
                 ease: [0.25, 0.46, 0.45, 0.94]
               }}
             >
-              
+
               <TabsContent value="courses" className="mt-0">
                 <Suspense fallback={
                   <div className="flex items-center justify-center py-12">
@@ -826,7 +771,7 @@ export default function Home() {
                   <CourseInfoPage />
                 </Suspense>
               </TabsContent>
-              
+
               <TabsContent value="schedule" className="mt-0">
                 <Suspense fallback={
                   <div className="flex items-center justify-center py-12">
@@ -841,8 +786,8 @@ export default function Home() {
                   <ModernSchedulePage />
                 </Suspense>
               </TabsContent>
-              
-              
+
+
               <TabsContent value="selection" className="mt-0">
                 <Suspense fallback={
                   <div className="flex items-center justify-center py-12">
@@ -857,7 +802,7 @@ export default function Home() {
                   <CourseSelectionPage />
                 </Suspense>
               </TabsContent>
-              
+
               <TabsContent value="grade" className="mt-0">
                 <Suspense fallback={
                   <div className="flex items-center justify-center py-12">
@@ -872,7 +817,7 @@ export default function Home() {
                   <GradePage />
                 </Suspense>
               </TabsContent>
-              
+
               <TabsContent value="school" className="mt-0">
                 <Suspense fallback={
                   <div className="flex items-center justify-center py-12">
@@ -887,7 +832,7 @@ export default function Home() {
                   <SchoolSelectPage />
                 </Suspense>
               </TabsContent>
-              
+
               <TabsContent value="settings" className="mt-0">
                 <Suspense fallback={
                   <div className="flex items-center justify-center min-h-[400px]">
@@ -914,7 +859,7 @@ export default function Home() {
           </AnimatePresence>
         </Tabs>
       </main>
-      
+
       {/* 后台管理登录模态框 */}
       <AdminLoginModal
         isOpen={showAdminLogin}
@@ -928,7 +873,7 @@ export default function Home() {
         onClose={() => setShowAutoLogin(false)}
         onSuccess={handleAutoLoginSuccess}
       />
-      
+
       {/* 性能监控组件 */}
       <PerformanceMonitor />
 
