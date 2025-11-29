@@ -5,10 +5,10 @@ export async function POST(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const schoolId = searchParams.get('schoolId')
-    
+
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
-    
+
     if (!cookieHeader) {
       return NextResponse.json({
         success: false,
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
 
     // 直接传递schoolId参数，不再修改服务器端状态
     const courseData = await request.json()
-    
+
     if (!courseData || typeof courseData !== 'object') {
       return NextResponse.json({
         success: false,
@@ -26,8 +26,23 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const { jxb_id, do_jxb_id, kch_id, jxbzls, kklxdm, kcmc, jxbmc, _rwlx, _xklc, _xkly, _xkkz_id } = courseData
-    
+    const {
+      jxb_id,
+      do_jxb_id,
+      kch_id,
+      jxbzls,
+      kklxdm,
+      kcmc,
+      jxbmc,
+      _rwlx,
+      _xklc,
+      _xkly,
+      _xkkz_id,
+      _sfkxq,
+      _xkxskcgskg,
+      _completeParams
+    } = courseData
+
     if (!jxb_id || !do_jxb_id || !kch_id) {
       return NextResponse.json({
         success: false,
@@ -48,9 +63,12 @@ export async function POST(request: NextRequest) {
       _rwlx,
       _xklc,
       _xkly,
-      _xkkz_id
+      _xkkz_id,
+      _sfkxq,
+      _xkxskcgskg,
+      _completeParams
     }, undefined, cookieHeader, schoolId || undefined)
-    
+
     return NextResponse.json({
       success: result.success,
       data: result,

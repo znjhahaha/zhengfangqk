@@ -24,12 +24,12 @@ export function getApiUrl(path: string): string {
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   // 从本地存储获取Cookie并添加到请求头
   const localCookie = LocalCookieManager.getCookie()
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers as Record<string, string>,
   }
-  
+
   // 如果有本地Cookie，添加到请求头
   if (localCookie) {
     headers['x-course-cookie'] = localCookie
@@ -45,7 +45,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     // 尝试解析响应，无论状态码如何
     let data: any
     const contentType = response.headers.get('content-type')
-    
+
     if (contentType && contentType.includes('application/json')) {
       try {
         data = await response.json()
@@ -90,7 +90,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 export const courseAPI = {
   // 健康检查
   healthCheck: () => request('/health'),
-  
+
   // 会话管理
   createSession: (data: { cookie: string }) =>
     request('/session', {
@@ -103,15 +103,15 @@ export const courseAPI = {
     request(`/session?sessionId=${sessionId}`, {
       method: 'DELETE',
     }),
-  
+
   // 配置管理
   getConfig: () => request('/config'),
-  setConfig: (data: { cookie: string }) => 
+  setConfig: (data: { cookie: string }) =>
     request('/config', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
+
   // 学生信息
   getStudentInfo: (sessionId?: string, schoolId?: string) => {
     const params = new URLSearchParams()
@@ -120,7 +120,7 @@ export const courseAPI = {
     const queryString = params.toString()
     return request(`/student-info${queryString ? `?${queryString}` : ''}`)
   },
-  
+
   // 课程信息
   getAvailableCourses: (schoolId?: string, options?: { forceRefresh?: boolean }) => {
     const params = new URLSearchParams()
@@ -129,25 +129,25 @@ export const courseAPI = {
     const queryString = params.toString()
     return request(`/courses/available${queryString ? `?${queryString}` : ''}`)
   },
-  getSelectedCourses: (schoolId?: string) => 
+  getSelectedCourses: (schoolId?: string) =>
     request(`/courses/selected${schoolId ? `?schoolId=${schoolId}` : ''}`),
-  getScheduleData: (schoolId?: string) => 
+  getScheduleData: (schoolId?: string) =>
     request(`/schedule${schoolId ? `?schoolId=${schoolId}` : ''}`),
-  
+
   // 成绩查询（支持传入schoolId参数）
   getGrades: (xnm: string, xqm: string, sessionId?: string, schoolId?: string) =>
     request('/grade', {
       method: 'POST',
       body: JSON.stringify({ xnm, xqm, sessionId, schoolId }),
     }),
-  
+
   // 总体成绩查询（支持传入schoolId参数）
   getOverallGrades: (sessionId?: string, schoolId?: string) =>
     request('/overall-grade', {
       method: 'POST',
       body: JSON.stringify({ sessionId, schoolId }),
     }),
-  
+
   // 选课功能
   executeSingleCourseSelection: (courseData: {
     jxb_id: string
@@ -161,12 +161,15 @@ export const courseAPI = {
     _xklc?: string  // 获取课程列表时使用的 xklc 参数
     _xkly?: string  // 获取课程列表时使用的 xkly 参数
     _xkkz_id?: string  // 获取课程列表时使用的 xkkz_id 参数
-  }, schoolId?: string) => 
+    _sfkxq?: string    // 课程列表中的 sfkxq 参数
+    _xkxskcgskg?: string // 课程列表中的 xkxskcgskg 参数
+    _completeParams?: any // 完整的参数对象
+  }, schoolId?: string) =>
     request(`/course-selection/single${schoolId ? `?schoolId=${schoolId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(courseData),
     }),
-  
+
   // 批量抢课
   executeBatchCourseSelection: (data: {
     courses: Array<{
@@ -180,32 +183,32 @@ export const courseAPI = {
     }>
     batchSize?: number
     delay?: number
-  }, schoolId?: string) => 
+  }, schoolId?: string) =>
     request(`/course-selection/batch${schoolId ? `?schoolId=${schoolId}` : ''}`, {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
+
   // 智能选课
   startSmartCourseSelection: (data: {
     courses: any[]
     max_attempts?: number
     interval?: number
-  }) => 
+  }) =>
     request('/course-selection/smart/start', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  
-  stopSmartCourseSelection: (threadId: string) => 
+
+  stopSmartCourseSelection: (threadId: string) =>
     request(`/course-selection/smart/stop/${threadId}`, {
       method: 'POST',
     }),
-  
-  getCourseSelectionStatus: (threadId: string) => 
+
+  getCourseSelectionStatus: (threadId: string) =>
     request(`/course-selection/status/${threadId}`),
-  
-  getCourseSelectionThreads: () => 
+
+  getCourseSelectionThreads: () =>
     Promise.resolve({
       success: true,
       data: {}

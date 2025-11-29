@@ -6,6 +6,12 @@
 import fs from 'fs'
 import path from 'path'
 import { saveToCos, loadFromCos, isCosEnabled } from './cos-storage'
+import {
+  detectErrorType,
+  calculateRetryDelay,
+  shouldRetry as shouldRetryByError,
+  ErrorType
+} from './utils/retry-strategy'
 
 const DATA_DIR = path.join(process.cwd(), 'data')
 const DATA_FILE = path.join(DATA_DIR, 'server-tasks.json')
@@ -16,6 +22,7 @@ export interface ServerSelectionTask {
   userId: string // 用户标识
   sessionId?: string // 会话ID
   schoolId: string // 学校ID
+  priority: 'high' | 'normal' | 'low' // 任务优先级
   courses: Array<{
     kch: string // 课程号
     kxh: string // 课程序号
@@ -43,6 +50,7 @@ export interface ServerSelectionTask {
   attemptCount: number // 尝试次数
   maxAttempts?: number // 最大尝试次数（设为undefined表示无限重试直到成功）
   scheduledTime?: number // 定时执行时间（时间戳）
+  errorType?: string // 最后一次错误的类型（用于智能重试）
   result?: {
     success: boolean
     message: string
@@ -284,6 +292,10 @@ export function getMaxConcurrentTasks(): number {
  * 添加任务到队列
  */
 export function addTask(task: ServerSelectionTask): void {
+  // 如果没有指定优先级，默认为 normal
+  if (!task.priority) {
+    task.priority = 'normal'
+  }
   taskQueue.set(task.id, task)
   saveTasks()
 }
@@ -317,12 +329,26 @@ export function getRunningTasks(): ServerSelectionTask[] {
 }
 
 /**
- * 获取等待中的任务
+ * 获取等待中的任务（按优先级排序）
  */
 export function getPendingTasks(): ServerSelectionTask[] {
-  return Array.from(taskQueue.values()).filter(
+  const pending = Array.from(taskQueue.values()).filter(
     task => task.status === 'pending' && !runningTasks.has(task.id)
   )
+
+  // 按优先级排序: high > normal > low
+  // 同优先级按创建时间排序（先创建的先执行）
+  const priorityOrder = { high: 0, normal: 1, low: 2 }
+  return pending.sort((a, b) => {
+    const priorityA = priorityOrder[a.priority || 'normal']
+    const priorityB = priorityOrder[b.priority || 'normal']
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB
+    }
+
+    return a.createdAt - b.createdAt
+  })
 }
 
 /**

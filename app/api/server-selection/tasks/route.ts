@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { 
-  addTask, 
-  getTask, 
-  getUserTasks, 
-  getAllTasks, 
-  cancelTask, 
+import {
+  addTask,
+  getTask,
+  getUserTasks,
+  getAllTasks,
+  cancelTask,
   getTaskStats,
   startTask,
   ServerSelectionTask
@@ -29,11 +29,11 @@ export async function POST(request: NextRequest) {
         const dataDir = await getDataDir()
         const activationCodesFile = path.join(dataDir, 'activation-codes.json')
         const activationRecordsFile = path.join(dataDir, 'activation-records.json')
-        
+
         const trimmedCode = activationCode.trim().replace(/\s+/g, '')
         const codes = await loadDataFromFile<ActivationCode>(activationCodesFile, 'activationCodes', [])
         const records = await loadDataFromFile<any>(activationRecordsFile, 'activationRecords', [])
-        
+
         const activationCodeObj = codes.find(c => c.code === trimmedCode || c.code === activationCode)
         if (!activationCodeObj) {
           return NextResponse.json({
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
             message: '激活码不存在'
           }, { status: 401 })
         }
-        
+
         const validation = validateActivationCode(trimmedCode, activationCodeObj, userId)
         if (!validation.valid) {
           return NextResponse.json({
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
             message: validation.message || '激活码验证失败'
           }, { status: 401 })
         }
-        
+
         // 检查是否已被其他用户绑定
         const existingRecordForCode = records.find((r: any) => r.code === activationCodeObj.code && r.userId !== userId)
         if (existingRecordForCode && existingRecordForCode.expiresAt > Date.now()) {
@@ -76,10 +76,10 @@ export async function POST(request: NextRequest) {
         const dataDir = await getDataDir()
         const activationRecordsFile = path.join(dataDir, 'activation-records.json')
         const activationCodesFile = path.join(dataDir, 'activation-codes.json')
-        
+
         const records = await loadDataFromFile<any>(activationRecordsFile, 'activationRecords', [])
         const userRecord = records.find((r: any) => r.userId === userId && r.expiresAt > Date.now())
-        
+
         if (!userRecord) {
           return NextResponse.json({
             success: false,
@@ -87,11 +87,11 @@ export async function POST(request: NextRequest) {
             message: '请先激活服务器端抢课功能'
           }, { status: 401 })
         }
-        
+
         // 检查课程数限制
         const codes = await loadDataFromFile<ActivationCode>(activationCodesFile, 'activationCodes', [])
         const activationCode = codes.find(c => c.code === userRecord.code)
-        
+
         if (activationCode && activationCode.maxCourses !== undefined) {
           const maxCourses = activationCode.maxCourses
           const usedCourses = activationCode.usedCourses || 0
@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
       const { getUserTasks } = await import('@/lib/server-course-selection-manager')
       const userTasks = getUserTasks(userId)
       const runningTasks = userTasks.filter(t => t.status === 'pending' || t.status === 'running')
-      
+
       if (runningTasks.length > 0) {
         return NextResponse.json({
           success: false,
@@ -138,11 +138,16 @@ export async function POST(request: NextRequest) {
 
     // 创建任务
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    // 确定任务优先级：定时任务为 normal，立即执行的任务为 high（用户主动触发）
+    const priority: 'high' | 'normal' | 'low' = scheduledTime ? 'normal' : 'high'
+
     const task: ServerSelectionTask = {
       id: taskId,
       userId,
       sessionId,
       schoolId: schoolId || getCurrentSchool().id, // 如果没提供schoolId，使用默认学校（但应该从客户端传入）
+      priority, // 添加优先级
       courses: courses.map((c: any) => ({
         kch: c.kch || c.kch_id,
         kxh: c.kxh || c.jxb_id,
@@ -184,7 +189,7 @@ export async function POST(request: NextRequest) {
           message: '定时时间不能超过24小时'
         }, { status: 400 })
       }
-      
+
       console.log(`⏰ 任务 ${taskId} 将在 ${Math.round(delay / 1000)} 秒后启动`)
       const timer = setTimeout(() => {
         processTask(task).catch(error => {
@@ -194,7 +199,7 @@ export async function POST(request: NextRequest) {
         const { cancelScheduledTaskTimer } = require('@/lib/server-course-selection-manager')
         cancelScheduledTaskTimer(taskId)
       }, delay)
-      
+
       // 注册定时器，以便可以取消
       const { registerScheduledTaskTimer } = require('@/lib/server-course-selection-manager')
       registerScheduledTaskTimer(taskId, timer)
@@ -263,7 +268,7 @@ export async function GET(request: NextRequest) {
       const sortedTasks = tasks
         .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
         .slice(0, 100)
-      
+
       return NextResponse.json({
         success: true,
         data: sortedTasks,
@@ -322,7 +327,7 @@ export async function DELETE(request: NextRequest) {
     // 检查权限
     const adminToken = request.headers.get('x-admin-token')
     const validToken = process.env.ADMIN_SECRET_TOKEN || 'Znj00751_admin_2024'
-    
+
     if (task.userId !== userId && (!adminToken || adminToken !== validToken)) {
       return NextResponse.json({
         success: false,
@@ -355,7 +360,7 @@ export async function DELETE(request: NextRequest) {
 // 处理任务（异步执行抢课）
 async function processTask(task: ServerSelectionTask) {
   const { completeTask, updateTaskAttempt } = await import('@/lib/server-course-selection-manager')
-  
+
   // 尝试启动任务
   if (!startTask(task.id)) {
     console.log(`⚠️ 任务 ${task.id} 无法启动（可能达到并发限制）`)
@@ -406,7 +411,10 @@ async function processTask(task: ServerSelectionTask) {
               _rwlx: course._rwlx,
               _xklc: course._xklc,
               _xkly: course._xkly,
-              _xkkz_id: course._xkkz_id
+              _xkkz_id: course._xkkz_id,
+              _sfkxq: course._sfkxq,
+              _xkxskcgskg: course._xkxskcgskg,
+              _completeParams: course._completeParams
             },
             task.sessionId,      // 使用任务的sessionId（如果有）
             task.cookie,         // 使用任务的Cookie（用户自己的Cookie，确保用户隔离）
@@ -415,26 +423,26 @@ async function processTask(task: ServerSelectionTask) {
 
           // 检查结果：flag=1 表示成功
           const isSuccess = result.success || (result.data && result.data.flag === '1')
-          
+
           if (isSuccess) {
             completeTask(task.id, true, result.message || '抢课成功 (flag=1)', course, result.data)
             console.log(`✅ 任务 ${task.id} 成功：${course.kch}-${course.kxh}，flag=${result.data?.flag || 'N/A'}`)
-            
+
             // 更新激活码的已使用课程数
             try {
               const { getDataDir, loadDataFromFile, saveDataToFile } = await import('@/lib/data-storage')
               const dataDir = await getDataDir()
               const activationCodesFile = path.join(dataDir, 'activation-codes.json')
               const activationRecordsFile = path.join(dataDir, 'activation-records.json')
-              
+
               // 加载激活记录找到用户对应的激活码
               const records = await loadDataFromFile<any>(activationRecordsFile, 'activationRecords', [])
               const userRecord = records.find((r: any) => r.userId === task.userId && r.expiresAt > Date.now())
-              
+
               if (userRecord) {
                 const codes = await loadDataFromFile<ActivationCode>(activationCodesFile, 'activationCodes', [])
                 const activationCode = codes.find(c => c.code === userRecord.code)
-                
+
                 if (activationCode) {
                   if (activationCode.usedCourses === undefined) {
                     activationCode.usedCourses = 0
@@ -447,7 +455,7 @@ async function processTask(task: ServerSelectionTask) {
             } catch (error) {
               console.error('更新激活码课程数失败:', error)
             }
-            
+
             return // 成功，退出整个函数
           } else {
             // 失败，记录尝试次数，继续重试

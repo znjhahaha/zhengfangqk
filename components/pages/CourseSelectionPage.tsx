@@ -365,7 +365,10 @@ export default function CourseSelectionPage() {
         _rwlx: course._rwlx,
         _xklc: course._xklc,
         _xkly: course._xkly,
-        _xkkz_id: course._xkkz_id
+        _xkkz_id: course._xkkz_id,
+        _sfkxq: course._sfkxq,
+        _xkxskcgskg: course._xkxskcgskg,
+        _completeParams: course._completeParams
       }, currentSchool.id) as any
 
       if (response.success) {

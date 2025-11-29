@@ -279,7 +279,8 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
             onClick={(e) => {
               if (e.target === e.currentTarget) {
                 handleNext()
@@ -288,15 +289,12 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
           >
             <motion.div
               key={currentAnnouncement.id}
-              initial={{ opacity: 0, scale: 0.8, y: 50 }}
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -20 }}
-              transition={{
-                type: "spring",
-                stiffness: 300,
-                damping: 30
-              }}
-              className={`relative w-full max-w-2xl rounded-2xl bg-gradient-to-br backdrop-blur-md p-6 sm:p-8 ${getColors(currentAnnouncement.type, currentAnnouncement.priority)} ${getTextColor(currentAnnouncement.type)}`}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              style={{ willChange: 'transform, opacity' }}
+              className={`relative w-full max-w-2xl rounded-2xl bg-gradient-to-br p-6 sm:p-8 ${getColors(currentAnnouncement.type, currentAnnouncement.priority)} ${getTextColor(currentAnnouncement.type)}`}
             >
               {/* 关闭按钮 */}
               <button
@@ -356,7 +354,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
                 {!confirmedIds.has(currentAnnouncement.id) && (
                   <Button
                     onClick={() => handleConfirm(currentAnnouncement.id)}
-                    className="flex-1 bg-green-500/20 hover:bg-green-500/30 backdrop-blur-sm border border-green-500/50 text-green-100"
+                    className="flex-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-100"
                     size="sm"
                   >
                     <CheckCircle className="h-4 w-4 mr-2" />
@@ -368,7 +366,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
                     markAsViewed(currentAnnouncement.id)
                     handleDismiss(currentAnnouncement.id)
                   }}
-                  className={`${confirmedIds.has(currentAnnouncement.id) ? 'flex-1' : 'flex-1'} bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20`}
+                  className={`${confirmedIds.has(currentAnnouncement.id) ? 'flex-1' : 'flex-1'} bg-white/10 hover:bg-white/20 border border-white/20`}
                   size="sm"
                 >
                   {confirmedIds.has(currentAnnouncement.id) ? '已确认' : '我知道了'}
@@ -387,7 +385,8 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
             onClick={() => {
               console.log('📢 关闭历史公告弹窗')
               setShowHistory(false)
@@ -397,14 +396,15 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
             }}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
               onClick={(e) => e.stopPropagation()}
-              className="relative w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl bg-gradient-to-br from-slate-800/95 to-slate-900/95 backdrop-blur-md border border-purple-500/30 shadow-2xl"
+              style={{ willChange: 'transform, opacity' }}
+              className="relative w-full max-w-3xl max-h-[80vh] overflow-y-auto rounded-2xl bg-gradient-to-br from-slate-800/95 to-slate-900/95 border border-purple-500/30 shadow-2xl overscroll-contain"
             >
-              <div className="sticky top-0 z-10 flex items-center justify-between p-4 sm:p-6 border-b border-purple-500/30 bg-slate-900/50 backdrop-blur-sm">
+              <div className="sticky top-0 z-10 flex items-center justify-between p-4 sm:p-6 border-b border-purple-500/30 bg-slate-900/90">
                 <h2 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
                   <History className="h-5 w-5 sm:h-6 sm:w-6" />
                   历史公告
@@ -430,13 +430,13 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
                 ) : allActiveAnnouncements.length === 0 ? (
                   <p className="text-center text-gray-400 py-8">暂无公告</p>
                 ) : (
-                  allActiveAnnouncements.map((ann) => (
+                  allActiveAnnouncements.map((ann, index) => (
                     <motion.div
                       key={ann.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.1 }}
-                      className={`p-4 sm:p-6 rounded-xl bg-gradient-to-r backdrop-blur-sm ${getColors(ann.type, ann.priority)} ${getTextColor(ann.type)} cursor-pointer hover:scale-[1.02] transition-transform`}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.2, delay: index * 0.03 }}
+                      className={`p-4 sm:p-6 rounded-xl bg-gradient-to-r ${getColors(ann.type, ann.priority)} ${getTextColor(ann.type)} cursor-pointer active:scale-[0.98] transition-transform`}
                       onClick={() => setSelectedAnnouncement(ann)}
                     >
                       <div className="flex items-start gap-3 sm:gap-4">
@@ -479,20 +479,18 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60"
             onClick={() => setSelectedAnnouncement(null)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 50 }}
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: -20 }}
-              transition={{
-                type: "spring",
-                stiffness: 300,
-                damping: 30
-              }}
+              exit={{ opacity: 0, scale: 0.95, y: -10 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
               onClick={(e) => e.stopPropagation()}
-              className={`relative w-full max-w-2xl rounded-2xl bg-gradient-to-br backdrop-blur-md p-6 sm:p-8 ${getColors(selectedAnnouncement.type, selectedAnnouncement.priority)} ${getTextColor(selectedAnnouncement.type)}`}
+              style={{ willChange: 'transform, opacity' }}
+              className={`relative w-full max-w-2xl rounded-2xl bg-gradient-to-br p-6 sm:p-8 ${getColors(selectedAnnouncement.type, selectedAnnouncement.priority)} ${getTextColor(selectedAnnouncement.type)}`}
             >
               {/* 关闭按钮 */}
               <button
@@ -527,7 +525,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
                           handleConfirm(selectedAnnouncement.id)
                           setSelectedAnnouncement(null)
                         }}
-                        className="flex-1 bg-green-500/20 hover:bg-green-500/30 backdrop-blur-sm border border-green-500/50 text-green-100"
+                        className="flex-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/50 text-green-100"
                         size="sm"
                       >
                         <CheckCircle className="h-4 w-4 mr-2" />
@@ -539,7 +537,7 @@ export default function AnnouncementModal({ forceShowHistory = false, onCloseHis
                         markAsViewed(selectedAnnouncement.id)
                         setSelectedAnnouncement(null)
                       }}
-                      className={`${confirmedIds.has(selectedAnnouncement.id) ? 'flex-1' : 'flex-1'} bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20`}
+                      className={`${confirmedIds.has(selectedAnnouncement.id) ? 'flex-1' : 'flex-1'} bg-white/10 hover:bg-white/20 border border-white/20`}
                       size="sm"
                     >
                       {confirmedIds.has(selectedAnnouncement.id) ? '已确认' : '我知道了'}
