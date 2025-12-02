@@ -2794,13 +2794,14 @@ export default function AdminPage() {
                             </div>
                           )}
 
+
                           {/* 截图 */}
-                          {suggestion.metadata?.screenshot && suggestion.metadata.screenshot !== 'none' && (
+                          {(suggestion.screenshot || (suggestion.metadata?.screenshot && suggestion.metadata.screenshot !== 'none')) && (
                             <div className="space-y-2">
                               <p className="text-xs text-gray-500">用户截图:</p>
                               <div className="bg-slate-900/50 p-2 rounded">
                                 <img
-                                  src={suggestion.screenshot || (typeof suggestion.metadata.screenshot === 'string' ? suggestion.metadata.screenshot : '')}
+                                  src={suggestion.screenshot || ''}
                                   alt="用户截图"
                                   className="w-full max-h-96 object-contain rounded border border-slate-700"
                                   onError={(e) => {

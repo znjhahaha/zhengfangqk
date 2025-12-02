@@ -116,6 +116,7 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
                         content: description,
                         category: type,
                         contact,
+                        screenshot: screenshot || undefined, // 发送实际的截图数据
                         metadata: {
                             systemInfo,
                             recentErrors: recentErrors.map(e => ({
