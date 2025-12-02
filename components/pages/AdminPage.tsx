@@ -2707,6 +2707,167 @@ export default function AdminPage() {
           </motion.div>
         )}
 
+        {/* 建议管理 */}
+        {activeTab === 'suggestions' && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4 sm:space-y-6"
+          >
+            <Card className="glass">
+              <CardHeader className="p-3 sm:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
+                  用户建议管理
+                </CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
+                  查看和管理用户反馈建议
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-3 sm:p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-xs sm:text-sm text-gray-400">
+                    共 {suggestions.length} 条建议
+                  </div>
+                  <Button
+                    onClick={loadSuggestions}
+                    disabled={isLoadingSuggestions}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className={`h-4 w-4 mr-2 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
+                    刷新
+                  </Button>
+                </div>
+
+                {isLoadingSuggestions && suggestions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
+                    <p className="text-sm text-gray-400">加载中...</p>
+                  </div>
+                ) : suggestions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p className="text-sm text-gray-400">暂无用户建议</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {suggestions.map((suggestion) => (
+                      <Card
+                        key={suggestion.id}
+                        className="bg-slate-800/30 border-slate-700 overflow-hidden"
+                      >
+                        <CardHeader className="p-3 sm:p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="font-medium text-sm sm:text-base text-white truncate">
+                                  {suggestion.title}
+                                </h3>
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    suggestion.type === 'bug'
+                                      ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                                      : suggestion.type === 'feature'
+                                        ? 'bg-yellow-500/10 border-yellow-500/30 text-yellow-300'
+                                        : 'bg-blue-500/10 border-blue-500/30 text-blue-300'
+                                  }
+                                >
+                                  {suggestion.category || suggestion.type}
+                                </Badge>
+                              </div>
+                              <p className="text-xs sm:text-sm text-gray-400 whitespace-pre-wrap">
+                                {suggestion.content}
+                              </p>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="p-3 sm:p-4 space-y-3">
+                          {/* 系统信息 */}
+                          {suggestion.metadata?.systemInfo && (
+                            <div className="p-2 bg-slate-900/50 rounded text-xs">
+                              <p className="text-gray-500 mb-1">系统信息:</p>
+                              <p className="text-gray-400">
+                                {suggestion.metadata.systemInfo.platform} | {suggestion.metadata.systemInfo.screenResolution}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* 截图 */}
+                          {suggestion.metadata?.screenshot && suggestion.metadata.screenshot !== 'none' && (
+                            <div className="space-y-2">
+                              <p className="text-xs text-gray-500">用户截图:</p>
+                              <div className="bg-slate-900/50 p-2 rounded">
+                                <img
+                                  src={suggestion.screenshot || (typeof suggestion.metadata.screenshot === 'string' ? suggestion.metadata.screenshot : '')}
+                                  alt="用户截图"
+                                  className="w-full max-h-96 object-contain rounded border border-slate-700"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none'
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 联系方式 */}
+                          {suggestion.contact && (
+                            <div className="text-xs text-gray-400">
+                              <span className="text-gray-500">联系方式:</span> {suggestion.contact}
+                            </div>
+                          )}
+
+                          {/* 时间 */}
+                          <div className="text-xs text-gray-500">
+                            提交时间: {new Date(suggestion.createdAt).toLocaleString('zh-CN')}
+                          </div>
+
+                          {/* 操作按钮 */}
+                          <div className="flex gap-2 pt-2">
+                            <Button
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch('/api/admin/suggestions', {
+                                    method: 'POST',
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                      'x-admin-token': 'Znj00751_admin_2024'
+                                    },
+                                    body: JSON.stringify({
+                                      action: 'delete',
+                                      suggestion: { id: suggestion.id }
+                                    })
+                                  })
+                                  const result = await response.json()
+                                  if (result.success) {
+                                    toast.success('删除成功')
+                                    loadSuggestions()
+                                  } else {
+                                    toast.error(result.message || '删除失败')
+                                  }
+                                } catch (error) {
+                                  toast.error('删除失败')
+                                }
+                              }}
+                              variant="outline"
+                              size="sm"
+                              className="text-xs"
+                            >
+                              <Trash2 className="h-3 w-3 mr-1" />
+                              删除
+                            </Button>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+
         {/* 激活码管理 */}
         {activeTab === 'activation-codes' && (
           <motion.div

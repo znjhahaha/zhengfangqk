@@ -1,38 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// 模拟数据库存储（在实际生产环境中应使用数据库）
-// 注意：在 Vercel Serverless 环境中，这个变量在每次请求后可能会重置
-// 如果需要持久化，请连接数据库（如 MongoDB, PostgreSQL）或使用 Vercel KV
-let suggestions: any[] = []
-
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json()
         const { action, suggestion } = body
 
         if (action === 'create') {
-            const newSuggestion = {
-                id: Date.now().toString(),
-                ...suggestion,
-                status: 'pending',
-                createdAt: Date.now(),
-                votes: 0
-            }
-
-            suggestions.unshift(newSuggestion)
-
-            // 限制内存中存储的数量，防止溢出
-            if (suggestions.length > 100) {
-                suggestions = suggestions.slice(0, 100)
-            }
-
-            console.log('📝 新收到反馈:', newSuggestion.title)
-
-            return NextResponse.json({
-                success: true,
-                data: newSuggestion,
-                message: '反馈提交成功'
+            // 转发到管理端 API 以获得持久化存储
+            const adminResponse = await fetch(`${request.nextUrl.origin}/api/admin/suggestions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    action: 'create',
+                    suggestion: {
+                        type: suggestion.category || suggestion.type || 'other',
+                        title: suggestion.title,
+                        content: suggestion.content,
+                        contact: suggestion.contact || '',
+                        metadata: suggestion.metadata || {},
+                        screenshot: suggestion.screenshot || undefined
+                    }
+                })
             })
+
+            const result = await adminResponse.json()
+
+            if (result.success) {
+                console.log('📝 新收到反馈:', result.data?.title)
+                return NextResponse.json({
+                    success: true,
+                    data: result.data,
+                    message: '反馈提交成功'
+                })
+            } else {
+                return NextResponse.json({
+                    success: false,
+                    message: result.message || '反馈提交失败'
+                }, { status: 500 })
+            }
         }
 
         return NextResponse.json({
@@ -50,9 +57,16 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-    // 获取所有建议
-    return NextResponse.json({
-        success: true,
-        data: suggestions
-    })
+    // 转发到管理端 API
+    try {
+        const adminResponse = await fetch(`${request.nextUrl.origin}/api/admin/suggestions`, {
+            headers: request.headers
+        })
+        return adminResponse
+    } catch (error) {
+        return NextResponse.json({
+            success: false,
+            message: '获取建议失败'
+        }, { status: 500 })
+    }
 }

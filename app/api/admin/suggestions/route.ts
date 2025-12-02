@@ -9,6 +9,9 @@ export interface Suggestion {
   title: string
   content: string
   contact?: string // 联系方式（可选）
+  category?: string // 类别（前端提交的）
+  screenshot?: string // 截图 base64 数据
+  metadata?: any // 元数据（系统信息等）
   status: 'pending' | 'reviewing' | 'approved' | 'rejected' | 'completed'
   createdAt: number
   updatedAt: number
@@ -71,7 +74,7 @@ export const dynamic = 'force-dynamic'
 export async function GET(request: NextRequest) {
   try {
     await initSuggestions()
-    
+
     // 验证管理员权限（如果是管理员，返回所有建议）
     const adminToken = request.headers.get('x-admin-token')
     const validToken = process.env.ADMIN_SECRET_TOKEN || 'Znj00751_admin_2024'
@@ -131,7 +134,7 @@ export async function POST(request: NextRequest) {
       }
 
       await initSuggestions()
-      
+
       const nextId = await getNextSuggestionId()
       const newSuggestion: Suggestion = {
         id: `suggestion-${nextId}`,
@@ -139,6 +142,9 @@ export async function POST(request: NextRequest) {
         title: suggestion.title,
         content: suggestion.content,
         contact: suggestion.contact || '',
+        category: suggestion.category || undefined,
+        screenshot: suggestion.screenshot || undefined,
+        metadata: suggestion.metadata || undefined,
         status: 'pending',
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -193,7 +199,7 @@ export async function POST(request: NextRequest) {
         reviewNote: suggestion.reviewNote || undefined,
         updatedAt: Date.now()
       }
-      
+
       await saveSuggestions(suggestions)
       console.log('💡 建议状态已更新并保存:', suggestion.id)
 
