@@ -332,7 +332,7 @@ export default function AdminPage() {
         loadVisitStats()
         // 如果在服务器抢课标签页，也刷新任务列表
         if (activeTab === 'server-selection') {
-          loadServerSelectionTasks()
+          loadServerSelectionTasks(true)
         }
       }, 5000) // 每5秒刷新一次
 
@@ -476,8 +476,10 @@ export default function AdminPage() {
   }
 
   // 加载服务器端抢课任务
-  const loadServerSelectionTasks = async () => {
-    setIsLoadingServerTasks(true)
+  const loadServerSelectionTasks = async (isBackground = false) => {
+    if (!isBackground) {
+      setIsLoadingServerTasks(true)
+    }
 
     // 先从缓存加载（立即显示）
     const cachedTasks = DataCacheManager.get<any[]>(CACHE_KEYS.ADMIN_TASKS)
@@ -524,7 +526,9 @@ export default function AdminPage() {
         toast.error('加载任务失败')
       }
     } finally {
-      setIsLoadingServerTasks(false)
+      if (!isBackground) {
+        setIsLoadingServerTasks(false)
+      }
     }
   }
 
@@ -3115,7 +3119,7 @@ export default function AdminPage() {
                     </div>
                   </div>
                   <Button
-                    onClick={loadServerSelectionTasks}
+                    onClick={() => loadServerSelectionTasks(false)}
                     disabled={isLoadingServerTasks}
                     variant="outline"
                     size="sm"
@@ -3124,7 +3128,7 @@ export default function AdminPage() {
                     刷新
                   </Button>
                 </div>
-                {isLoadingServerTasks ? (
+                {isLoadingServerTasks && serverSelectionTasks.length === 0 ? (
                   <div className="text-center py-8">
                     <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2 text-primary" />
                     <p className="text-sm text-gray-400">加载中...</p>
