@@ -47,14 +47,14 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
 
             // 在截图前隐藏反馈模态框
             const canvas = await html2canvas(document.body, {
-                onclone: (clonedDoc) => {
+                onclone: (clonedDoc: Document) => {
                     // 在克隆的文档中隐藏反馈模态框
                     const modal = clonedDoc.querySelector('.feedback-modal')
                     if (modal) {
                         (modal as HTMLElement).style.display = 'none'
                     }
                 }
-            })
+            } as any)
 
             const dataUrl = canvas.toDataURL('image/png')
             setScreenshot(dataUrl)
