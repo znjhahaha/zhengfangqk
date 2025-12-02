@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import ToastProvider from '@/components/ToastProvider'
+import FeedbackButton from '@/components/FeedbackButton'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
 // 优化字体加载
@@ -46,6 +47,7 @@ export default function RootLayout({
           {children}
         </div>
         <ToastProvider />
+        <FeedbackButton />
         <SpeedInsights />
       </body>
     </html>
