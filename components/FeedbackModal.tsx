@@ -44,10 +44,15 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
         try {
             // 动态导入 html2canvas（减小初始包大小）
             const html2canvas = (await import('html2canvas')).default
+
+            // 在截图前隐藏反馈模态框
             const canvas = await html2canvas(document.body, {
-                ignoreElements: (element) => {
-                    // 忽略模态框本身
-                    return element.classList.contains('feedback-modal')
+                onclone: (clonedDoc) => {
+                    // 在克隆的文档中隐藏反馈模态框
+                    const modal = clonedDoc.querySelector('.feedback-modal')
+                    if (modal) {
+                        (modal as HTMLElement).style.display = 'none'
+                    }
                 }
             })
 
