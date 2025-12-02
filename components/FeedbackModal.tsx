@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Bug, Lightbulb, HelpCircle, Camera } from 'lucide-react'
+import { X, Send, Bug, Lightbulb, HelpCircle, Camera, MessageSquare } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import toast from 'react-hot-toast'
@@ -201,8 +201,8 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
                                         key={value}
                                         onClick={() => setType(value)}
                                         className={`p-3 rounded-lg border-2 transition-all flex flex-col items-center gap-2 ${type === value
-                                                ? `border-${color}-500 bg-${color}-500/10`
-                                                : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
+                                            ? `border-${color}-500 bg-${color}-500/10`
+                                            : 'border-slate-700 bg-slate-800/50 hover:border-slate-600'
                                             }`}
                                     >
                                         <Icon className={`h-5 w-5 ${type === value ? `text-${color}-400` : 'text-gray-400'}`} />
