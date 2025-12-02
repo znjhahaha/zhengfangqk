@@ -142,7 +142,7 @@ function createRequestConfig(method: string = 'GET', body?: string, sessionId?: 
 }
 
 // 带重试的fetch函数
-async function robustFetch(url: string, config: RequestInit, maxRetries: number = 3): Promise<Response> {
+async function robustFetch(url: string, config: RequestInit, maxRetries: number = 2): Promise<Response> {
   let lastError: Error | null = null
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -154,7 +154,8 @@ async function robustFetch(url: string, config: RequestInit, maxRetries: number 
       console.warn(`请求失败 (尝试 ${attempt}/${maxRetries}):`, error)
 
       if (attempt < maxRetries) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+        // 优化云部署：减小延迟 500ms -> 1000ms (最多延迟1秒)
+        const delay = Math.min(500 * Math.pow(2, attempt - 1), 1000)
         await new Promise(resolve => setTimeout(resolve, delay))
       }
     }

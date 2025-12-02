@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getGrades } from '@/lib/course-api'
 
+// Vercel 云部署配置
+export const maxDuration = 60 // Vercel Pro: 60秒；Hobby: 10秒
+export const runtime = 'nodejs'
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -16,7 +20,7 @@ export async function POST(request: NextRequest) {
 
     // 从请求头获取Cookie
     const cookieHeader = request.headers.get('x-course-cookie')
-    
+
     if (!cookieHeader) {
       return NextResponse.json({
         success: false,
@@ -29,7 +33,7 @@ export async function POST(request: NextRequest) {
     try {
       // 直接传递schoolId参数，不再修改服务器端状态
       const grades = await getGrades(xnm, xqm, sessionId || undefined, cookieHeader, schoolId || undefined)
-      
+
       return NextResponse.json({
         success: true,
         data: grades,
@@ -37,7 +41,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (error: any) {
       console.error('获取成绩失败:', error)
-      
+
       // 处理Cookie过期错误
       if (error.message?.includes('Cookie已过期') || error.message?.includes('需要重新登录')) {
         return NextResponse.json({
@@ -47,7 +51,7 @@ export async function POST(request: NextRequest) {
           action: '请前往"系统设置"页面，重新输入您的登录Cookie'
         }, { status: 401 })
       }
-      
+
       return NextResponse.json({
         success: false,
         error: error.message || '获取成绩失败',
