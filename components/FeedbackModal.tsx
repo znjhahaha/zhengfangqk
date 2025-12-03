@@ -345,22 +345,48 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
                         </div>
                     </div>
 
+                    {/* 上传进度条 */}
+                    {isUploading && (
+                        <div className="px-6 pb-4">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between text-sm">
+                                    <span className="text-gray-400 flex items-center gap-2">
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        正在上传截图...
+                                    </span>
+                                    <span className="text-purple-400 font-medium">{uploadProgress}%</span>
+                                </div>
+                                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                                    <motion.div
+                                        className="h-full bg-gradient-to-r from-purple-600 to-blue-600"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${uploadProgress}%` }}
+                                        transition={{ duration: 0.3 }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* 底部按钮 */}
                     <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-700/50">
                         <Button
                             variant="outline"
                             onClick={onClose}
-                            disabled={isSubmitting}
+                            disabled={isSubmitting || isUploading}
                         >
                             取消
                         </Button>
                         <Button
                             onClick={handleSubmit}
-                            disabled={isSubmitting || !title.trim() || !description.trim()}
+                            disabled={isSubmitting || isUploading || !title.trim() || !description.trim()}
                             className="bg-gradient-to-r from-purple-600 to-blue-600"
                         >
-                            {isSubmitting ? (
-                                <>正在提交...</>
+                            {isSubmitting || isUploading ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    {isUploading ? '上传中...' : '提交中...'}
+                                </>
                             ) : (
                                 <>
                                     <Send className="h-4 w-4 mr-2" />
