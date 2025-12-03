@@ -17,11 +17,16 @@ export async function POST(request: NextRequest) {
 
         // 检查 COS 是否配置
         const { isCosEnabled } = await import('@/lib/cos-storage')
+
+        // 如果 COS 未配置，直接返回 base64（降级方案）
         if (!isCosEnabled()) {
+            console.warn('⚠️ COS 未配置，使用 base64 存储（不推荐用于生产环境）')
             return NextResponse.json({
-                success: false,
-                message: 'COS 存储未配置，无法上传图片'
-            }, { status: 503 })
+                success: true,
+                url: image, // 返回 base64 作为 URL
+                message: '图片已保存（base64格式）',
+                warning: 'COS未配置，建议配置以获得更好的性能'
+            })
         }
 
         // 提取 base64 数据
@@ -54,6 +59,19 @@ export async function POST(request: NextRequest) {
 
     } catch (error: any) {
         console.error('上传截图失败:', error)
+
+        // 如果上传失败，尝试返回 base64 作为降级方案
+        const { image } = await request.json().catch(() => ({ image: null }))
+        if (image) {
+            console.warn('⚠️ 上传失败，使用 base64 降级')
+            return NextResponse.json({
+                success: true,
+                url: image,
+                message: '上传失败，已保存为 base64',
+                warning: error.message
+            })
+        }
+
         return NextResponse.json({
             success: false,
             message: error.message || '上传失败'

@@ -82,6 +82,7 @@ import {
   type VisitStats
 } from '@/lib/visit-tracker'
 import { SimpleBarChart, SimplePieChart } from '@/components/ui/SimpleChart'
+import ImageZoomModal from '@/components/ImageZoomModal'
 
 // 动画下拉选择组件
 interface AnimatedSelectProps {
@@ -271,6 +272,9 @@ export default function AdminPage() {
   const [isLoadingServerTasks, setIsLoadingServerTasks] = useState(false)
   const [serverSelectionStats, setServerSelectionStats] = useState<any>(null)
   const [maxConcurrentTasks, setMaxConcurrentTasks] = useState(5)
+
+  // 图片预览状态
+  const [zoomImage, setZoomImage] = useState<{ src: string; alt: string } | null>(null)
 
   // 表单状态
   const [formData, setFormData] = useState({
@@ -2795,19 +2799,26 @@ export default function AdminPage() {
                           )}
 
 
+
                           {/* 截图 */}
                           {(suggestion.screenshot || (suggestion.metadata?.screenshot && suggestion.metadata.screenshot !== 'none')) && (
                             <div className="space-y-2">
                               <p className="text-xs text-gray-500">用户截图:</p>
-                              <div className="bg-slate-900/50 p-2 rounded">
+                              <div
+                                className="bg-slate-900/50 p-2 rounded cursor-pointer hover:bg-slate-900/70 transition-colors group"
+                                onClick={() => setZoomImage({ src: suggestion.screenshot || '', alt: `${suggestion.title} - 截图` })}
+                              >
                                 <img
                                   src={suggestion.screenshot || ''}
                                   alt="用户截图"
-                                  className="w-full max-h-96 object-contain rounded border border-slate-700"
+                                  className="w-full max-h-96 object-contain rounded border border-slate-700 group-hover:border-slate-600 transition-colors"
                                   onError={(e) => {
                                     (e.target as HTMLImageElement).style.display = 'none'
                                   }}
                                 />
+                                <p className="text-xs text-center text-gray-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  点击放大查看
+                                </p>
                               </div>
                             </div>
                           )}
@@ -3384,6 +3395,14 @@ export default function AdminPage() {
           </motion.div>
         )}
       </div>
+
+      {/* 图片放大预览模态框 */}
+      <ImageZoomModal
+        src={zoomImage?.src || ''}
+        alt={zoomImage?.alt || '图片预览'}
+        isOpen={!!zoomImage}
+        onClose={() => setZoomImage(null)}
+      />
     </div>
   )
 }
