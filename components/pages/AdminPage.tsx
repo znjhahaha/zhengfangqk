@@ -2800,25 +2800,49 @@ export default function AdminPage() {
 
 
 
+
                           {/* 截图 */}
                           {(suggestion.screenshot || (suggestion.metadata?.screenshot && suggestion.metadata.screenshot !== 'none')) && (
                             <div className="space-y-2">
                               <p className="text-xs text-gray-500">用户截图:</p>
                               <div
                                 className="bg-slate-900/50 p-2 rounded cursor-pointer hover:bg-slate-900/70 transition-colors group"
-                                onClick={() => setZoomImage({ src: suggestion.screenshot || '', alt: `${suggestion.title} - 截图` })}
+                                onClick={() => {
+                                  const imgSrc = suggestion.screenshot || ''
+                                  if (imgSrc) {
+                                    setZoomImage({ src: imgSrc, alt: `${suggestion.title} - 截图` })
+                                  }
+                                }}
                               >
-                                <img
-                                  src={suggestion.screenshot || ''}
-                                  alt="用户截图"
-                                  className="w-full max-h-96 object-contain rounded border border-slate-700 group-hover:border-slate-600 transition-colors"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none'
-                                  }}
-                                />
-                                <p className="text-xs text-center text-gray-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  点击放大查看
-                                </p>
+                                {suggestion.screenshot ? (
+                                  <>
+                                    <img
+                                      src={suggestion.screenshot}
+                                      alt="用户截图"
+                                      className="w-full max-h-96 object-contain rounded border border-slate-700 group-hover:border-slate-600 transition-colors"
+                                      onError={(e) => {
+                                        console.error('截图加载失败:', suggestion.screenshot)
+                                        const target = e.target as HTMLImageElement
+                                        target.style.display = 'none'
+                                        // 显示错误信息
+                                        const parent = target.parentElement
+                                        if (parent) {
+                                          const errorDiv = document.createElement('div')
+                                          errorDiv.className = 'text-center py-4 text-red-400 text-sm'
+                                          errorDiv.textContent = '截图加载失败'
+                                          parent.appendChild(errorDiv)
+                                        }
+                                      }}
+                                    />
+                                    <p className="text-xs text-center text-gray-500 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      点击放大查看
+                                    </p>
+                                  </>
+                                ) : (
+                                  <div className="text-center py-4 text-gray-500 text-sm">
+                                    无截图数据
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}

@@ -179,22 +179,44 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
             const result = await response.json()
 
             if (result.success) {
-                toast.success('感谢您的反馈！')
-                onClose()
-                // 重置表单
-                setTitle('')
-                setDescription('')
-                setContact('')
-                setScreenshot(null)
-                setType('bug')
+                // 确保 toast 在模态框关闭前显示
+                toast.success('感谢您的反馈！', {
+                    duration: 3000,
+                    style: {
+                        zIndex: 10001 // 高于模态框的 z-index (10000)
+                    }
+                })
+
+                // 延迟关闭模态框，让用户看到成功提示
+                setTimeout(() => {
+                    onClose()
+                    // 重置表单
+                    setTitle('')
+                    setDescription('')
+                    setContact('')
+                    setScreenshot(null)
+                    setType('bug')
+                }, 500)
             } else {
-                toast.error('提交失败，请稍后重试')
+                toast.error('提交失败，请稍后重试', {
+                    style: {
+                        zIndex: 10001
+                    }
+                })
             }
         } catch (error) {
             console.error('Failed to submit feedback:', error)
-            toast.error('提交失败')
+            toast.error('提交失败', {
+                style: {
+                    zIndex: 10001
+                }
+            })
         } finally {
+            // 确保无论成功或失败都重置提交状态
             setIsSubmitting(false)
+            // 确保上传状态也被重置
+            setIsUploading(false)
+            setUploadProgress(0)
         }
     }
 
