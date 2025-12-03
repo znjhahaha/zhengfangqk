@@ -79,7 +79,7 @@ export async function saveToCos(key: string, data: any): Promise<void> {
   try {
     const cos = getCosInstance()
     const jsonData = JSON.stringify(data, null, 2)
-    
+
     await new Promise<void>((resolve, reject) => {
       cos.putObject(
         {
@@ -139,8 +139,8 @@ export async function loadFromCos(key: string): Promise<any | null> {
       const content = Buffer.isBuffer(result.Body)
         ? result.Body.toString('utf-8')
         : typeof result.Body === 'string'
-        ? result.Body
-        : Buffer.from(result.Body).toString('utf-8')
+          ? result.Body
+          : Buffer.from(result.Body).toString('utf-8')
       return JSON.parse(content)
     }
 
@@ -164,3 +164,48 @@ export async function loadFromCos(key: string): Promise<any | null> {
   }
 }
 
+/**
+ * 上传二进制文件到 COS（用于图片等）
+ * @param key COS 对象键名
+ * @param buffer 文件Buffer数据
+ * @param contentType 文件类型
+ * @returns 文件的访问URL
+ */
+export async function uploadToCos(key: string, buffer: Buffer, contentType: string = 'application/octet-stream'): Promise<string> {
+  const config = getCosConfig()
+  if (!config) {
+    throw new Error('COS 配置未设置')
+  }
+
+  try {
+    const cos = getCosInstance()
+
+    await new Promise<void>((resolve, reject) => {
+      cos.putObject(
+        {
+          Bucket: config.Bucket,
+          Region: config.Region,
+          Key: key,
+          Body: buffer,
+          ContentType: contentType
+        },
+        (err: any, data: any) => {
+          if (err) {
+            reject(err)
+          } else {
+            resolve()
+          }
+        }
+      )
+    })
+
+    // 返回 COS 访问 URL
+    const url = `https://${config.Bucket}.cos.${config.Region}.myqcloud.com/${key}`
+    console.log(`✅ 文件已上传到 COS: ${key}`)
+    return url
+
+  } catch (error: any) {
+    console.error(`❌ 上传文件到 COS 失败:`, error)
+    throw new Error(`上传文件到 COS 失败: ${error.message || String(error)}`)
+  }
+}

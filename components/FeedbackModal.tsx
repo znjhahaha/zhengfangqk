@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Send, Bug, Lightbulb, HelpCircle, Camera, MessageSquare } from 'lucide-react'
+import { X, Send, Bug, Lightbulb, HelpCircle, Camera, MessageSquare, Loader2 } from 'lucide-react'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import toast from 'react-hot-toast'
 import ErrorTracker from '@/lib/error-tracker'
+import { compressImage } from '@/lib/image-compress'
 
 interface FeedbackModalProps {
     isOpen: boolean
@@ -28,6 +29,8 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
     const [contact, setContact] = useState('')
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [screenshot, setScreenshot] = useState<string | null>(null)
+    const [uploadProgress, setUploadProgress] = useState(0)
+    const [isUploading, setIsUploading] = useState(false)
 
     // 自动填充错误上下文
     useEffect(() => {
@@ -41,6 +44,7 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
 
     // 截图功能（使用 html2canvas）
     const takeScreenshot = async () => {
+        const loadingToast = toast.loading('正在截图...')
         try {
             // 动态导入 html2canvas（减小初始包大小）
             const html2canvas = (await import('html2canvas')).default
@@ -56,12 +60,22 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
                 }
             } as any)
 
-            const dataUrl = canvas.toDataURL('image/png')
+            let dataUrl = canvas.toDataURL('image/png')
+
+            // 压缩图片
+            toast.loading('正在压缩...', { id: loadingToast })
+            dataUrl = await compressImage(dataUrl, {
+                maxWidth: 1920,
+                maxHeight: 1080,
+                quality: 0.8,
+                maxSizeMB: 0.5
+            })
+
             setScreenshot(dataUrl)
-            toast.success('截图已生成')
+            toast.success('截图成功！', { id: loadingToast })
         } catch (error) {
             console.error('Screenshot failed:', error)
-            toast.error('截图失败')
+            toast.error('截图失败', { id: loadingToast })
         }
     }
 
@@ -88,16 +102,48 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
             const recentErrors = ErrorTracker.getErrorHistory(5)
             const recentActions = ErrorTracker.getActionHistory(10)
 
-            const feedbackData = {
-                type,
-                title,
-                description,
-                contact,
-                screenshot,
-                systemInfo,
-                recentErrors,
-                recentActions,
-                errorContext
+            // 如果有截图，先上传到 COS
+            let screenshotUrl: string | undefined = undefined
+            if (screenshot) {
+                try {
+                    setIsUploading(true)
+                    setUploadProgress(0)
+
+                    const uploadToast = toast.loading('正在上传截图...')
+
+                    // 模拟进度（因为 fetch 不支持实时进度）
+                    const progressInterval = setInterval(() => {
+                        setUploadProgress(prev => Math.min(90, prev + 10))
+                    }, 200)
+
+                    const uploadResponse = await fetch('/api/upload/screenshot', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ image: screenshot })
+                    })
+
+                    clearInterval(progressInterval)
+                    setUploadProgress(100)
+
+                    const uploadResult = await uploadResponse.json()
+
+                    if (uploadResult.success) {
+                        screenshotUrl = uploadResult.url
+                        toast.success('截图上传成功', { id: uploadToast })
+                    } else {
+                        // 上传失败，但继续提交反馈
+                        console.warn('Screenshot upload failed:', uploadResult.message)
+                        toast.error('截图上传失败，将继续提交反馈', { id: uploadToast })
+                    }
+                } catch (uploadError) {
+                    console.error('Screenshot upload error:', uploadError)
+                    toast.error('截图上传失败，将继续提交反馈')
+                } finally {
+                    setIsUploading(false)
+                    setUploadProgress(0)
+                }
             }
 
             // 记录到操作日志
@@ -116,7 +162,7 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
                         content: description,
                         category: type,
                         contact,
-                        screenshot: screenshot || undefined, // 发送实际的截图数据
+                        screenshot: screenshotUrl, // 发送 COS URL 而不是 base64
                         metadata: {
                             systemInfo,
                             recentErrors: recentErrors.map(e => ({
@@ -124,7 +170,7 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
                                 component: e.context.component,
                                 timestamp: e.timestamp
                             })),
-                            screenshot: screenshot ? 'included' : 'none'
+                            screenshot: screenshotUrl ? 'uploaded' : 'none'
                         }
                     }
                 })
