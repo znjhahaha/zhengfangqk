@@ -1,4 +1,67 @@
 {
-  "tasks": [],
-  "updatedAt": 1764664106170
+  "tasks": [
+    {
+      "id": "scheduled_1764844478242_zoe973qam",
+      "userId": "user_1763976658359",
+      "schoolId": "zjut",
+      "priority": "normal",
+      "courses": [],
+      "cookie": "JSESSIONID=258BFE173E33394F56646940FE88A7BA; _gscu_1440800408=56351669i2xr9h12; route=80ddf433809c8acd12d25486411d4a13\n",
+      "status": "failed",
+      "createdAt": 1764844478242,
+      "attemptCount": 0,
+      "scheduledTime": 1764844500000,
+      "metadata": {
+        "type": "scheduled-keyword",
+        "keywords": [
+          "自己"
+        ],
+        "studentInfo": {
+          "name": "乐可炯",
+          "studentId": "",
+          "major": "",
+          "grade": "",
+          "class": "",
+          "college": "",
+          "department": ""
+        }
+      },
+      "startedAt": 1764844500010,
+      "completedAt": 1764844500569,
+      "result": {
+        "success": false,
+        "message": "❌ 缺少必需参数或参数为空: xqh_id, zyh_id, zyfx_id, njdm_id, bh_id, xbm, xslbdm, mzm, xz, ccdm, xsbj, xkxnm, xkxqm。请检查页面参数提取是否完整。"
+      }
+    },
+    {
+      "id": "scheduled_1764845558185_d5kutuwpn",
+      "userId": "user_1763976658359",
+      "schoolId": "zjut",
+      "priority": "normal",
+      "courses": [],
+      "cookie": "JSESSIONID=258BFE173E33394F56646940FE88A7BA; _gscu_1440800408=56351669i2xr9h12; route=80ddf433809c8acd12d25486411d4a13\n",
+      "status": "cancelled",
+      "createdAt": 1764845558185,
+      "attemptCount": 0,
+      "scheduledTime": 1764845580000,
+      "metadata": {
+        "type": "scheduled-keyword",
+        "keywords": [
+          "概数"
+        ],
+        "studentInfo": {
+          "name": "乐可炯",
+          "studentId": "",
+          "major": "",
+          "grade": "",
+          "class": "",
+          "college": "",
+          "department": ""
+        }
+      },
+      "startedAt": 1764845580010,
+      "completedAt": 1764845584728
+    }
+  ],
+  "updatedAt": 1764845584728
 }

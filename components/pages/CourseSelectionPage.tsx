@@ -29,6 +29,7 @@ import toast from 'react-hot-toast'
 import { courseAPI, getApiUrl } from '@/lib/api'
 import DataCacheManager, { CACHE_KEYS } from '@/lib/data-cache-manager'
 import { useStudentStore } from '@/lib/student-store'
+import ScheduledCourseModal from '@/components/ScheduledCourseModal'
 
 export default function CourseSelectionPage() {
   const [availableCourses, setAvailableCourses] = useState<any[]>([])
@@ -46,6 +47,7 @@ export default function CourseSelectionPage() {
   const [showScheduleDialog, setShowScheduleDialog] = useState(false)
   const [grabbingCourses, setGrabbingCourses] = useState<Set<string>>(new Set())
   const [showTaskPanel, setShowTaskPanel] = useState(false) // 任务面板展开/收起状态
+  const [showScheduledCourseModal, setShowScheduledCourseModal] = useState(false) // 定时抢课模态框
 
   const { studentInfo } = useStudentStore()
 
@@ -452,6 +454,17 @@ export default function CourseSelectionPage() {
           <p className="text-xs sm:text-base text-muted-foreground">手动选择课程进行抢课，支持本地和服务器端抢课</p>
         </div>
         <div className="flex gap-2">
+          {/* 定时抢课按钮 */}
+          <Button
+            onClick={() => setShowScheduledCourseModal(true)}
+            variant="outline"
+            className="btn-hover text-xs sm:text-sm px-3 sm:px-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-purple-500/50 hover:border-purple-400"
+            title="设置课程关键词，到时间自动抢课"
+          >
+            <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+            <span className="hidden sm:inline">定时抢课</span>
+            <span className="sm:hidden">定时</span>
+          </Button>
           <Button
             onClick={() => setShowTaskPanel(!showTaskPanel)}
             disabled={!isServerSelectionActivated || serverTasks.length === 0}
@@ -915,6 +928,13 @@ export default function CourseSelectionPage() {
           </Card>
         </motion.div>
       )}
+
+      {/* 定时抢课模态框 */}
+      <ScheduledCourseModal
+        isOpen={showScheduledCourseModal}
+        onClose={() => setShowScheduledCourseModal(false)}
+        userId={getUserId()}
+      />
 
     </div>
   )
