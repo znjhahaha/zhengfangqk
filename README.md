@@ -58,4 +58,3 @@
 许可
 - Apache License 2.0
 
-如需我把这个 README 提交为仓库的 README.md（生成 PR/commit），或为某个功能生成更详细的运行/部署文档，告诉我我来帮你。
