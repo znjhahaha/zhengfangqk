@@ -187,7 +187,8 @@ export async function uploadToCos(key: string, buffer: Buffer, contentType: stri
           Region: config.Region,
           Key: key,
           Body: buffer,
-          ContentType: contentType
+          ContentType: contentType,
+          ACL: 'public-read' // 设置为公开读，允许通过URL直接访问
         },
         (err: any, data: any) => {
           if (err) {
@@ -202,6 +203,7 @@ export async function uploadToCos(key: string, buffer: Buffer, contentType: stri
     // 返回 COS 访问 URL
     const url = `https://${config.Bucket}.cos.${config.Region}.myqcloud.com/${key}`
     console.log(`✅ 文件已上传到 COS: ${key}`)
+    console.log(`📎 访问URL: ${url}`)
     return url
 
   } catch (error: any) {

@@ -111,35 +111,54 @@ export default function FeedbackModal({ isOpen, onClose, errorContext }: Feedbac
 
                     const uploadToast = toast.loading('正在上传截图...')
 
-                    // 模拟进度（因为 fetch 不支持实时进度）
-                    const progressInterval = setInterval(() => {
-                        setUploadProgress(prev => Math.min(90, prev + 10))
-                    }, 200)
+                    // 使用 XMLHttpRequest 以获取真实上传进度
+                    const uploadResult = await new Promise<any>((resolve, reject) => {
+                        const xhr = new XMLHttpRequest()
 
-                    const uploadResponse = await fetch('/api/upload/screenshot', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ image: screenshot })
+                        // 监听上传进度
+                        xhr.upload.addEventListener('progress', (e) => {
+                            if (e.lengthComputable) {
+                                const percentComplete = Math.round((e.loaded / e.total) * 100)
+                                setUploadProgress(percentComplete)
+                            }
+                        })
+
+                        // 监听请求完成
+                        xhr.addEventListener('load', () => {
+                            if (xhr.status >= 200 && xhr.status < 300) {
+                                try {
+                                    const result = JSON.parse(xhr.responseText)
+                                    resolve(result)
+                                } catch (e) {
+                                    reject(new Error('解析响应失败'))
+                                }
+                            } else {
+                                reject(new Error(`上传失败: ${xhr.status}`))
+                            }
+                        })
+
+                        // 监听错误
+                        xhr.addEventListener('error', () => {
+                            reject(new Error('网络错误'))
+                        })
+
+                        // 发送请求
+                        xhr.open('POST', '/api/upload/screenshot')
+                        xhr.setRequestHeader('Content-Type', 'application/json')
+                        xhr.send(JSON.stringify({ image: screenshot }))
                     })
-
-                    clearInterval(progressInterval)
-                    setUploadProgress(100)
-
-                    const uploadResult = await uploadResponse.json()
 
                     if (uploadResult.success) {
                         screenshotUrl = uploadResult.url
-                        toast.success('截图上传成功', { id: uploadToast })
+                        toast.success('截图上传成功', { id: uploadToast, style: { zIndex: 10001 } })
                     } else {
                         // 上传失败，但继续提交反馈
                         console.warn('Screenshot upload failed:', uploadResult.message)
-                        toast.error('截图上传失败，将继续提交反馈', { id: uploadToast })
+                        toast.error('截图上传失败，将继续提交反馈', { id: uploadToast, style: { zIndex: 10001 } })
                     }
                 } catch (uploadError) {
                     console.error('Screenshot upload error:', uploadError)
-                    toast.error('截图上传失败，将继续提交反馈')
+                    toast.error('截图上传失败，将继续提交反馈', { style: { zIndex: 10001 } })
                 } finally {
                     setIsUploading(false)
                     setUploadProgress(0)
