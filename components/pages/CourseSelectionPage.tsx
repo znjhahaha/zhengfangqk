@@ -457,9 +457,10 @@ export default function CourseSelectionPage() {
           {/* 定时抢课按钮 */}
           <Button
             onClick={() => setShowScheduledCourseModal(true)}
+            disabled={!isServerSelectionActivated}
             variant="outline"
-            className="btn-hover text-xs sm:text-sm px-3 sm:px-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-purple-500/50 hover:border-purple-400"
-            title="设置课程关键词，到时间自动抢课"
+            className="btn-hover text-xs sm:text-sm px-3 sm:px-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-purple-500/50 hover:border-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={!isServerSelectionActivated ? '请先激活服务器端抢课功能' : '设置课程关键词，到时间自动抢课'}
           >
             <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
             <span className="hidden sm:inline">定时抢课</span>
