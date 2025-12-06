@@ -41,9 +41,15 @@ async function createRequestConfigAsync(method: string = 'GET', body?: string, s
   // 在服务器端，使用异步方式获取URL配置（确保能获取到新添加的学校配置）
   let urls
   if (typeof window === 'undefined') {
-    // 服务器端：使用异步版本获取URL配置
-    const { getApiUrlsAsync } = await import('./global-school-state')
-    urls = await getApiUrlsAsync(schoolId)
+    try {
+      // 服务器端：使用异步版本获取URL配置
+      const { getApiUrlsAsync } = await import('./global-school-state')
+      urls = await getApiUrlsAsync(schoolId)
+    } catch (error) {
+      // EdgeOne Pages等环境可能不支持动态导入，降级到同步版本
+      console.warn('⚠️ 动态导入失败，使用同步版本:', error)
+      urls = getApiUrls(schoolId)
+    }
   } else {
     // 客户端：使用同步版本
     urls = getApiUrls(schoolId)
