@@ -2,7 +2,7 @@
 
 简短介绍
 - 一个面向高校的现代化选课工具（Web + Android APK），支持多学校配置、智能选课/抢课、激活码、公告与建议反馈等。
-- 已使用 Next.js 全栈架构实现，支持将前端打包为 Android APK（通过 Capacitor）。线上演示：https://zhengfangqk.vercel.app（需要🪜）
+- 已使用 Next.js 全栈架构实现，支持将前端打包为 Android APK（通过 Capacitor）。线上演示：https://zhengfangqk.vercel.app （需要🪜）
 
 主要特性
 - 智能选课与自动重试策略
